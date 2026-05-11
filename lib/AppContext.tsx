@@ -36,6 +36,7 @@ interface DogRoutine {
   id: string
   dog_id: string
   title: string
+  frequency: string
   scheduled_time: string | null
   assigned_to: string | null
   completed_today: boolean
