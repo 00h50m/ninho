@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  background: #161614;
+  color: #f0ede8;
+  font-family: 'Inter', system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+}
+
+/* Scrollbar discreta */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #2e2e2c; border-radius: 2px; }
+
+/* PWA standalone */
+@media (display-mode: standalone) {
+  body { padding-top: env(safe-area-inset-top); }
+}
+
+/* Animações */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes xpPop {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.animate-slide-up  { animation: slideUp .2s ease; }
+.animate-fade-in   { animation: fadeIn .15s ease; }
+.animate-xp-pop    { animation: xpPop .3s ease; }
+
+/* Tap highlight no mobile */
+* { -webkit-tap-highlight-color: transparent; }
+
+/* Botões e interações */
+.interactive {
+  transition: opacity .12s ease, transform .1s ease;
+}
+.interactive:active { transform: scale(0.97); opacity: 0.85; }
