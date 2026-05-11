@@ -2,7 +2,7 @@
 
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
-import { getTodayString, getWeekStart, getCurrentLevel } from '@/lib/utils'
+import { getTodayString, getWeekStart } from '@/lib/utils'
 
 interface Profile {
   id: string
