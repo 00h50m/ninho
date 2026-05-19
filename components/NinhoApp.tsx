@@ -417,7 +417,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
   }
 
   // ── NAMES (em settings no banco, por enquanto local) ──
-  const [names, setNames] = useState({ g: 'Giovanna', s: 'Sabrina' })
+  const [names, setNames] = useState<{g:string,s:string}>({ g: 'Giovanna', s: 'Sabrina' })
   // Carregar nomes do localStorage para persistência simples
   useEffect(() => {
     try {
@@ -493,7 +493,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
     )
   }
 
-  function PersonCol({ ts, pend, done, key, role, avCls }: any) {
+  function PersonCol({ ts, pend, done, personKey, role, avCls }: any) {
     function byCat(list: Task[]) {
       const g: Record<string, Task[]> = {}
       list.forEach(t => { if (!g[t.category]) g[t.category] = []; g[t.category].push(t) })
@@ -503,7 +503,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
     return (
       <div className="card" style={{overflow:'auto',maxHeight:'min(560px,65vh)'}}>
         <div className="ph">
-          <div className={`av ${avCls}`}>{names[key].slice(0,2).toUpperCase()}</div>
+          <div className={`av ${avCls}`}>{(names[personKey as 'g'|'s']||'??').slice(0,2).toUpperCase()}</div>
           <div><div className="pname">{names[key]}</div><div className="prole">{role}</div></div>
           <div className="pprog"><span style={{color:'var(--green)',fontWeight:500}}>{done.length}</span><span style={{color:'var(--faint)'}}> / {ts.length}</span></div>
         </div>
@@ -628,8 +628,8 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
             <label className="fl">Responsável</label>
             <div className="btng c3">
               <button className={`sbtn ${!assign?'on':''}`} onClick={() => setAssign('')}>Rodízio</button>
-              <button className={`sbtn ${assign==='g'?'on':''}`} onClick={() => setAssign('g')}>{names.g.split(' ')[0]}</button>
-              <button className={`sbtn ${assign==='s'?'on':''}`} onClick={() => setAssign('s')}>{names.s.split(' ')[0]}</button>
+              <button className={`sbtn ${assign==='g'?'on':''}`} onClick={() => setAssign('g')}>{(names.g||'Giovanna').split(' ')[0]}</button>
+              <button className={`sbtn ${assign==='s'?'on':''}`} onClick={() => setAssign('s')}>{(names.s||'Sabrina').split(' ')[0]}</button>
             </div>
             <label className="fl">Horário <span className="hint">(opcional)</span></label>
             <input type="time" className="fi" value={time} onChange={e => setTime(e.target.value)} style={{width:160}} />
@@ -843,7 +843,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
             {/* card Giovanna */}
             <div className="card">
               <div className="ph">
-                <div className="av av-g">{names.g.slice(0,2).toUpperCase()}</div>
+                <div className="av av-g">{(names.g||'GI').slice(0,2).toUpperCase()}</div>
                 <div><div className="pname">{names.g}</div><div className="prole">home office</div></div>
                 <div className="pprog"><span style={{color:'var(--green)',fontWeight:500}}>{myDone.length}</span><span style={{color:'var(--faint)'}}>/{myTasks.length}</span></div>
               </div>
@@ -858,7 +858,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
             {/* card Sabrina */}
             <div className="card">
               <div className="ph">
-                <div className="av av-s">{names.s.slice(0,2).toUpperCase()}</div>
+                <div className="av av-s">{(names.s||'SA').slice(0,2).toUpperCase()}</div>
                 <div><div className="pname">{names.s}</div><div className="prole">professora</div></div>
                 <div className="pprog"><span style={{color:'var(--green)',fontWeight:500}}>{saDone.length}</span><span style={{color:'var(--faint)'}}>/{saTasks.length}</span></div>
               </div>
@@ -903,8 +903,8 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
           <Legend />
           <button className="gwbtn" onClick={autoDistribute}>✦ Gerar tarefas da semana</button>
           <div className="gdash">
-            <PersonCol ts={myTasks} pend={myPend} done={myDone} key2="g" role="home office" avCls="av-g" />
-            <PersonCol ts={saTasks} pend={saPend} done={saDone} key2="s" role="professora" avCls="av-s" />
+            <PersonCol ts={myTasks} pend={myPend} done={myDone} personKey="g" role="home office" avCls="av-g" />
+            <PersonCol ts={saTasks} pend={saPend} done={saDone} personKey="s" role="professora" avCls="av-s" />
             <Sidebar />
           </div>
         </div>
@@ -919,7 +919,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
             </div>
           </div>
           <div className="tcf">
-            {[['all',`Todas (${tasks.length})`],['essential',`🔴 Essenciais (${tasks.filter(t=>t.essential).length})`],['g',names.g.split(' ')[0]],['s',names.s.split(' ')[0]],...Object.entries(CAT).map(([k,v])=>[k,v])].map(([k,v]) => (
+            {[['all',`Todas (${tasks.length})`],['essential',`🔴 Essenciais (${tasks.filter(t=>t.essential).length})`],['g',(names.g||'Giovanna').split(' ')[0]],['s',(names.s||'Sabrina').split(' ')[0]],...Object.entries(CAT).map(([k,v])=>[k,v])].map(([k,v]) => (
               <button key={k} className={`tcfb ${taskFilter===k?'on':''}`} onClick={() => setTaskFilter(k)}>{v}</button>
             ))}
           </div>
@@ -933,7 +933,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
                     <span className="bdg bdg-n">{CAT[t.category]||t.category}</span>
                     <span className={`bdg ${t.weight==='light'?'bdg-l':t.weight==='medium'?'bdg-m':'bdg-h'}`}>{WPT[t.weight]} +{XPW[t.weight]}</span>
                     <span className="bdg bdg-n">{FPT[t.frequency]}</span>
-                    <span className="bdg" style={{background:!t.assigned_to?'var(--sf2)':t.assigned_to==='g'?'var(--gbg)':'var(--pbg)',color:!t.assigned_to?'var(--sub)':t.assigned_to==='g'?'var(--green)':'var(--pur)'}}>{!t.assigned_to?'Rodízio':t.assigned_to==='g'?names.g.split(' ')[0]:names.s.split(' ')[0]}</span>
+                    <span className="bdg" style={{background:!t.assigned_to?'var(--sf2)':t.assigned_to==='g'?'var(--gbg)':'var(--pbg)',color:!t.assigned_to?'var(--sub)':t.assigned_to==='g'?'var(--green)':'var(--pur)'}}>{!t.assigned_to?'Rodízio':t.assigned_to==='g'?(names.g||'Giovanna').split(' ')[0]:(names.s||'Sabrina').split(' ')[0]}</span>
                     {t.scheduled_time && <span className="trtime">⏰ {t.scheduled_time}</span>}
                     {t.essential && <span className="bdg bdg-e">essencial</span>}
                   </div>
@@ -1031,8 +1031,8 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
                   </div>
                 </div>
                 <div className="wt-assign">
-                  <button className={`wa ${(!t.assigned_to||t.assigned_to==='g')?'g-on':''}`} onClick={() => assignTask(t.id,'g')}>{names.g.split(' ')[0]}</button>
-                  <button className={`wa ${t.assigned_to==='s'?'s-on':''}`} onClick={() => assignTask(t.id,'s')}>{names.s.split(' ')[0]}</button>
+                  <button className={`wa ${(!t.assigned_to||t.assigned_to==='g')?'g-on':''}`} onClick={() => assignTask(t.id,'g')}>{(names.g||'Giovanna').split(' ')[0]}</button>
+                  <button className={`wa ${t.assigned_to==='s'?'s-on':''}`} onClick={() => assignTask(t.id,'s')}>{(names.s||'Sabrina').split(' ')[0]}</button>
                 </div>
                 <button className="tc-btn" onClick={() => openModal('task', t)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--sub)',padding:'4px 6px',fontSize:13}}>✎</button>
               </div>
