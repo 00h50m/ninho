@@ -504,7 +504,7 @@ export default function NinhoApp({ householdId }: { householdId: string }) {
       <div className="card" style={{overflow:'auto',maxHeight:'min(560px,65vh)'}}>
         <div className="ph">
           <div className={`av ${avCls}`}>{(names[personKey as 'g'|'s']||'??').slice(0,2).toUpperCase()}</div>
-          <div><div className="pname">{names[key]}</div><div className="prole">{role}</div></div>
+          <div><div className="pname">{names[personKey as 'g'|'s']||personKey}</div><div className="prole">{role}</div></div>
           <div className="pprog"><span style={{color:'var(--green)',fontWeight:500}}>{done.length}</span><span style={{color:'var(--faint)'}}> / {ts.length}</span></div>
         </div>
         {ts.length === 0 ? (
