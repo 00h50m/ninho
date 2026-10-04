@@ -4,6 +4,18 @@ export type Names = Record<Who, string>
 
 export type TaskWeight = 'light' | 'medium' | 'heavy'
 
+export type TaskRecurrence =
+  | 'daily'
+  | 'weekdays'
+  | 'weekly'
+  | 'biweekly'
+  | 'monthly'
+  | 'interval_days'
+  | 'after_completion'
+  | 'once'
+
+export type TaskOccurrenceStatus = 'pending' | 'completed' | 'postponed' | 'skipped' | 'cancelled'
+
 export interface Task {
   id: string
   household_id?: string
@@ -11,11 +23,26 @@ export interface Task {
   category: string
   weight: TaskWeight
   frequency: string
+  recurrence_type?: TaskRecurrence
+  recurrence_interval?: number
+  recurrence_weekdays?: number[]
+  recurrence_day_of_month?: number | null
+  starts_on?: string
+  ends_on?: string | null
+  paused_until?: string | null
   assigned_to: string | null
   scheduled_time: string | null
   essential: boolean
   active: boolean
   completed_today?: boolean
+  occurrence_id?: string
+  occurrence_status?: TaskOccurrenceStatus
+  original_scheduled_date?: string
+  occurrence_date?: string
+  completed_by?: Who | null
+  completed_at?: string | null
+  resolution_reason?: string | null
+  is_overdue?: boolean
 }
 
 export interface DogRoutine {
@@ -69,4 +96,3 @@ export interface WeekHistory {
   completions: number
   meeting: (Meeting & { week_start: string }) | null
 }
-
