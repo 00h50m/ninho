@@ -1,5 +1,8 @@
-.env.local
-node_modules/
 .next/
+node_modules/
+*.tsbuildinfo
+.env*
+!.env.example
 *.log
+npm-debug.log*
 .DS_Store

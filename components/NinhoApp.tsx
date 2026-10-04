@@ -1,19 +1,38 @@
 'use client'
-import { useEffect, useState, useCallback, useRef, ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
-
-interface Task { id:string;title:string;category:string;weight:'light'|'medium'|'heavy';frequency:string;assigned_to:string|null;scheduled_time:string|null;essential:boolean;active:boolean;completed_today?:boolean }
-interface Dog { id:string;name:string;breed:string|null;is_puppy:boolean;routines:DogRoutine[] }
-interface DogRoutine { id:string;title:string;frequency:string;scheduled_time:string|null;completed_today?:boolean }
-interface Settings { energy:'high'|'medium'|'low';survival:boolean }
-interface Meeting { what_worked:string;what_overloaded:string;adjustments:string;priorities:string;mood_g:string;mood_s:string;wins:string;next_mode:string;reward:string }
-type Who='g'|'s'
-type Names=Record<Who,string>
+import { useEffect, useState, useCallback, useId, useRef, ReactNode } from 'react'
+import { friendlyMessage, reportError } from '@/lib/errors'
+import {
+  addDaysToIsoDate,
+  formatLongDateInSaoPaulo,
+  formatShortDate as fmtDate,
+  formatTimeInSaoPaulo,
+  hourInSaoPaulo,
+  todayInSaoPaulo as todayStr,
+  weekStartInSaoPaulo as weekStartStr,
+} from '@/lib/date'
+import {
+  applyTaskDistribution,
+  createPet,
+  createPuppyAccident,
+  deactivateTask,
+  insertTasks,
+  loadNinhoSnapshot,
+  loadWeekHistory,
+  persistMeeting,
+  persistTask,
+  saveProfileName,
+  saveWeeklySettings,
+  setDogRoutineCompletion,
+  setTaskCompletion,
+  subscribeToHouseholdChanges,
+  updateTaskAssignment,
+} from '@/lib/ninho-api'
+import { getLevel, LEVELS, XP_BY_WEIGHT as XPW } from '@/lib/xp'
+import type { Dog, DogRoutine, Meeting, Names, PuppyAccident, Settings, Task, WeekHistory, Who } from '@/types/ninho'
 
 const CAT:Record<string,string>={kitchen:'🍳 Cozinha',bathroom:'🚿 Banheiro',bedroom:'🛏 Quarto',laundry:'👕 Lavanderia',general:'🏠 Geral',dogs:'🐾 Cães',shopping:'🛒 Compras',finance:'💰 Finanças'}
 const WPT:Record<string,string>={light:'Leve',medium:'Médio',heavy:'Pesado'}
 const FPT:Record<string,string>={daily:'Diária',weekly:'Semanal',biweekly:'Quinzenal',monthly:'Mensal',once:'Pontual'}
-const XPW:Record<string,number>={light:1,medium:2,heavy:3}
 const FEFF:Record<string,number>={daily:7,weekly:2,biweekly:1,monthly:0.5,once:1}
 const ROLE:Record<Who,string>={g:'home office',s:'professora'}
 const ENERGY:Record<string,{ic:string,l:string,short:string,s:string,cls:string}>={
@@ -22,7 +41,6 @@ const ENERGY:Record<string,{ic:string,l:string,short:string,s:string,cls:string}
   low:{ic:'🌧',l:'Baixa energia',short:'Baixa',s:'Foco no essencial',cls:'coral'},
 }
 const TABS:Array<[string,string,string]>=[['today','☀️','Hoje'],['tasks','📋','Tarefas'],['week','📅','Semana'],['pets','🐾','Cães'],['settings','⚙️','Ajustes']]
-const LEVELS=[{l:1,n:'Nest Builders',min:0,max:100},{l:2,n:'Nest Keepers',min:100,max:300},{l:3,n:'Home Runners',min:300,max:600},{l:4,n:'Domestic Legends',min:600,max:1000},{l:5,n:'Ninho Masters',min:1000,max:9999}]
 const SUGG:Record<string,Array<{t:string,w:string,f:string,cat:string,ess:boolean}>>={
   'Cozinha':[{t:'Louça diária',w:'light',f:'daily',cat:'kitchen',ess:true},{t:'Limpar bancada e fogão',w:'light',f:'daily',cat:'kitchen',ess:true},{t:'Lixo da cozinha',w:'light',f:'daily',cat:'kitchen',ess:true},{t:'Organizar geladeira',w:'medium',f:'weekly',cat:'kitchen',ess:false},{t:'Limpar microondas',w:'light',f:'weekly',cat:'kitchen',ess:false},{t:'Limpar geladeira por dentro',w:'medium',f:'monthly',cat:'kitchen',ess:false}],
   'Banheiro':[{t:'Limpar pia e espelho',w:'light',f:'weekly',cat:'bathroom',ess:false},{t:'Limpar vaso sanitário',w:'medium',f:'weekly',cat:'bathroom',ess:false},{t:'Limpar box / chuveiro',w:'medium',f:'weekly',cat:'bathroom',ess:false},{t:'Repor papel e sabonete',w:'light',f:'weekly',cat:'bathroom',ess:true}],
@@ -34,14 +52,7 @@ const SUGG:Record<string,Array<{t:string,w:string,f:string,cat:string,ess:boolea
 const DR_DEF=[{t:'Ração manhã',f:'daily',time:'07:00'},{t:'Água fresca',f:'daily',time:null},{t:'Passeio manhã',f:'daily',time:'08:00'},{t:'Ração noite',f:'daily',time:'18:00'},{t:'Passeio tarde',f:'daily',time:'17:30'},{t:'Enriquecimento ambiental',f:'daily',time:null},{t:'Escovação',f:'weekly',time:null},{t:'Banho',f:'weekly',time:null}]
 const DR_PUP=[{t:'Saída xixi manhã',f:'daily',time:'07:30'},{t:'Saída xixi tarde',f:'daily',time:'14:00'},{t:'Saída xixi noite',f:'daily',time:'21:00'},{t:'Treino básico',f:'daily',time:null},{t:'Socialização',f:'daily',time:null}]
 
-function getLevel(xp:number){return[...LEVELS].reverse().find(l=>xp>=l.min)||LEVELS[0]}
 function getChaosInfo(p:number){if(p<35)return{label:'Organizada ✦',color:'var(--green)'};if(p<65)return{label:'Atenção necessária',color:'var(--amb)'};return{label:'Casa em alerta!',color:'var(--cor)'}}
-// Datas no fuso local (toISOString usava UTC e virava o dia às 21h no Brasil)
-function isoDate(d:Date){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
-function weekStartOf(d:Date){const x=new Date(d);const day=x.getDay();x.setDate(x.getDate()-(day===0?6:day-1));return isoDate(x)}
-function todayStr(){return isoDate(new Date())}
-function weekStartStr(){return weekStartOf(new Date())}
-function fmtDate(d:string){return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}
 function firstName(n:string){return (n||'').split(' ')[0]}
 function initials(n:string){return (n||'??').slice(0,2).toUpperCase()}
 function wCls(w:string){return w==='light'?'l':w==='medium'?'m':'h'}
@@ -243,6 +254,7 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .fab span{font-size:22px;line-height:1;font-weight:300}
 .fab:hover{transform:translateY(-2px)}
 .toast{position:fixed;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);background:#132a20;border:1px solid var(--gbdr);border-radius:12px;padding:10px 12px 10px 16px;font-size:13px;color:var(--green);display:flex;align-items:center;gap:12px;z-index:100;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fu .2s ease}
+.toast.error{background:var(--cbg);border-color:var(--cbdr);color:var(--cor)}
 .toast-m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toast button{background:none;border:none;color:var(--tx);font-weight:500;font-size:13px;padding:2px 6px;text-decoration:underline;text-underline-offset:3px;flex-shrink:0}
 
@@ -265,6 +277,7 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .fita{resize:vertical;min-height:76px;line-height:1.5}
 .btng{display:grid;gap:6px}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}
 .sbtn{padding:10px 8px;border-radius:var(--rs);border:1px solid var(--bd);background:transparent;font-size:13px;color:var(--mu);transition:all .12s;text-align:center}
+.sbtn:disabled,.asg button:disabled,.chk:disabled,.ib:disabled{opacity:.45;cursor:not-allowed}
 .sbtn:hover{border-color:var(--bd2);color:var(--tx)}
 .sbtn.on{background:var(--gbg);border-color:var(--gbdr);color:var(--green)}
 .sbtn small{display:block;font-size:11.5px;color:var(--sub);margin-top:2px}
@@ -343,18 +356,33 @@ function Ring({pct,color,label}:{pct:number,color:string,label:string}){
 
 function Sheet({title,onClose,children,footer,size}:{title:ReactNode,onClose:()=>void,children:ReactNode,footer?:ReactNode,size?:'sm'|'lg'}){
   const closeRef=useRef(onClose)
+  const dialogRef=useRef<HTMLDivElement>(null)
+  const titleId=useId()
   closeRef.current=onClose
   useEffect(()=>{
-    const h=(e:KeyboardEvent)=>{if(e.key==='Escape')closeRef.current()}
+    const previousFocus=document.activeElement as HTMLElement|null
+    const focusable=()=>Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex="-1"])')||[])
+    const h=(e:KeyboardEvent)=>{
+      if(e.key==='Escape'){closeRef.current();return}
+      if(e.key!=='Tab')return
+      const items=focusable();if(items.length===0){e.preventDefault();return}
+      const first=items[0],last=items[items.length-1]
+      if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}
+      else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}
+    }
     window.addEventListener('keydown',h)
     const prev=document.body.style.overflow;document.body.style.overflow='hidden'
-    return()=>{window.removeEventListener('keydown',h);document.body.style.overflow=prev}
+    const frame=requestAnimationFrame(()=>{
+      const preferred=dialogRef.current?.querySelector<HTMLElement>('[autofocus]')
+      ;(preferred||focusable()[0]||dialogRef.current)?.focus()
+    })
+    return()=>{cancelAnimationFrame(frame);window.removeEventListener('keydown',h);document.body.style.overflow=prev;previousFocus?.focus()}
   },[])
   return(
     <div className="mwrap" onClick={onClose}>
-      <div className={`modal ${size?'modal-'+size:''}`} role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
+      <div ref={dialogRef} className={`modal ${size?'modal-'+size:''}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} onClick={e=>e.stopPropagation()}>
         <div className="grab"/>
-        <div className="mh"><span className="mht">{title}</span><button className="mclose" onClick={onClose} aria-label="Fechar">✕</button></div>
+        <div className="mh"><span className="mht" id={titleId}>{title}</span><button className="mclose" onClick={onClose} aria-label="Fechar">✕</button></div>
         <div className="mbody">{children}</div>
         {footer&&<div className="mfoot">{footer}</div>}
       </div>
@@ -362,7 +390,7 @@ function Sheet({title,onClose,children,footer,size}:{title:ReactNode,onClose:()=
   )
 }
 
-function TaskFormModal({task,names,onClose,onSave,onDelete}:{task:Task|null,names:Names,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void}){
+function TaskFormModal({task,names,onClose,onSave,onDelete,busy=false}:{task:Task|null,names:Names,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void,busy?:boolean}){
   const t=task
   const editing=!!t?.id
   const[title,setTitle]=useState(t?.title||'')
@@ -375,8 +403,8 @@ function TaskFormModal({task,names,onClose,onSave,onDelete}:{task:Task|null,name
   const handle=()=>{if(!title.trim())return;onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess},editing?t!.id:undefined)}
   return(
     <Sheet title={editing?'Editar tarefa':'Nova tarefa'} onClose={onClose} footer={<>
-      {editing&&<button className="btn btn-danger" onClick={()=>onDelete(t!.id)}>Remover</button>}
-      <button className="btn btn-p" disabled={!title.trim()} onClick={handle}>{editing?'Salvar alterações':'Criar tarefa'}</button>
+      {editing&&<button className="btn btn-danger" disabled={busy} onClick={()=>onDelete(t!.id)}>Remover</button>}
+      <button className="btn btn-p" disabled={!title.trim()||busy} onClick={handle}>{busy?'Salvando...':editing?'Salvar alterações':'Criar tarefa'}</button>
     </>}>
       <label className="fl">Nome</label>
       <input className="fi" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handle()}} placeholder="Ex: Limpar bancada" autoFocus/>
@@ -416,8 +444,8 @@ function SuggModal({tasks,onClose,onAdd,onCustomize}:{tasks:Task[],onClose:()=>v
   function selectAll(){const toAdd=SUGG[curTab].filter(s=>!existing.has(s.t)&&!sel.find(x=>x.key===keyOf(s)));setSel(p=>[...p,...toAdd.map(s=>({...s,key:keyOf(s)}))])}
   return(
     <Sheet size="lg" title="Sugestões de tarefas" onClose={onClose} footer={
-      <button className="btn btn-p" disabled={sel.length===0||busy} onClick={async()=>{setBusy(true);await onAdd(sel)}}>
-        {sel.length===0?'Selecione tarefas':`Adicionar ${sel.length} tarefa${sel.length!==1?'s':''}`}
+      <button className="btn btn-p" disabled={sel.length===0||busy} onClick={async()=>{setBusy(true);try{await onAdd(sel)}finally{setBusy(false)}}}>
+        {busy?'Adicionando...':sel.length===0?'Selecione tarefas':`Adicionar ${sel.length} tarefa${sel.length!==1?'s':''}`}
       </button>
     }>
       <div className="stabs">{cats.map(c=>{
@@ -449,7 +477,7 @@ function SuggModal({tasks,onClose,onAdd,onCustomize}:{tasks:Task[],onClose:()=>v
   )
 }
 
-function PetModal({onClose,onSave}:{onClose:()=>void,onSave:(d:any,r:any[])=>void}){
+function PetModal({onClose,onSave,busy=false}:{onClose:()=>void,onSave:(d:any,r:any[])=>void,busy?:boolean}){
   const[pname,setPname]=useState('')
   const[breed,setBreed]=useState('')
   const[isPuppy,setIsPuppy]=useState(false)
@@ -459,7 +487,7 @@ function PetModal({onClose,onSave}:{onClose:()=>void,onSave:(d:any,r:any[])=>voi
   function pickPuppy(v:boolean){setIsPuppy(v);if(v)setSel(p=>Array.from(new Set([...p,...DR_PUP.map(r=>r.t)])))}
   const handle=()=>{if(!pname.trim())return;onSave({name:pname.trim(),breed:breed.trim()||null,is_puppy:isPuppy},allR.filter(r=>sel.includes(r.t)).map(r=>({title:r.t,frequency:r.f,scheduled_time:r.time})))}
   return(
-    <Sheet title="Cadastrar pet" onClose={onClose} footer={<button className="btn btn-p" disabled={!pname.trim()} onClick={handle}>Adicionar pet</button>}>
+    <Sheet title="Cadastrar pet" onClose={onClose} footer={<button className="btn btn-p" disabled={!pname.trim()||busy} onClick={handle}>{busy?'Salvando...':'Adicionar pet'}</button>}>
       <label className="fl">Nome</label><input className="fi" value={pname} onChange={e=>setPname(e.target.value)} placeholder="Ex: Luna, Bob..." autoFocus/>
       <label className="fl">Raça <span className="hint">(opcional)</span></label><input className="fi" value={breed} onChange={e=>setBreed(e.target.value)} placeholder="Ex: Golden Retriever, SRD..."/>
       <label className="fl">Fase</label>
@@ -476,13 +504,13 @@ function PetModal({onClose,onSave}:{onClose:()=>void,onSave:(d:any,r:any[])=>voi
   )
 }
 
-function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>void,onPick:(e:'high'|'medium'|'low')=>void}){
+function EnergyModal({energy,onClose,onPick,busy=false}:{energy:string,onClose:()=>void,onPick:(e:'high'|'medium'|'low')=>void,busy?:boolean}){
   return(
     <Sheet size="sm" title="Energia da semana" onClose={onClose}>
       <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>Como vocês chegam nessa semana?</div>
       <div className="btng" style={{gap:8}}>
         {(['high','medium','low'] as const).map(v=>(
-          <button key={v} className={`sbtn ${energy===v?'on':''}`} style={{padding:14,textAlign:'left',fontSize:14}} onClick={()=>onPick(v)}>
+          <button key={v} disabled={busy} className={`sbtn ${energy===v?'on':''}`} style={{padding:14,textAlign:'left',fontSize:14}} onClick={()=>onPick(v)}>
             {ENERGY[v].ic} {ENERGY[v].l}<small>{ENERGY[v].s}</small>
           </button>
         ))}
@@ -491,7 +519,7 @@ function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>void,onP
   )
 }
 
-function MeetingModal({names,weekStart,onClose,onSave}:{names:Names,weekStart:string,onClose:()=>void,onSave:(m:Meeting)=>void}){
+function MeetingModal({names,weekStart,onClose,onSave,busy=false}:{names:Names,weekStart:string,onClose:()=>void,onSave:(m:Meeting)=>void,busy?:boolean}){
   const[form,setForm]=useState<Meeting>({what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''})
   const set=(k:keyof Meeting,v:string)=>setForm(p=>({...p,[k]:v}))
   const moods=[['😌 Bem','ok'],['😐 Ok','mid'],['😔 Difícil','hard']]
@@ -500,7 +528,7 @@ function MeetingModal({names,weekStart,onClose,onSave}:{names:Names,weekStart:st
     <div className="meet"><label className="fl">{n} — {label}</label><textarea className="fita" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={ph}/></div>
   )
   return(
-    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" onClick={()=>onSave(form)}>Salvar reunião</button>}>
+    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" disabled={busy} onClick={()=>onSave(form)}>{busy?'Salvando...':'Salvar reunião'}</button>}>
       <div style={{fontSize:13,color:'var(--sub)',marginBottom:18}}>Semana de {fmtDate(weekStart)} · 15 minutos · sem cobranças</div>
       {area('01','what_worked','O que funcionou essa semana?','Tarefas que rolaram bem, hábitos que mantiveram...')}
       {area('02','what_overloaded','O que sobrecarregou?','O que pesou demais, o que ficou acumulando...')}
@@ -539,18 +567,23 @@ export default function NinhoApp({householdId}:{householdId:string}){
   const [names,setNames]=useState<Names>({g:'Giovanna',s:'Sabrina'})
   const [modal,setModal]=useState<string|null>(null)
   const [modalData,setModalData]=useState<any>(null)
-  const [toast,setToast]=useState<{msg:string,undo?:()=>void}|null>(null)
+  const [toast,setToast]=useState<{msg:string,undo?:()=>void,actionLabel?:string,tone?:'success'|'error'}|null>(null)
   const [taskFilter,setTaskFilter]=useState('all')
   const [query,setQuery]=useState('')
-  const [historyData,setHistoryData]=useState<any[]>([])
-  const [accidents,setAccidents]=useState<any[]>([])
+  const [historyData,setHistoryData]=useState<WeekHistory[]>([])
+  const [accidents,setAccidents]=useState<PuppyAccident[]>([])
   const [person,setPerson]=useState<Who>('g')
   const [showDone,setShowDone]=useState<Record<Who,boolean>>({g:false,s:false})
   const [showAllToday,setShowAllToday]=useState(false)
+  const [loading,setLoading]=useState(true)
+  const [hasLoaded,setHasLoaded]=useState(false)
+  const [loadError,setLoadError]=useState<string|null>(null)
+  const [busyKeys,setBusyKeys]=useState<Set<string>>(()=>new Set())
   const toastTimer=useRef<any>(null)
+  const busyRef=useRef<Set<string>>(new Set())
   const today=todayStr()
   const weekStart=weekStartStr()
-  const dow=new Date().getDay()
+  const dow=new Date(`${today}T12:00:00.000Z`).getUTCDay()
   const dowI=dow===0?6:dow-1
 
   // Preferências locais (aba e pessoa no celular)
@@ -564,168 +597,218 @@ export default function NinhoApp({householdId}:{householdId:string}){
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
   // ── LOAD ──────────────────────────────────────────────
-  const loadAll=useCallback(async()=>{
-    const [tRes,dRes,wsRes,compRes,dcRes,xpRes,strRes,profRes,accRes]=await Promise.all([
-      supabase.from('tasks').select('*').eq('household_id',householdId).eq('active',true).order('essential',{ascending:false}).order('category'),
-      supabase.from('dogs').select('*,dog_routines(*)').eq('household_id',householdId).eq('active',true),
-      supabase.from('weekly_settings').select('*').eq('household_id',householdId).eq('week_start',weekStart).maybeSingle(),
-      supabase.from('task_completions').select('task_id').eq('household_id',householdId).eq('date',today),
-      supabase.from('dog_completions').select('routine_id').eq('date',today),
-      supabase.rpc('get_household_xp',{hid:householdId}),
-      supabase.rpc('get_streak',{hid:householdId}),
-      supabase.from('profiles').select('display_name,role').eq('household_id',householdId),
-      supabase.from('puppy_accidents').select('*').eq('household_id',householdId).order('occurred_at',{ascending:false}).limit(20),
-    ])
-    const doneTaskIds=new Set((compRes.data||[]).map((c:any)=>c.task_id))
-    const doneDogIds=new Set((dcRes.data||[]).map((c:any)=>c.routine_id))
-    setTasks((tRes.data||[]).map((t:any)=>({...t,completed_today:doneTaskIds.has(t.id)})))
-    setDogs((dRes.data||[]).map((d:any)=>({...d,routines:(d.dog_routines||[]).map((r:any)=>({...r,completed_today:doneDogIds.has(r.id)}))})))
-    if(wsRes.data)setSettings({energy:wsRes.data.energy,survival:wsRes.data.survival})
-    setXp(xpRes.data||0)
-    setStreak(strRes.data||0)
-    setAccidents(accRes.data||[])
-    if(profRes.data&&profRes.data.length>0){
-      const ng=profRes.data.find((p:any)=>p.role==='g')
-      const ns=profRes.data.find((p:any)=>p.role==='s')
-      setNames({g:ng?.display_name||'Giovanna',s:ns?.display_name||'Sabrina'})
+  const loadAll=useCallback(async(options?:{silent?:boolean})=>{
+    if(!options?.silent)setLoading(true)
+    setLoadError(null)
+    try{
+      const snapshot=await loadNinhoSnapshot(householdId,today,weekStart)
+      setTasks(snapshot.tasks)
+      setDogs(snapshot.dogs)
+      setSettings(snapshot.settings)
+      setXp(snapshot.xp)
+      setStreak(snapshot.streak)
+      setAccidents(snapshot.accidents)
+      setNames(snapshot.names)
+      setHasLoaded(true)
+    }catch(caught){
+      reportError('carregar Ninho',caught)
+      setLoadError(friendlyMessage(caught))
+    }finally{
+      if(!options?.silent)setLoading(false)
     }
   },[householdId,today,weekStart])
 
   const loadHistory=useCallback(async()=>{
-    const weeks:string[]=[]
-    for(let i=0;i<4;i++){const d=new Date();d.setDate(d.getDate()-(i*7));weeks.push(weekStartOf(d))}
-    const results=await Promise.all(weeks.map(async ws=>{
-      const end=new Date(ws+'T12:00:00');end.setDate(end.getDate()+6)
-      const endStr=isoDate(end)
-      const{data:comp}=await supabase.from('task_completions').select('task_id,date').eq('household_id',householdId).gte('date',ws).lte('date',endStr)
-      const{data:meet}=await supabase.from('weekly_meetings').select('*').eq('household_id',householdId).eq('week_start',ws).maybeSingle()
-      return{week:ws,completions:(comp||[]).length,meeting:meet}
-    }))
-    setHistoryData(results)
-  },[householdId])
+    try{
+      const weeks=Array.from({length:4},(_,index)=>addDaysToIsoDate(weekStart,-index*7))
+      setHistoryData(await loadWeekHistory(householdId,weeks))
+    }catch(caught){
+      reportError('carregar histórico semanal',caught)
+      setLoadError(friendlyMessage(caught))
+    }
+  },[householdId,weekStart])
 
-  useEffect(()=>{loadAll()},[loadAll])
-  useEffect(()=>{if(tab==='week')loadHistory()},[tab,loadHistory])
+  useEffect(()=>{void loadAll()},[loadAll])
+  useEffect(()=>{if(tab==='week')void loadHistory()},[tab,loadHistory])
 
   // Realtime
-  useEffect(()=>{
-    const ch=supabase.channel('ninho-rt')
-      .on('postgres_changes',{event:'*',schema:'public',table:'task_completions'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'dog_completions'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'tasks'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'dogs'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'xp_history'},loadAll)
-      .subscribe()
-    return()=>{supabase.removeChannel(ch)}
-  },[loadAll])
+  useEffect(()=>subscribeToHouseholdChanges(
+    householdId,
+    ()=>{void loadAll({silent:true})},
+    error=>reportError('realtime',error),
+  ),[householdId,loadAll])
 
-  function showToast(msg:string,undo?:()=>void){setToast({msg,undo});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),undo?4500:2600)}
+  function showToast(msg:string,undo?:()=>void,actionLabel='Desfazer',tone:'success'|'error'='success'){
+    setToast({msg,undo,actionLabel,tone})
+    clearTimeout(toastTimer.current)
+    toastTimer.current=setTimeout(()=>setToast(null),undo?5500:3000)
+  }
+  function setActionBusy(key:string,busy:boolean){
+    if(busy)busyRef.current.add(key);else busyRef.current.delete(key)
+    setBusyKeys(new Set(busyRef.current))
+  }
+  function isBusy(key:string){return busyKeys.has(key)}
+  async function performAction(key:string,action:()=>Promise<void>,retry?:()=>void){
+    if(busyRef.current.has(key))return false
+    setActionBusy(key,true)
+    try{
+      await action()
+      return true
+    }catch(caught){
+      reportError(key,caught)
+      showToast(friendlyMessage(caught),retry,'Tentar novamente','error')
+      return false
+    }finally{
+      setActionBusy(key,false)
+    }
+  }
   function closeModal(){setModal(null);setModalData(null)}
   function openModal(m:string,d?:any){setModal(m);setModalData(d??null)}
 
+  if(!hasLoaded&&loading)return(
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',color:'#8a8882',fontFamily:"'DM Mono', monospace",fontSize:13}}>
+      carregando o Ninho...
+    </div>
+  )
+
+  if(!hasLoaded&&loadError)return(
+    <div style={{minHeight:'100vh',display:'flex',alignItems:'center',justifyContent:'center',padding:24,color:'#f2efe9'}}>
+      <div style={{maxWidth:380,textAlign:'center'}}>
+        <div style={{fontSize:16,marginBottom:8}}>Não foi possível carregar o Ninho</div>
+        <div style={{fontSize:13,color:'#8a8882',marginBottom:18}}>{loadError}</div>
+        <button onClick={()=>{void loadAll()}} style={{padding:'10px 18px',border:0,borderRadius:10,background:'#1D9E75',color:'#fff',fontWeight:500}}>Tentar novamente</button>
+      </div>
+    </div>
+  )
+
   // ── ACTIONS ───────────────────────────────────────────
   async function toggleTask(t:Task){
+    const key=`task:${t.id}`
+    if(busyRef.current.has(key))return
     const was=!!t.completed_today
-    // Atualização otimista: o check responde na hora
     setTasks(p=>p.map(x=>x.id===t.id?{...x,completed_today:!was}:x))
     setXp(v=>v+(was?-XPW[t.weight]:XPW[t.weight]))
-    if(was){
-      await supabase.from('task_completions').delete().eq('task_id',t.id).eq('date',today)
-      await supabase.from('xp_history').delete().eq('household_id',householdId).eq('reason',`task:${t.id}:${today}`)
-    }else{
-      showToast(`+${XPW[t.weight]} XP · ${t.title}`,()=>{setToast(null);toggleTask({...t,completed_today:true})})
-      await supabase.from('task_completions').upsert({task_id:t.id,household_id:householdId,date:today},{onConflict:'task_id,date'})
-      await supabase.from('xp_history').insert({household_id:householdId,amount:XPW[t.weight],reason:`task:${t.id}:${today}`})
+    const ok=await performAction(key,async()=>{
+      await setTaskCompletion({
+        householdId,
+        taskId:t.id,
+        date:today,
+        completed:!was,
+        completedBy:t.assigned_to==='g'||t.assigned_to==='s'?t.assigned_to:person,
+      })
+    },()=>{void toggleTask(t)})
+    if(!ok){
+      setTasks(p=>p.map(x=>x.id===t.id?{...x,completed_today:was}:x))
+      setXp(v=>v+(was?XPW[t.weight]:-XPW[t.weight]))
+      return
     }
-    loadAll()
+    if(!was)showToast(`+${XPW[t.weight]} XP · ${t.title}`,()=>{setToast(null);void toggleTask({...t,completed_today:true})})
+    await loadAll({silent:true})
   }
 
   async function completeDog(r:DogRoutine){
+    const key=`dog:${r.id}`
+    if(busyRef.current.has(key))return
     const was=!!r.completed_today
     setDogs(p=>p.map(d=>({...d,routines:d.routines.map(x=>x.id===r.id?{...x,completed_today:!was}:x)})))
-    if(was){
-      await supabase.from('dog_completions').delete().eq('routine_id',r.id).eq('date',today)
-      await supabase.from('xp_history').delete().eq('household_id',householdId).eq('reason',`dog:${r.id}:${today}`)
-    }else{
-      showToast(`+1 XP · ${r.title}`,()=>{setToast(null);completeDog({...r,completed_today:true})})
-      await supabase.from('dog_completions').upsert({routine_id:r.id,date:today},{onConflict:'routine_id,date'})
-      await supabase.from('xp_history').insert({household_id:householdId,amount:1,reason:`dog:${r.id}:${today}`})
+    setXp(v=>v+(was?-1:1))
+    const ok=await performAction(key,async()=>{
+      await setDogRoutineCompletion({householdId,routineId:r.id,date:today,completed:!was,completedBy:person})
+    },()=>{void completeDog(r)})
+    if(!ok){
+      setDogs(p=>p.map(d=>({...d,routines:d.routines.map(x=>x.id===r.id?{...x,completed_today:was}:x)})))
+      setXp(v=>v+(was?1:-1))
+      return
     }
-    loadAll()
+    if(!was)showToast(`+1 XP · ${r.title}`,()=>{setToast(null);void completeDog({...r,completed_today:true})})
+    await loadAll({silent:true})
   }
 
   async function swapTask(t:Task){
     const n=t.assigned_to==='s'?'g':'s'
+    const previous=t.assigned_to
     setTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:n}:x))
+    const ok=await performAction(`assign:${t.id}`,async()=>updateTaskAssignment(householdId,t.id,n),()=>{void swapTask(t)})
+    if(!ok){setTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:previous}:x));return}
     showToast(`Passada para ${firstName(names[n])}`)
-    await supabase.from('tasks').update({assigned_to:n}).eq('id',t.id)
-    loadAll()
+    await loadAll({silent:true})
   }
 
   async function assignTask(id:string,to:string|null){
+    const previous=tasks.find(task=>task.id===id)?.assigned_to??null
     setTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:to}:x))
-    await supabase.from('tasks').update({assigned_to:to}).eq('id',id)
-    loadAll()
+    const ok=await performAction(`assign:${id}`,async()=>updateTaskAssignment(householdId,id,to),()=>{void assignTask(id,to)})
+    if(!ok){setTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:previous}:x));return}
+    await loadAll({silent:true})
   }
 
   async function deleteTask(id:string){
     if(!confirm('Remover essa tarefa?'))return
-    await supabase.from('tasks').update({active:false}).eq('id',id)
-    showToast('Tarefa removida');closeModal();loadAll()
+    const ok=await performAction(`delete-task:${id}`,async()=>deactivateTask(householdId,id),()=>{void deleteTask(id)})
+    if(!ok)return
+    showToast('Tarefa removida');closeModal();await loadAll({silent:true})
   }
 
   async function saveTask(data:any,editId?:string){
-    if(editId){
-      await supabase.from('tasks').update(data).eq('id',editId)
-      showToast('Tarefa atualizada!')
-    }else{
-      await supabase.from('tasks').insert({...data,household_id:householdId,active:true})
-      showToast(`"${data.title}" criada!`)
-    }
-    closeModal();loadAll()
+    const key=editId?`save-task:${editId}`:'save-task:new'
+    const ok=await performAction(key,async()=>persistTask(householdId,data,editId),()=>{void saveTask(data,editId)})
+    if(!ok)return
+    showToast(editId?'Tarefa atualizada!':`"${data.title}" criada!`)
+    closeModal();await loadAll({silent:true})
   }
 
   async function addSuggestions(sel:any[]){
     const existing=new Set(tasks.map(t=>t.title))
     const toAdd=sel.filter(s=>!existing.has(s.t)).map(s=>({household_id:householdId,title:s.t,category:s.cat,weight:s.w,frequency:s.f,assigned_to:null,scheduled_time:null,essential:s.ess,active:true}))
-    if(toAdd.length>0){await supabase.from('tasks').insert(toAdd);showToast(`${toAdd.length} tarefa${toAdd.length!==1?'s':''} adicionada${toAdd.length!==1?'s':''}!`)}
-    closeModal();loadAll()
+    const ok=await performAction('add-suggestions',async()=>insertTasks(householdId,toAdd),()=>{void addSuggestions(sel)})
+    if(!ok)return
+    if(toAdd.length>0)showToast(`${toAdd.length} tarefa${toAdd.length!==1?'s':''} adicionada${toAdd.length!==1?'s':''}!`)
+    closeModal();await loadAll({silent:true})
   }
 
   async function savePet(data:any,routines:any[]){
-    const{data:dog}=await supabase.from('dogs').insert({...data,household_id:householdId,active:true}).select().single()
-    if(dog)await supabase.from('dog_routines').insert(routines.map(r=>({...r,dog_id:dog.id,household_id:householdId,active:true})))
-    showToast(`${data.name} cadastrado(a)!`);closeModal();loadAll()
+    const ok=await performAction('save-pet',async()=>createPet(householdId,data,routines),()=>{void savePet(data,routines)})
+    if(!ok)return
+    showToast(`${data.name} cadastrado(a)!`);closeModal();await loadAll({silent:true})
   }
 
   async function toggleSurvival(){
     const ns=!settings.survival
     setSettings(p=>({...p,survival:ns}))
+    const ok=await performAction('weekly-settings',async()=>saveWeeklySettings(householdId,weekStart,{energy:settings.energy,survival:ns}),()=>{void toggleSurvival()})
+    if(!ok){setSettings(p=>({...p,survival:!ns}));return}
     showToast(ns?'Modo sobrevivência ativado':'Modo normal ativado')
-    await supabase.from('weekly_settings').upsert({household_id:householdId,week_start:weekStart,energy:settings.energy,survival:ns},{onConflict:'household_id,week_start'})
   }
 
   async function setEnergy(e:'high'|'medium'|'low'){
-    setSettings(p=>({...p,energy:e}));closeModal();showToast('Energia atualizada!')
-    await supabase.from('weekly_settings').upsert({household_id:householdId,week_start:weekStart,energy:e,survival:settings.survival},{onConflict:'household_id,week_start'})
+    const previous=settings.energy
+    setSettings(p=>({...p,energy:e}))
+    const ok=await performAction('weekly-settings',async()=>saveWeeklySettings(householdId,weekStart,{energy:e,survival:settings.survival}),()=>{void setEnergy(e)})
+    if(!ok){setSettings(p=>({...p,energy:previous}));return}
+    closeModal();showToast('Energia atualizada!')
   }
 
   async function updateName(role:Who,val:string){
     if(!val.trim()||val.trim()===names[role])return
-    setNames(n=>({...n,[role]:val.trim()}))
-    await supabase.from('profiles').update({display_name:val.trim()}).eq('household_id',householdId).eq('role',role)
+    const previous=names[role]
+    const displayName=val.trim()
+    setNames(n=>({...n,[role]:displayName}))
+    const ok=await performAction(`name:${role}`,async()=>saveProfileName(householdId,role,displayName),()=>{void updateName(role,displayName)})
+    if(!ok){setNames(n=>({...n,[role]:previous}));return}
     showToast('Nome atualizado!')
   }
 
   async function saveMeeting(data:Meeting){
-    await supabase.from('weekly_meetings').upsert({household_id:householdId,week_start:weekStart,...data},{onConflict:'household_id,week_start'})
+    const ok=await performAction('save-meeting',async()=>persistMeeting(householdId,weekStart,data),()=>{void saveMeeting(data)})
+    if(!ok)return
     showToast('Reunião salva!');closeModal()
-    if(tab==='week')loadHistory()
+    if(tab==='week')await loadHistory()
   }
 
   async function addAccident(dogId:string,location:string){
-    await supabase.from('puppy_accidents').insert({dog_id:dogId,household_id:householdId,location,date:today})
-    showToast('Acidente registrado');loadAll()
+    const ok=await performAction(`accident:${dogId}:${location}`,async()=>createPuppyAccident(householdId,dogId,location,today),()=>{void addAccident(dogId,location)})
+    if(!ok)return
+    showToast('Acidente registrado');await loadAll({silent:true})
   }
 
   async function autoDistribute(){
@@ -738,9 +821,10 @@ export default function NinhoApp({householdId}:{householdId:string}){
     active.filter(t=>t.weight==='heavy'&&!(t.essential&&t.category==='dogs')).forEach(t=>assign(t,gS<=sS?'g':'s'))
     active.filter(t=>t.frequency==='daily'&&!t.essential&&t.weight!=='heavy').forEach(t=>assign(t,gS*0.85<=sS?'g':'s'))
     active.filter(t=>!updates.find(u=>u.id===t.id)).forEach(t=>assign(t,gS<=sS?'g':'s'))
-    await Promise.all(updates.map(u=>supabase.from('tasks').update({assigned_to:u.assigned_to}).eq('id',u.id)))
+    const ok=await performAction('auto-distribute',async()=>applyTaskDistribution(householdId,updates as Array<{id:string,assigned_to:Who}>),()=>{void autoDistribute()})
+    if(!ok)return
     showToast(`Distribuído — ${firstName(names.g)}: ${Math.round(gS)}pts · ${firstName(names.s)}: ${Math.round(sS)}pts`)
-    loadAll()
+    await loadAll({silent:true})
   }
 
   // ── DERIVED ───────────────────────────────────────────
@@ -753,24 +837,27 @@ export default function NinhoApp({householdId}:{householdId:string}){
   const chaos=dailyTasks.length?Math.max(0,Math.round(100-(dailyTasks.filter(t=>t.completed_today).length/dailyTasks.length)*100)):0
   const ci=getChaosInfo(chaos)
   const lv=getLevel(xp)
+  const nextLevel=LEVELS.find(level=>level.min>xp)
   const xpPct=Math.min(100,Math.round(((xp-lv.min)/(lv.max-lv.min))*100))
   const puppies=dogs.filter(d=>d.is_puppy)
   const dogDaily=dogs.flatMap(d=>d.routines.filter(r=>r.frequency==='daily').map(r=>({r,dog:d})))
   const dogDone=dogDaily.filter(x=>x.r.completed_today).length
   const en=ENERGY[settings.energy]||ENERGY.medium
-  const h=new Date().getHours()
+  const h=hourInSaoPaulo()
   const hello=h<5?'Boa noite':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'
-  const dateLabel=new Date().toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})
+  const dateLabel=formatLongDateInSaoPaulo()
   const countFor=(w:Who)=>{const all=todayTasks.filter(t=>belongsTo(t,w));return{all:all.length,done:all.filter(t=>t.completed_today).length}}
 
   // ── RENDER HELPERS ────────────────────────────────────
   const taskRow=(t:Task,actions=true)=>{
     const other:Who=t.assigned_to==='s'?'g':'s'
     const hasMeta=t.essential||t.scheduled_time||t.frequency!=='daily'
+    const completionBusy=isBusy(`task:${t.id}`)
+    const assignmentBusy=isBusy(`assign:${t.id}`)
     return(
       <div key={t.id} className={`tr ${t.completed_today?'done':''}`}>
-        <button className={`chk ${t.essential?'ess':''}`} onClick={()=>toggleTask(t)} aria-label={t.completed_today?`Desmarcar ${t.title}`:`Concluir ${t.title}`}>✓</button>
-        <div className="trb" onClick={()=>toggleTask(t)}>
+        <button disabled={completionBusy} className={`chk ${t.essential?'ess':''}`} onClick={()=>toggleTask(t)} aria-label={t.completed_today?`Desmarcar ${t.title}`:`Concluir ${t.title}`}>✓</button>
+        <div className="trb" onClick={()=>{if(!completionBusy)void toggleTask(t)}} aria-disabled={completionBusy}>
           <div className="trt">{t.title}</div>
           {hasMeta&&<div className="trm">
             {t.essential&&!t.completed_today&&<span className="tag-e">● essencial</span>}
@@ -779,7 +866,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
           </div>}
         </div>
         <span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>
-        {actions&&<button className="ib" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
+        {actions&&<button disabled={assignmentBusy} className="ib" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
         {actions&&<button className="ib" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
       </div>
     )
@@ -826,14 +913,16 @@ export default function NinhoApp({householdId}:{householdId:string}){
     )
   }
 
-  const dogRow=(r:DogRoutine,dogName?:string)=>(
-    <div key={r.id} className={`dr ${r.completed_today?'done':''}`} onClick={()=>completeDog(r)}>
+  const dogRow=(r:DogRoutine,dogName?:string)=>{
+    const busy=isBusy(`dog:${r.id}`)
+    return(
+    <div key={r.id} className={`dr ${r.completed_today?'done':''}`} role="button" tabIndex={0} aria-disabled={busy} onKeyDown={event=>{if((event.key==='Enter'||event.key===' ')&&!busy)void completeDog(r)}} onClick={()=>{if(!busy)void completeDog(r)}}>
       <span className={`chk ${r.completed_today?'ok':''}`}>✓</span>
       <span className="dr-t">{r.title}</span>
       {dogName&&<span className="dr-m">{dogName}</span>}
       {r.scheduled_time&&<span className="dr-m">{hhmm(r.scheduled_time)}</span>}
     </div>
-  )
+  )}
 
   const actionBtn=(ic:string,t:string,s:string,onClick:()=>void,tint?:string)=>(
     <button className="act" onClick={onClick}>
@@ -885,6 +974,12 @@ export default function NinhoApp({householdId}:{householdId:string}){
       </header>
 
       <main className="main">
+        {loadError&&hasLoaded&&(
+          <div className="banner surv">
+            <span>{loadError}</span>
+            <button className="lnk" onClick={()=>{void loadAll()}}>Tentar novamente</button>
+          </div>
+        )}
         {/* ── HOJE ── */}
         {tab==='today'&&<div className="scr">
           <div className="sh">
@@ -946,7 +1041,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <div className="card">
                 <div className="slbl">Atalhos</div>
                 <div className="acts">
-                  {actionBtn('✦','Distribuir tarefas','Equilibra a carga entre vocês',autoDistribute,'var(--pbg)')}
+                  {actionBtn('✦','Distribuir tarefas',isBusy('auto-distribute')?'Distribuindo...':'Equilibra a carga entre vocês',()=>{void autoDistribute()},'var(--pbg)')}
                   {actionBtn(en.ic,'Energia da semana',en.l,()=>openModal('energy'))}
                   {actionBtn('🛡',settings.survival?'Sair do modo sobrevivência':'Modo sobrevivência',settings.survival?'Ativo · só essenciais':'Só o essencial por um tempo',toggleSurvival,settings.survival?'var(--cbg)':undefined)}
                   {actionBtn('📋','Reunião semanal','15 minutos, sem cobranças',()=>openModal('meeting'))}
@@ -996,11 +1091,11 @@ export default function NinhoApp({householdId}:{householdId:string}){
                       </div>
                     </div>
                     <div className="asg" role="group" aria-label="Responsável">
-                      <button className={t.assigned_to==='g'?'on-g':''} onClick={()=>assignTask(t.id,'g')}>{firstName(names.g)}</button>
-                      <button className={t.assigned_to==='s'?'on-s':''} onClick={()=>assignTask(t.id,'s')}>{firstName(names.s)}</button>
-                      <button className={!t.assigned_to?'on-r':''} onClick={()=>assignTask(t.id,null)} title="Rodízio">↻</button>
+                      <button disabled={isBusy(`assign:${t.id}`)} className={t.assigned_to==='g'?'on-g':''} onClick={()=>assignTask(t.id,'g')}>{firstName(names.g)}</button>
+                      <button disabled={isBusy(`assign:${t.id}`)} className={t.assigned_to==='s'?'on-s':''} onClick={()=>assignTask(t.id,'s')}>{firstName(names.s)}</button>
+                      <button disabled={isBusy(`assign:${t.id}`)} className={!t.assigned_to?'on-r':''} onClick={()=>assignTask(t.id,null)} title="Rodízio">↻</button>
                     </div>
-                    <button className="ib danger" onClick={()=>deleteTask(t.id)} title="Remover" aria-label="Remover">✕</button>
+                    <button disabled={isBusy(`delete-task:${t.id}`)} className="ib danger" onClick={()=>deleteTask(t.id)} title="Remover" aria-label="Remover">✕</button>
                   </div>
                 ))}
               </div>
@@ -1028,7 +1123,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                   <span><b style={{color:'var(--tx)',fontWeight:500}}>{Math.round(gS)}</b> pts · {act.filter(t=>belongsTo(t,'g')).length} tarefas</span>
                   <span><b style={{color:'var(--tx)',fontWeight:500}}>{Math.round(sS)}</b> pts · {act.filter(t=>belongsTo(t,'s')).length} tarefas</span>
                 </div>
-                <button className="btn btn-pur btn-w" onClick={autoDistribute}>✦ Distribuir automaticamente</button>
+                <button className="btn btn-pur btn-w" disabled={isBusy('auto-distribute')} onClick={autoDistribute}>{isBusy('auto-distribute')?'Distribuindo...':'✦ Distribuir automaticamente'}</button>
                 <div style={{fontSize:12,color:'var(--sub)',marginTop:8,textAlign:'center'}}>Ou ajuste uma a uma em <button onClick={()=>setTab('tasks')} style={{background:'none',border:'none',color:'var(--green)',fontSize:12}}>Tarefas →</button></div>
               </div>
               <div className="card">
@@ -1053,7 +1148,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                   <span style={{fontSize:32,fontWeight:300,letterSpacing:'-.03em'}}>{xp}</span><span style={{color:'var(--sub)',fontSize:13}}>XP · Nv{lv.l} {lv.n}</span>
                 </div>
                 <div className="bar"><div className="barf" style={{width:xpPct+'%',background:'var(--pur)'}}/></div>
-                <div style={{fontSize:12,color:'var(--sub)',marginTop:8}}>{lv.l<LEVELS.length?`Faltam ${lv.max-xp} XP para ${LEVELS[lv.l].n}`:'Nível máximo 🏆'}</div>
+                <div style={{fontSize:12,color:'var(--sub)',marginTop:8}}>{nextLevel?`Faltam ${nextLevel.min-xp} XP para ${nextLevel.n}`:'Nível máximo 🏆'}</div>
               </div>
               <div className="card">
                 <div className="slbl">Últimas 4 semanas</div>
@@ -1100,7 +1195,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                   <div key={a.id} className="acc">
                     <span>💧</span><span>{a.location}</span>
                     <span className="mono" style={{marginLeft:'auto',fontSize:11,color:'var(--sub)'}}>
-                      {a.date!==today&&fmtDate(a.date)+' · '}{new Date(a.occurred_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+                      {a.date!==today&&fmtDate(a.date)+' · '}{formatTimeInSaoPaulo(a.occurred_at)}
                     </span>
                   </div>
                 ))}
@@ -1180,12 +1275,12 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
       {(tab==='today'||tab==='tasks')&&<button className="fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>}
 
-      {toast&&<div className="toast" role="status"><span className="toast-m">{toast.msg}</span>{toast.undo&&<button onClick={toast.undo}>Desfazer</button>}</div>}
-      {modal==='task'&&<TaskFormModal task={modalData} names={names} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
+      {toast&&<div className={`toast ${toast.tone==='error'?'error':''}`} role={toast.tone==='error'?'alert':'status'}><span className="toast-m">{toast.msg}</span>{toast.undo&&<button onClick={toast.undo}>{toast.actionLabel||'Desfazer'}</button>}</div>}
+      {modal==='task'&&<TaskFormModal task={modalData} names={names} onClose={closeModal} onSave={saveTask} onDelete={deleteTask} busy={isBusy(modalData?.id?`save-task:${modalData.id}`:'save-task:new')||isBusy(`delete-task:${modalData?.id}`)}/>}
       {modal==='sugg'&&<SuggModal tasks={tasks} onClose={closeModal} onAdd={addSuggestions} onCustomize={s=>openModal('task',{title:s.t,category:s.cat,weight:s.w,frequency:s.f,essential:s.ess,assigned_to:null,scheduled_time:null,active:true,id:null})}/>}
-      {modal==='pet'&&<PetModal onClose={closeModal} onSave={savePet}/>}
-      {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy}/>}
-      {modal==='meeting'&&<MeetingModal names={names} weekStart={weekStart} onClose={closeModal} onSave={saveMeeting}/>}
+      {modal==='pet'&&<PetModal onClose={closeModal} onSave={savePet} busy={isBusy('save-pet')}/>}
+      {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy} busy={isBusy('weekly-settings')}/>}
+      {modal==='meeting'&&<MeetingModal names={names} weekStart={weekStart} onClose={closeModal} onSave={saveMeeting} busy={isBusy('save-meeting')}/>}
     </>
   )
 }
