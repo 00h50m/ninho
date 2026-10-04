@@ -18,5 +18,26 @@ select public.get_household_xp(id) from public.households limit 1;
 select public.get_streak(id) from public.households limit 1;
 ```
 
-O `supabase-schema.sql` é o schema canônico para um banco novo. Em banco existente, use sempre as migrations.
+Para a Fase 2, aplique em seguida `202610040001_phase2_task_occurrences.sql`. A migration:
 
+- adiciona as regras de recorrência às tarefas-modelo;
+- cria `task_occurrences` e migra todas as conclusões antigas;
+- preserva as chaves de XP já existentes;
+- gera ocorrências futuras de forma idempotente;
+- adiciona operações transacionais para concluir, desfazer, adiar e ignorar ocorrências.
+
+Valide após a execução:
+
+```sql
+select public.generate_task_occurrences(id, public.ninho_today() + 62, null)
+from public.households;
+
+select task_id, original_scheduled_date, scheduled_date, status, count(*)
+from public.task_occurrences
+group by task_id, original_scheduled_date, scheduled_date, status
+having count(*) > 1;
+```
+
+A segunda consulta deve retornar zero linhas. Execute a Fase 2 somente depois da Fase 1.
+
+O `supabase-schema.sql` é o schema canônico para um banco novo. Em banco existente, use sempre as migrations.

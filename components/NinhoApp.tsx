@@ -18,6 +18,7 @@ import {
   insertTasks,
   loadNinhoSnapshot,
   loadWeekHistory,
+  postponeTaskOccurrence,
   persistMeeting,
   persistTask,
   saveProfileName,
@@ -32,8 +33,8 @@ import type { Dog, DogRoutine, Meeting, Names, PuppyAccident, Settings, Task, We
 
 const CAT:Record<string,string>={kitchen:'🍳 Cozinha',bathroom:'🚿 Banheiro',bedroom:'🛏 Quarto',laundry:'👕 Lavanderia',general:'🏠 Geral',dogs:'🐾 Cães',shopping:'🛒 Compras',finance:'💰 Finanças'}
 const WPT:Record<string,string>={light:'Leve',medium:'Médio',heavy:'Pesado'}
-const FPT:Record<string,string>={daily:'Diária',weekly:'Semanal',biweekly:'Quinzenal',monthly:'Mensal',once:'Pontual'}
-const FEFF:Record<string,number>={daily:7,weekly:2,biweekly:1,monthly:0.5,once:1}
+const FPT:Record<string,string>={daily:'Diária',weekdays:'Dias da semana',weekly:'Semanal',biweekly:'Quinzenal',monthly:'Mensal',interval_days:'A cada X dias',after_completion:'X dias após concluir',once:'Pontual'}
+const FEFF:Record<string,number>={daily:7,weekdays:3,weekly:2,biweekly:1,monthly:0.5,interval_days:2,after_completion:1,once:1}
 const ROLE:Record<Who,string>={g:'home office',s:'professora'}
 const ENERGY:Record<string,{ic:string,l:string,short:string,s:string,cls:string}>={
   high:{ic:'🌿',l:'Alta energia',short:'Alta',s:'Lista completa ativa',cls:'green'},
@@ -396,15 +397,31 @@ function TaskFormModal({task,names,onClose,onSave,onDelete,busy=false}:{task:Tas
   const[title,setTitle]=useState(t?.title||'')
   const[cat,setCat]=useState(t?.category||'general')
   const[weight,setWeight]=useState<'light'|'medium'|'heavy'>(t?.weight||'medium')
-  const[freq,setFreq]=useState(t?.frequency||'weekly')
+  const[freq,setFreq]=useState(t?.recurrence_type||t?.frequency||'weekly')
+  const[interval,setInterval]=useState(t?.recurrence_interval||1)
+  const[weekdays,setWeekdays]=useState<number[]>(t?.recurrence_weekdays||[])
+  const[monthDay,setMonthDay]=useState(t?.recurrence_day_of_month||Number((t?.starts_on||todayStr()).slice(8,10)))
+  const[start,setStart]=useState(t?.starts_on||todayStr())
+  const[end,setEnd]=useState(t?.ends_on||'')
+  const[pause,setPause]=useState(t?.paused_until||'')
   const[assign,setAssign]=useState(t?.assigned_to||'')
   const[time,setTime]=useState(hhmm(t?.scheduled_time||null))
   const[ess,setEss]=useState(t?.essential||false)
-  const handle=()=>{if(!title.trim())return;onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess},editing?t!.id:undefined)}
+  const toggleWeekday=(day:number)=>setWeekdays(current=>current.includes(day)?current.filter(value=>value!==day):[...current,day].sort())
+  const handle=()=>{
+    if(!title.trim()||!start||(freq==='weekdays'&&weekdays.length===0))return
+    onSave({
+      title:title.trim(),category:cat,weight,frequency:freq,recurrence_type:freq,
+      recurrence_interval:interval,recurrence_weekdays:weekdays,
+      recurrence_day_of_month:freq==='monthly'?monthDay:null,
+      starts_on:start,ends_on:end||null,paused_until:pause||null,
+      assigned_to:assign||null,scheduled_time:time||null,essential:ess,
+    },editing?t!.id:undefined)
+  }
   return(
     <Sheet title={editing?'Editar tarefa':'Nova tarefa'} onClose={onClose} footer={<>
       {editing&&<button className="btn btn-danger" disabled={busy} onClick={()=>onDelete(t!.id)}>Remover</button>}
-      <button className="btn btn-p" disabled={!title.trim()||busy} onClick={handle}>{busy?'Salvando...':editing?'Salvar alterações':'Criar tarefa'}</button>
+      <button className="btn btn-p" disabled={!title.trim()||!start||(freq==='weekdays'&&weekdays.length===0)||busy} onClick={handle}>{busy?'Salvando...':editing?'Salvar alterações':'Criar tarefa'}</button>
     </>}>
       <label className="fl">Nome</label>
       <input className="fi" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handle()}} placeholder="Ex: Limpar bancada" autoFocus/>
@@ -422,6 +439,26 @@ function TaskFormModal({task,names,onClose,onSave,onDelete,busy=false}:{task:Tas
       </div>
       <label className="fl">Frequência</label>
       <div className="btng c3">{Object.entries(FPT).map(([k,v])=><button key={k} className={`sbtn ${freq===k?'on':''}`} onClick={()=>setFreq(k)}>{v}</button>)}</div>
+      {freq==='weekdays'&&<>
+        <label className="fl">Dias da semana</label>
+        <div className="btng c3">{[['Seg',1],['Ter',2],['Qua',3],['Qui',4],['Sex',5],['Sáb',6],['Dom',7]].map(([label,day])=><button key={String(day)} className={`sbtn ${weekdays.includes(Number(day))?'on':''}`} onClick={()=>toggleWeekday(Number(day))}>{label}</button>)}</div>
+      </>}
+      {(freq==='interval_days'||freq==='after_completion')&&<>
+        <label className="fl">Intervalo em dias</label>
+        <input type="number" min="1" max="365" className="fi" value={interval} onChange={e=>setInterval(Math.max(1,Number(e.target.value)||1))} style={{maxWidth:180}}/>
+      </>}
+      {freq==='monthly'&&<>
+        <label className="fl">Dia do mês</label>
+        <input type="number" min="1" max="31" className="fi" value={monthDay} onChange={e=>setMonthDay(Math.min(31,Math.max(1,Number(e.target.value)||1)))} style={{maxWidth:180}}/>
+      </>}
+      <label className="fl">{freq==='once'?'Data':'Data inicial'}</label>
+      <input type="date" className="fi" value={start} onChange={e=>setStart(e.target.value)} style={{maxWidth:220}}/>
+      {freq!=='once'&&<>
+        <label className="fl">Data final <span className="hint">(opcional)</span></label>
+        <input type="date" className="fi" min={start} value={end} onChange={e=>setEnd(e.target.value)} style={{maxWidth:220}}/>
+      </>}
+      <label className="fl">Pausar até <span className="hint">(opcional)</span></label>
+      <input type="date" className="fi" value={pause} onChange={e=>setPause(e.target.value)} style={{maxWidth:220}}/>
       <label className="fl">Horário <span className="hint">(opcional)</span></label>
       <input type="time" className="fi" value={time} onChange={e=>setTime(e.target.value)} style={{maxWidth:180}}/>
       <label className="fl">Prioridade</label>
@@ -429,6 +466,21 @@ function TaskFormModal({task,names,onClose,onSave,onDelete,busy=false}:{task:Tas
         <button className={`sbtn ${!ess?'on':''}`} style={{textAlign:'left',padding:'11px 13px'}} onClick={()=>setEss(false)}>Regular<small>Pode ser adiada</small></button>
         <button className={`sbtn ${ess?'on':''}`} style={{textAlign:'left',padding:'11px 13px'}} onClick={()=>setEss(true)}>🔴 Essencial<small>Não pode falhar</small></button>
       </div>
+    </Sheet>
+  )
+}
+
+function PostponeTaskModal({task,onClose,onSave,busy=false}:{task:Task,onClose:()=>void,onSave:(date:string,reason:string)=>void,busy?:boolean}){
+  const today=todayStr()
+  const[date,setDate]=useState(addDaysToIsoDate(today,1))
+  const[reason,setReason]=useState('')
+  return(
+    <Sheet title="Adiar tarefa" onClose={onClose} footer={<button className="btn btn-p" disabled={!date||busy} onClick={()=>onSave(date,reason)}>{busy?'Adiando...':'Adiar tarefa'}</button>}>
+      <p style={{color:'var(--mu)',marginBottom:16}}>{task.title}</p>
+      <label className="fl">Nova data</label>
+      <input type="date" className="fi" min={today} value={date} onChange={event=>setDate(event.target.value)} autoFocus/>
+      <label className="fl">Motivo <span className="hint">(opcional)</span></label>
+      <textarea className="fi" rows={3} value={reason} onChange={event=>setReason(event.target.value)} placeholder="Ex: semana corrida, falta de material..."/>
     </Sheet>
   )
 }
@@ -560,6 +612,7 @@ function MeetingModal({names,weekStart,onClose,onSave,busy=false}:{names:Names,w
 export default function NinhoApp({householdId}:{householdId:string}){
   const [tab,setTabState]=useState('today')
   const [tasks,setTasks]=useState<Task[]>([])
+  const [scheduledTasks,setScheduledTasks]=useState<Task[]>([])
   const [dogs,setDogs]=useState<Dog[]>([])
   const [settings,setSettings]=useState<Settings>({energy:'medium',survival:false})
   const [xp,setXp]=useState(0)
@@ -603,6 +656,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
     try{
       const snapshot=await loadNinhoSnapshot(householdId,today,weekStart)
       setTasks(snapshot.tasks)
+      setScheduledTasks(snapshot.todayTasks)
       setDogs(snapshot.dogs)
       setSettings(snapshot.settings)
       setXp(snapshot.xp)
@@ -683,22 +737,24 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
   // ── ACTIONS ───────────────────────────────────────────
   async function toggleTask(t:Task){
-    const key=`task:${t.id}`
+    const occurrenceKey=t.occurrence_id||`${t.id}:${t.occurrence_date||today}`
+    const key=`task:${occurrenceKey}`
     if(busyRef.current.has(key))return
     const was=!!t.completed_today
-    setTasks(p=>p.map(x=>x.id===t.id?{...x,completed_today:!was}:x))
+    setScheduledTasks(p=>p.map(x=>(x.occurrence_id||x.id)===occurrenceKey?{...x,completed_today:!was,occurrence_status:was?'pending':'completed'}:x))
     setXp(v=>v+(was?-XPW[t.weight]:XPW[t.weight]))
     const ok=await performAction(key,async()=>{
       await setTaskCompletion({
         householdId,
         taskId:t.id,
-        date:today,
+        date:t.original_scheduled_date||t.occurrence_date||today,
+        occurrenceId:t.occurrence_id,
         completed:!was,
         completedBy:t.assigned_to==='g'||t.assigned_to==='s'?t.assigned_to:person,
       })
     },()=>{void toggleTask(t)})
     if(!ok){
-      setTasks(p=>p.map(x=>x.id===t.id?{...x,completed_today:was}:x))
+      setScheduledTasks(p=>p.map(x=>(x.occurrence_id||x.id)===occurrenceKey?{...x,completed_today:was,occurrence_status:t.occurrence_status}:x))
       setXp(v=>v+(was?XPW[t.weight]:-XPW[t.weight]))
       return
     }
@@ -728,8 +784,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
     const n=t.assigned_to==='s'?'g':'s'
     const previous=t.assigned_to
     setTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:n}:x))
+    setScheduledTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:n}:x))
     const ok=await performAction(`assign:${t.id}`,async()=>updateTaskAssignment(householdId,t.id,n),()=>{void swapTask(t)})
-    if(!ok){setTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:previous}:x));return}
+    if(!ok){setTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:previous}:x));setScheduledTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:previous}:x));return}
     showToast(`Passada para ${firstName(names[n])}`)
     await loadAll({silent:true})
   }
@@ -737,8 +794,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
   async function assignTask(id:string,to:string|null){
     const previous=tasks.find(task=>task.id===id)?.assigned_to??null
     setTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:to}:x))
+    setScheduledTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:to}:x))
     const ok=await performAction(`assign:${id}`,async()=>updateTaskAssignment(householdId,id,to),()=>{void assignTask(id,to)})
-    if(!ok){setTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:previous}:x));return}
+    if(!ok){setTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:previous}:x));setScheduledTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:previous}:x));return}
     await loadAll({silent:true})
   }
 
@@ -755,6 +813,16 @@ export default function NinhoApp({householdId}:{householdId:string}){
     if(!ok)return
     showToast(editId?'Tarefa atualizada!':`"${data.title}" criada!`)
     closeModal();await loadAll({silent:true})
+  }
+
+  async function postponeTask(task:Task,newDate:string,reason:string){
+    if(!task.occurrence_id)return
+    const key=`postpone:${task.occurrence_id}`
+    const ok=await performAction(key,async()=>{await postponeTaskOccurrence(householdId,task.occurrence_id!,newDate,reason)},()=>{void postponeTask(task,newDate,reason)})
+    if(!ok)return
+    showToast(`"${task.title}" adiada para ${fmtDate(newDate)}`)
+    closeModal()
+    await loadAll({silent:true})
   }
 
   async function addSuggestions(sel:any[]){
@@ -829,11 +897,11 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
   // ── DERIVED ───────────────────────────────────────────
   const focusMode=settings.survival||settings.energy==='low'
-  const todayTasks=focusMode&&!showAllToday?tasks.filter(t=>t.essential):tasks
-  const hiddenCount=tasks.length-todayTasks.length
-  const doneToday=tasks.filter(t=>t.completed_today).length
-  const dayPct=tasks.length?Math.round(doneToday/tasks.length*100):0
-  const dailyTasks=tasks.filter(t=>t.frequency==='daily')
+  const todayTasks=focusMode&&!showAllToday?scheduledTasks.filter(t=>t.essential):scheduledTasks
+  const hiddenCount=scheduledTasks.length-todayTasks.length
+  const doneToday=scheduledTasks.filter(t=>t.completed_today).length
+  const dayPct=scheduledTasks.length?Math.round(doneToday/scheduledTasks.length*100):0
+  const dailyTasks=scheduledTasks
   const chaos=dailyTasks.length?Math.max(0,Math.round(100-(dailyTasks.filter(t=>t.completed_today).length/dailyTasks.length)*100)):0
   const ci=getChaosInfo(chaos)
   const lv=getLevel(xp)
@@ -851,21 +919,23 @@ export default function NinhoApp({householdId}:{householdId:string}){
   // ── RENDER HELPERS ────────────────────────────────────
   const taskRow=(t:Task,actions=true)=>{
     const other:Who=t.assigned_to==='s'?'g':'s'
-    const hasMeta=t.essential||t.scheduled_time||t.frequency!=='daily'
-    const completionBusy=isBusy(`task:${t.id}`)
+    const hasMeta=t.essential||t.is_overdue||t.scheduled_time||t.frequency!=='daily'
+    const completionBusy=isBusy(`task:${t.occurrence_id||`${t.id}:${t.occurrence_date||today}`}`)
     const assignmentBusy=isBusy(`assign:${t.id}`)
     return(
-      <div key={t.id} className={`tr ${t.completed_today?'done':''}`}>
+      <div key={t.occurrence_id||t.id} className={`tr ${t.completed_today?'done':''}`}>
         <button disabled={completionBusy} className={`chk ${t.essential?'ess':''}`} onClick={()=>toggleTask(t)} aria-label={t.completed_today?`Desmarcar ${t.title}`:`Concluir ${t.title}`}>✓</button>
         <div className="trb" onClick={()=>{if(!completionBusy)void toggleTask(t)}} aria-disabled={completionBusy}>
           <div className="trt">{t.title}</div>
           {hasMeta&&<div className="trm">
             {t.essential&&!t.completed_today&&<span className="tag-e">● essencial</span>}
+            {t.is_overdue&&<span className="tag-e">atrasada · {fmtDate(t.occurrence_date!)}</span>}
             {t.scheduled_time&&<span className="tag-t">⏰ {hhmm(t.scheduled_time)}</span>}
             {t.frequency!=='daily'&&<span>{FPT[t.frequency]}</span>}
           </div>}
         </div>
         <span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>
+        {actions&&!t.completed_today&&<button className="ib" onClick={()=>openModal('postpone',t)} title="Adiar" aria-label={`Adiar ${t.title}`}>↷</button>}
         {actions&&<button disabled={assignmentBusy} className="ib" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
         {actions&&<button className="ib" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
       </div>
@@ -989,7 +1059,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
           <div className="stats">
             <div className="stat">
               <div className="stat-l">Hoje</div>
-              <div className="stat-v">{dayPct}%<small>{doneToday}/{tasks.length}</small></div>
+              <div className="stat-v">{dayPct}%<small>{doneToday}/{scheduledTasks.length}</small></div>
               <div className="bar"><div className="barf" style={{width:dayPct+'%',background:'var(--gdk)'}}/></div>
             </div>
             <div className="stat">
@@ -1277,6 +1347,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
       {toast&&<div className={`toast ${toast.tone==='error'?'error':''}`} role={toast.tone==='error'?'alert':'status'}><span className="toast-m">{toast.msg}</span>{toast.undo&&<button onClick={toast.undo}>{toast.actionLabel||'Desfazer'}</button>}</div>}
       {modal==='task'&&<TaskFormModal task={modalData} names={names} onClose={closeModal} onSave={saveTask} onDelete={deleteTask} busy={isBusy(modalData?.id?`save-task:${modalData.id}`:'save-task:new')||isBusy(`delete-task:${modalData?.id}`)}/>}
+      {modal==='postpone'&&modalData&&<PostponeTaskModal task={modalData} onClose={closeModal} onSave={(date,reason)=>{void postponeTask(modalData,date,reason)}} busy={isBusy(`postpone:${modalData.occurrence_id}`)}/>}
       {modal==='sugg'&&<SuggModal tasks={tasks} onClose={closeModal} onAdd={addSuggestions} onCustomize={s=>openModal('task',{title:s.t,category:s.cat,weight:s.w,frequency:s.f,essential:s.ess,assigned_to:null,scheduled_time:null,active:true,id:null})}/>}
       {modal==='pet'&&<PetModal onClose={closeModal} onSave={savePet} busy={isBusy('save-pet')}/>}
       {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy} busy={isBusy('weekly-settings')}/>}

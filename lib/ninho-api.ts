@@ -1,5 +1,6 @@
 import { supabase } from '@/lib/supabase'
 import { reportError, throwIfError } from '@/lib/errors'
+import { addDaysToIsoDate, todayInSaoPaulo } from '@/lib/date'
 import type {
   Dog,
   DogRoutine,
@@ -14,6 +15,7 @@ import type {
 
 export interface NinhoSnapshot {
   tasks: Task[]
+  todayTasks: Task[]
   dogs: Dog[]
   settings: Settings
   xp: number
@@ -27,7 +29,14 @@ export async function loadNinhoSnapshot(
   today: string,
   weekStart: string,
 ): Promise<NinhoSnapshot> {
-  const [tasks, dogs, settings, taskCompletions, dogCompletions, xp, streak, profiles, accidents] =
+  const generation = await supabase.rpc('generate_task_occurrences', {
+    p_household_id: householdId,
+    p_until: addDaysToIsoDate(today, 62),
+    p_task_id: null,
+  })
+  throwIfError('gerar ocorrências das tarefas', generation.error)
+
+  const [tasks, dogs, settings, pendingOccurrences, completedOccurrences, dogCompletions, xp, streak, profiles, accidents] =
     await Promise.all([
       supabase
         .from('tasks')
@@ -48,10 +57,21 @@ export async function loadNinhoSnapshot(
         .eq('week_start', weekStart)
         .maybeSingle(),
       supabase
-        .from('task_completions')
-        .select('task_id')
+        .from('task_occurrences')
+        .select('*,task:tasks!inner(*)')
         .eq('household_id', householdId)
-        .eq('date', today),
+        .eq('task.active', true)
+        .lte('scheduled_date', today)
+        .in('status', ['pending', 'postponed'])
+        .order('scheduled_date')
+        .order('scheduled_time'),
+      supabase
+        .from('task_occurrences')
+        .select('*,task:tasks!inner(*)')
+        .eq('household_id', householdId)
+        .eq('scheduled_date', today)
+        .eq('status', 'completed')
+        .order('completed_at'),
       supabase
         .from('dog_completions')
         .select('routine_id')
@@ -75,7 +95,8 @@ export async function loadNinhoSnapshot(
     ['carregar tarefas', tasks.error],
     ['carregar cães', dogs.error],
     ['carregar configuração semanal', settings.error],
-    ['carregar conclusões de tarefas', taskCompletions.error],
+    ['carregar tarefas previstas', pendingOccurrences.error],
+    ['carregar tarefas concluídas', completedOccurrences.error],
     ['carregar conclusões dos cães', dogCompletions.error],
     ['carregar XP', xp.error],
     ['carregar sequência', streak.error],
@@ -83,17 +104,28 @@ export async function loadNinhoSnapshot(
     ['carregar acidentes', accidents.error],
   ].forEach(([context, error]) => throwIfError(String(context), error))
 
-  const completedTaskIds = new Set((taskCompletions.data || []).map((item: any) => item.task_id))
   const completedDogIds = new Set((dogCompletions.data || []).map((item: any) => item.routine_id))
   const profileRows = profiles.data || []
   const giovanna = profileRows.find((profile: any) => profile.role === 'g')
   const sabrina = profileRows.find((profile: any) => profile.role === 's')
 
   return {
-    tasks: (tasks.data || []).map((task: any) => ({
-      ...task,
-      completed_today: completedTaskIds.has(task.id),
-    })),
+    tasks: (tasks.data || []) as Task[],
+    todayTasks: [...(pendingOccurrences.data || []), ...(completedOccurrences.data || [])]
+      .map((occurrence: any) => ({
+        ...occurrence.task,
+        assigned_to: occurrence.planned_assignee ?? occurrence.task.assigned_to,
+        scheduled_time: occurrence.scheduled_time ?? occurrence.task.scheduled_time,
+        completed_today: occurrence.status === 'completed',
+        occurrence_id: occurrence.id,
+        occurrence_status: occurrence.status,
+        original_scheduled_date: occurrence.original_scheduled_date,
+        occurrence_date: occurrence.scheduled_date,
+        completed_by: occurrence.completed_by,
+        completed_at: occurrence.completed_at,
+        resolution_reason: occurrence.resolution_reason,
+        is_overdue: occurrence.scheduled_date < today && occurrence.status !== 'completed',
+      })),
     dogs: (dogs.data || []).map((dog: any) => ({
       ...dog,
       routines: (dog.dog_routines || []).map((routine: any) => ({
@@ -123,11 +155,12 @@ export async function loadWeekHistory(householdId: string, weeks: string[]) {
 
       const [completions, meeting] = await Promise.all([
         supabase
-          .from('task_completions')
-          .select('task_id,date')
+          .from('task_occurrences')
+          .select('id,scheduled_date')
           .eq('household_id', householdId)
-          .gte('date', weekStart)
-          .lte('date', endDate),
+          .eq('status', 'completed')
+          .gte('scheduled_date', weekStart)
+          .lte('scheduled_date', endDate),
         supabase
           .from('weekly_meetings')
           .select('*')
@@ -152,9 +185,21 @@ export async function setTaskCompletion(input: {
   householdId: string
   taskId: string
   date: string
+  occurrenceId?: string
   completed: boolean
   completedBy?: Who | null
 }) {
+  if (input.occurrenceId) {
+    const result = await supabase.rpc('set_task_occurrence_completion', {
+      p_household_id: input.householdId,
+      p_occurrence_id: input.occurrenceId,
+      p_completed: input.completed,
+      p_completed_by: input.completedBy || null,
+    })
+    throwIfError('atualizar ocorrência da tarefa', result.error)
+    return result.data
+  }
+
   const result = await supabase.rpc('set_task_completion', {
     p_household_id: input.householdId,
     p_task_id: input.taskId,
@@ -185,13 +230,11 @@ export async function setDogRoutineCompletion(input: {
 }
 
 export async function updateTaskAssignment(householdId: string, taskId: string, assignedTo: string | null) {
-  const result = await supabase
-    .from('tasks')
-    .update({ assigned_to: assignedTo })
-    .eq('id', taskId)
-    .eq('household_id', householdId)
-    .select('id')
-    .single()
+  const result = await supabase.rpc('set_task_assignment', {
+    p_household_id: householdId,
+    p_task_id: taskId,
+    p_assigned_to: assignedTo,
+  })
   throwIfError('alterar responsável', result.error)
 }
 
@@ -207,32 +250,50 @@ export async function deactivateTask(householdId: string, taskId: string) {
 }
 
 export async function persistTask(householdId: string, data: Partial<Task>, taskId?: string) {
-  if (taskId) {
-    const result = await supabase
-      .from('tasks')
-      .update(data)
-      .eq('id', taskId)
-      .eq('household_id', householdId)
-      .select('id')
-      .single()
-    throwIfError('salvar tarefa', result.error)
-    return
-  }
-
-  const result = await supabase
-    .from('tasks')
-    .insert({ ...data, household_id: householdId, active: true })
-    .select('id')
-    .single()
-  throwIfError('criar tarefa', result.error)
+  const result = await supabase.rpc('save_task_template', {
+    p_household_id: householdId,
+    p_payload: data,
+    p_task_id: taskId || null,
+    p_generate_until: addDaysToIsoDate(todayInSaoPaulo(), 62),
+  })
+  throwIfError(taskId ? 'salvar tarefa' : 'criar tarefa', result.error)
 }
 
 export async function insertTasks(householdId: string, tasks: Array<Partial<Task>>) {
   if (!tasks.length) return
-  const result = await supabase
-    .from('tasks')
-    .insert(tasks.map((task) => ({ ...task, household_id: householdId, active: true })))
-  throwIfError('adicionar sugestões', result.error)
+  await Promise.all(tasks.map((task) => persistTask(householdId, task)))
+}
+
+export async function postponeTaskOccurrence(
+  householdId: string,
+  occurrenceId: string,
+  newDate: string,
+  reason?: string,
+) {
+  const result = await supabase.rpc('postpone_task_occurrence', {
+    p_household_id: householdId,
+    p_occurrence_id: occurrenceId,
+    p_new_date: newDate,
+    p_reason: reason || null,
+  })
+  throwIfError('adiar tarefa', result.error)
+  return result.data
+}
+
+export async function resolveTaskOccurrence(
+  householdId: string,
+  occurrenceId: string,
+  status: 'skipped' | 'cancelled',
+  reason?: string,
+) {
+  const result = await supabase.rpc('resolve_task_occurrence', {
+    p_household_id: householdId,
+    p_occurrence_id: occurrenceId,
+    p_status: status,
+    p_reason: reason || null,
+  })
+  throwIfError('resolver tarefa', result.error)
+  return result.data
 }
 
 export async function createPet(
@@ -339,6 +400,7 @@ export function subscribeToHouseholdChanges(
   const filter = `household_id=eq.${householdId}`
   const channel = supabase
     .channel(`ninho:${householdId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'task_occurrences', filter }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'task_completions', filter }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'dog_completions', filter }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'tasks', filter }, onChange)
@@ -356,4 +418,3 @@ export function subscribeToHouseholdChanges(
 }
 
 export type { DogRoutine }
-
