@@ -116,6 +116,10 @@ export const TEMPLATES: Template[] = [
     steps: [s('Trocar roupa de cama e toalhas'), s('Lavar e estender roupa', true), s('Aspirar a casa'), s('Limpar a geladeira')], essentialIf: ['lavanderia'], suggestIf: ['semana', 'divisao'] },
   { key: 'prep_semana', title: 'Preparação da semana', description: 'Combinar a semana em poucos minutos', category: 'semana', time: '18:00', weekdays: [0], duration: 20, assign: 'shared',
     steps: [s('Olhar a agenda das duas', true), s('Lista de compras'), s('Combinar quem faz o quê'), s('Definir a energia da semana')], essentialIf: [], suggestIf: ['semana', 'prioridade', 'compras'] },
+  { key: 'reset_sala', title: 'Reset da sala', description: 'Sala em ordem antes de dormir', category: 'noite', time: '22:00', weekdays: ALL_DAYS, duration: 10, assign: 'rotation',
+    steps: [s('Recolher copos e louça', true), s('Dobrar mantas e almofadas'), s('Guardar o que está fora do lugar'), s('Brinquedos dos cães na caixa')], essentialIf: [], suggestIf: ['esquecidas'] },
+  { key: 'organiza_10', title: 'Organização de 10 minutos', description: 'Um cômodo por dia, só 10 minutos', category: 'casa', time: '19:30', weekdays: [1, 2, 3, 4, 5], duration: 10, assign: 'shared',
+    steps: [s('Escolher um cômodo', true), s('Tirar o que não é dali'), s('Limpar uma superfície')], essentialIf: [], suggestIf: ['cansaco', 'semana'] },
   { key: 'resgate_15', title: 'Resgate de 15 minutos', description: 'Para quando a casa sair do controle', category: 'casa', time: null, weekdays: ALL_DAYS, duration: 15, assign: 'shared',
     steps: [s('Recolher o que está no chão', true), s('Louça na pia', true), s('Superfícies livres'), s('Lixo para fora')], essentialIf: [], suggestIf: ['cansaco'] },
 ]

@@ -725,3 +725,52 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
   .wk-days{gap:2px}
   .wk-leg{display:none}
 }
+
+/* ── Rotinas com checklist e hábitos (Fase 4) ─────────────────────── */
+.rt-actions{display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap}
+.rt-sec{margin:6px 0 10px}
+.rt-live{display:flex;flex-direction:column;gap:10px}
+.rt-live.done{border-color:var(--gbdr)}
+.rt-card-a{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.rt-edit{width:32px;height:32px;border-radius:var(--rs);border:1px solid var(--bd);background:var(--sf2);color:var(--mu);font-size:14px}
+.rt-prog{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--sub)}
+.rt-prog .bar{flex:1}
+.rt-check{list-style:none;display:flex;flex-direction:column;gap:4px}
+.rt-step{width:100%;display:flex;align-items:center;gap:10px;padding:8px 10px;min-height:var(--touch);border-radius:var(--rs);border:1px solid var(--bd);background:var(--sf2);color:var(--tx);text-align:left;font-size:14px}
+.rt-step.on{background:var(--gbg);border-color:var(--gbdr)}
+.rt-step.on .rt-step-t{color:var(--sub);text-decoration:line-through}
+.rt-box{width:20px;height:20px;border-radius:6px;border:1.5px solid var(--bd2);display:flex;align-items:center;justify-content:center;font-size:12px;flex-shrink:0;background:var(--sf)}
+.rt-step.on .rt-box{background:var(--green);border-color:var(--green);color:var(--on-green)}
+.rt-step-t{flex:1;min-width:0}
+.rt-sv{font-size:11px}
+.rt-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.rt-done{color:var(--green);font-size:13px;font-weight:500}
+.rt-hist,.hb-days{display:flex;gap:4px;margin-left:auto}
+.rt-hist i,.hb-days i{width:10px;height:10px;border-radius:50%;display:block;border:1.5px solid var(--bd2)}
+.rt-hist i.done,.hb-days i.done{background:var(--green);border-color:var(--green)}
+.rt-hist i.partial{background:linear-gradient(90deg,var(--green) 50%,transparent 50%);border-color:var(--green)}
+.rt-hist i.none,.hb-days i.miss{border-style:solid;border-color:var(--bd2);background:var(--sf3)}
+.rt-hist i.off,.hb-days i.off{border-style:dashed;opacity:.5}
+.hb-days i.today{border-color:var(--pri)}
+.rt-other{width:100%;background:none;border:none;border-bottom:1px solid var(--bd);color:var(--tx);display:flex;align-items:center;gap:12px;padding:10px 0}
+.rt-other:last-child{border-bottom:none}
+.rt-toggle{display:flex;gap:10px;align-items:flex-start;margin:12px 0;cursor:pointer}
+.rt-toggle input{width:20px;height:20px;accent-color:var(--pri);margin-top:2px}
+.rt-toggle span{display:flex;flex-direction:column}
+.rt-toggle b{font-weight:500;font-size:14px}
+.rt-toggle small{font-size:12px;color:var(--sub)}
+.onb-days.wrap{flex-wrap:wrap}
+.hb-sugg{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin-bottom:14px}
+.hb-foot{display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:space-between}
+.hb-foot .hb-days{margin-left:0}
+.hb.done{border-color:var(--gbdr)}
+.tpl-list{display:flex;flex-direction:column;gap:8px}
+.tpl{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--bd);border-radius:var(--r);background:var(--sf)}
+.tpl b{font-weight:500;font-size:14px;display:block}
+.tpl small{font-size:12px;color:var(--sub)}
+.tpl.has{opacity:.7}
+@media(max-width:860px){
+  .onb-days.wrap{flex-wrap:wrap}
+  .rt-grid{grid-template-columns:1fr}
+}
+.rt-other .row-t,.rt-other .row-s{display:block}

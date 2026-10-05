@@ -44,6 +44,13 @@ import { turnBy } from '@/lib/rotation'
 import { WeekStrip } from '@/components/inicio/WeekStrip'
 import { CheckinCard } from '@/components/inicio/CheckinCard'
 import { RoutineNowCard } from '@/components/inicio/RoutineNowCard'
+import { useRotinas } from '@/hooks/useRotinas'
+import * as rotApi from '@/lib/services/rotinas'
+import { routineOnDay, runProgress, type Habit, type Routine } from '@/lib/rotinas'
+import { TEMPLATES } from '@/lib/onboarding'
+import { RoutinesView } from '@/components/rotinas/RoutinesView'
+import { HabitsView } from '@/components/rotinas/HabitsView'
+import { HabitEditor, RoutineEditor, TemplatesSheet } from '@/components/rotinas/Editors'
 
 function firstName(n:string){return (n||'').split(' ')[0]}
 function initials(n:string){return (n||'??').slice(0,2).toUpperCase()}
@@ -355,13 +362,14 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   },[week.available,settings.survival,today,householdId])
   // Configuração inicial (migration 014) e rotinas cadastradas
   const [setup,setSetup]=useState<setupApi.SetupState|null>(null)
-  const [routines,setRoutines]=useState<setupApi.RoutineRow[]>([])
+  const rot=useRotinas(householdId,today)
+  const routines=rot.routines
   const [onb,setOnb]=useState<null|'open'|'redo'>(null)
   async function loadSetup(auto:boolean){
     if(!me)return
     try{
-      const [st,rs]=await Promise.all([setupApi.loadSetup(householdId,me),setupApi.loadRoutines(householdId)])
-      setSetup(st);setRoutines(rs)
+      const st=await setupApi.loadSetup(householdId,me)
+      setSetup(st)
       if(auto&&shouldAutoOpen(st))setOnb('open')
     }catch(e){logError('carregar configuração',e)}
   }
@@ -731,7 +739,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const countFor=(w:Who)=>{const all=hItems.filter(i=>ownerOfItem(i)===w);return{all:all.length,done:all.filter(i=>i.completed_today).length}}
   // Início: semana real, rotina do momento, resumo de agora, cuidados dos cães, desafio sugerido
   const weekInfo=weekDays(weekStart,today,{tasks,dogs,checkins:week.checkins,days:week.days,survivalNow:settings.survival})
-  const rn=routineNow(routines,today,nowHM)
+  const rn=routineNow(routines.filter(r=>routineOnDay(r,today)),today,nowHM)
+  const rnRun=(r:Routine|null)=>r?runProgress(r,rot.runs.find(x=>x.routine_id===r.id&&x.date===today),settings.survival):null
   const nowSum=nowSummary(hItems,me,ownerOfItem,nowHM)
   const care=dogCare(casa.maint,today)
   const challenge=(setup?.answers as any)?.challenge as {title:string,days:number,why:string}|undefined
@@ -740,6 +749,33 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     if(!me)return
     try{await week.checkin(today,me,v)}catch(e){showError(toNinhoError(e,'salvar check-in'));throw e}
   }
+
+  // ── ROTINAS E HÁBITOS ──
+  const routineTurn=(r:Routine)=>turnBy('routine:'+r.id,'daily',today,plan.slots)
+  function stepRoutine(r:Routine,stepId:string,done:boolean){const w=requireMe();if(!w)return
+    rot.checkStep(r.id,stepId,w,done,settings.survival).catch(e=>showError(toNinhoError(e,done?'marcar passo':'desmarcar passo')))}
+  function finishRoutine(r:Routine,done:boolean){const w=requireMe();if(!w)return
+    const ids=routineSteps(r).map(x=>x.id)
+    rot.finish(r.id,w,done,settings.survival,ids).then(()=>showToast(done?`✓ ${r.title} concluída`:`${r.title} reaberta`)).catch(e=>showError(toNinhoError(e,done?'concluir rotina':'reabrir rotina')))}
+  const routineSteps=(r:Routine)=>{const all=r.routine_steps;if(!settings.survival)return all;const red=all.filter(x=>x.survival);return red.length?red:all}
+  async function saveRoutineDraft(d:rotApi.RoutineDraft){setSaving(true)
+    try{await rotApi.saveRoutine(householdId,me,d);closeModal();await rot.reload();showToast(d.id?'Rotina salva':'Rotina criada')}
+    catch(e){showError(toNinhoError(e,'salvar rotina'))}finally{setSaving(false)}}
+  async function archiveRoutine(r:Routine){setSaving(true)
+    try{await rotApi.archiveRoutine(r.id);closeModal();await rot.reload();showToast(`${r.title} arquivada (o histórico fica guardado)`)}
+    catch(e){showError(toNinhoError(e,'arquivar rotina'))}finally{setSaving(false)}}
+  const [tplBusy,setTplBusy]=useState<string|null>(null)
+  async function addRoutineTemplate(key:string){const t=TEMPLATES.find(x=>x.key===key);if(!t)return;setTplBusy(key)
+    try{const r=await rotApi.addTemplate(householdId,me,t,false);await rot.reload();showToast(r.created?`${t.title} adicionada`:`${t.title} já existe`)}
+    catch(e){showError(toNinhoError(e,'adicionar modelo'))}finally{setTplBusy(null)}}
+  async function saveHabitDraft(d:rotApi.HabitDraft){setSaving(true)
+    try{await rotApi.saveHabit(householdId,me,d);closeModal();await rot.reload();showToast(d.id?'Hábito salvo':'Hábito criado')}
+    catch(e){showError(toNinhoError(e,'salvar hábito'))}finally{setSaving(false)}}
+  async function archiveHabit(h:Habit){setSaving(true)
+    try{await rotApi.archiveHabit(h.id);closeModal();await rot.reload();showToast(`${h.title}: abandonado (o histórico fica guardado)`)}
+    catch(e){showError(toNinhoError(e,'abandonar hábito'))}finally{setSaving(false)}}
+  function toggleHabit(h:Habit,done:boolean){const w=requireMe();if(!w)return
+    rot.logHabit(h.id,w,done).catch(e=>showError(toNinhoError(e,'registrar hábito')))}
 
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
@@ -1039,7 +1075,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <aside className="side">
               {week.available&&me&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
               {setup?.available&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
-                turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
+                turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
               <div className="card">
                 <div className="slbl">🐾 Cães hoje {dogDaily.length>0&&<span className="mono" style={{color:'var(--faint)'}}>{dogDone}/{dogDaily.length}</span>}<button className="lnk" onClick={()=>setTab('pets')}>Ver →</button></div>
                 {dogs.length===0?(
@@ -1089,24 +1125,21 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         </div>}
 
         {/* ── ROTINAS ── */}
-        {screen==='rotinas'&&<div className="scr narrow">
+        {screen==='rotinas'&&<div className="scr">
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
-          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.length+routineGroups.length],['habitos','Hábitos']]}/>
+          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length]]}/>
           {rotView==='rotinas'?<>
-            <div className="card intro">
-              <div className="intro-t">Rotina é um conjunto de passos num momento do dia</div>
-              <div className="row-s">Como “fechar a cozinha” ou “rotina noturna dos cães”: tem passos, horário e pode ser dividida. O checklist do dia a dia chega na próxima atualização.</div>
-            </div>
-            {routines.length>0&&<div className="rt-grid">
-              {routines.map(r=>(
-                <div key={r.id} className="rt-card">
-                  <div className="rt-card-h"><div><b>{r.title}</b><div className="rt-card-m">{r.scheduled_time||'Sem horário'} · {daysLabel(r.weekdays||[0,1,2,3,4,5,6])}{r.duration_min?` · ${r.duration_min} min`:''}</div></div>
-                    <span className={`chip ${r.essential?'coral':''}`}>{r.essential?'essencial':r.assign_mode==='rotation'?'rodízio':r.assign_mode==='shared'?'as duas':firstName(names[r.assign_mode as Who])}</span></div>
-                  {r.routine_steps.length>0&&<ol className="rt-steps">{r.routine_steps.map(st=><li key={st.id}>{st.title}{st.survival&&<span title="Continua no modo sobrevivência" aria-label="continua no modo sobrevivência"> 🛡</span>}</li>)}</ol>}
-                </div>
-              ))}
-            </div>}
-            {routines.length===0&&setup?.available&&<div className="card empty"><span className="empty-icon">🔁</span>Nenhuma rotina com passos ainda.<div><button className="btn btn-p" onClick={()=>setOnb(setup.completed?'redo':'open')}>Escolher rotinas</button></div></div>}
+            {!rot.routinesOk&&rot.ready?<div className="card empty"><span className="empty-icon">🔁</span>Rotinas com passos precisam da atualização do banco (migration 014).</div>
+            :<>
+              {routines.length===0&&rot.ready&&<div className="card intro">
+                <div className="intro-t">Rotina é um conjunto de passos num momento do dia</div>
+                <div className="row-s">Como “fechar a cozinha”: tem checklist, horário e pode ser dividida ou entrar no rodízio. Comece por um modelo ou crie a sua.</div>
+              </div>}
+              <RoutinesView routines={routines} runs={rot.runs} checklistOk={rot.checklistOk} today={today} me={me} names={names} survival={settings.survival}
+                turnOf={routineTurn} onStep={stepRoutine} onFinish={finishRoutine}
+                onEdit={r=>openModal('rtedit',r)} onNew={()=>openModal('rtedit',null)} onTemplates={()=>openModal('rttpl')}
+                footer={<>
+                  <div className="slbl rt-sec">Cães</div>
             <div className="card">
               <div className="slbl">🐾 Rotinas dos cães <span className="mono" style={{color:'var(--faint)'}}>{routineGroups.length}</span><button className="lnk" onClick={()=>go('caes')}>Editar em Cães →</button></div>
               {routineGroups.length===0?<div className="row-s">Nenhuma rotina ainda.</div>:routineGroups.map(g=>{const w=ownerOfRoutine(g.r);return(
@@ -1116,10 +1149,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                   <span className={`mini av-${w}`} title={`Hoje: vez de ${firstName(names[w])}`}>{names[w].slice(0,1).toUpperCase()}</span>
                 </div>)})}
             </div>
-            <div className="row-s" style={{textAlign:'center'}}>As tarefas da casa (louça, lixo, faxina…) continuam em <button className="lnk-inline" onClick={()=>goCasa('tarefas')}>Casa › Tarefas</button>.</div>
-          </>:<div className="card empty"><span className="empty-icon">🌱</span>
-            <b>Hábitos chegam em breve</b><br/>Coisas que vocês querem repetir para ganhar constância, como “preparar o dia seguinte”. Hábito não vira atraso: se um dia não deu, fica só registrado.
-          </div>}
+                  <div className="row-s" style={{textAlign:'center'}}>Tarefas (o que tem começo e fim) ficam em <button className="lnk-inline" onClick={()=>goCasa('tarefas')}>Casa › Tarefas</button>.</div>
+                </>}/>
+            </>}
+          </>:<HabitsView habits={rot.habits} logs={rot.logs} available={rot.checklistOk} today={today} me={me} names={names}
+            onToggle={toggleHabit} onEdit={h=>openModal('hbedit',{habit:h})} onNew={()=>openModal('hbedit',{habit:null})}
+            onSuggest={sg=>openModal('hbedit',{habit:null,preset:{title:sg.title,owner:sg.owner,weekly_target:sg.weekly_target,weekdays:sg.weekdays}})}/>}
         </div>}
 
         {/* ── CASA ── */}
@@ -1566,12 +1601,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         dogRoutineTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} tasks={tasks} existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)}
         setup={setup} redo={onb==='redo'} theme={theme} onTheme={pickTheme}
         onClose={()=>{setOnb(null);loadSetup(false)}}
-        onDone={(_,to)=>{setOnb(null);loadSetup(false);data.reloadNames();data.reloadDogs();data.reloadTasks();go(to)}}/>}
+        onDone={(_,to)=>{setOnb(null);loadSetup(false);rot.reload();data.reloadNames();data.reloadDogs();data.reloadTasks();go(to)}}/>}
       {device.ready&&!account&&(!me||modal==='device')&&<DeviceIdentityModal names={names} current={me} required={!me}
         onPick={w=>{device.setWho(w);if(modal==='device')closeModal();showToast(`Este aparelho agora é da ${firstName(names[w])}`)}}
         onClose={closeModal}/>}
       {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
       {modal==='maint'&&<MaintenanceForm item={modalData} today={today} names={names} saving={saving} onClose={closeModal} onSave={saveMaint} onDelete={removeMaint}/>}
+      {modal==='rtedit'&&<RoutineEditor routine={modalData} names={names} saving={saving} onSave={saveRoutineDraft} onArchive={archiveRoutine} onClose={closeModal}/>}
+      {modal==='rttpl'&&<TemplatesSheet existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)} busy={tplBusy} onAdd={addRoutineTemplate} onClose={closeModal}/>}
+      {modal==='hbedit'&&<HabitEditor habit={modalData?.habit??null} preset={modalData?.preset} names={names} saving={saving} onSave={saveHabitDraft} onArchive={archiveHabit} onClose={closeModal}/>}
       {modal==='mainttpl'&&<MaintTemplatesSheet existing={casa.maint} today={today} saving={saving} onClose={closeModal} onAdd={addMaintTemplates}/>}
       {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} onClose={closeModal} onSave={saveMeeting}/>}
     </>

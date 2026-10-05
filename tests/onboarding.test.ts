@@ -84,9 +84,10 @@ describe('essenciais e rotinas', () => {
   })
   it('sugestões seguem as dores e pulam o que a casa já tem', () => {
     expect(suggestRoutines(['caes'], [])).toEqual(['caes'])
-    expect(suggestRoutines(['esquecidas'], ['cozinha_fechada'])).toEqual(['caes'])
+    expect(suggestRoutines(['esquecidas'], ['cozinha_fechada'])).toEqual(['reset_sala'])
+    expect(suggestRoutines([], [])).toEqual(['cozinha_fechada', 'caes'])
     expect(suggestRoutines(['rotina', 'semana', 'cansaco'], []).length).toBe(3)
-    expect(TEMPLATES.map(t => t.key)).toEqual(['abrir_casa', 'manha', 'cozinha_fechada', 'noturna', 'caes', 'reset_domingo', 'prep_semana', 'resgate_15'])
+    expect(TEMPLATES.map(t => t.key)).toEqual(['abrir_casa', 'manha', 'cozinha_fechada', 'noturna', 'caes', 'reset_domingo', 'prep_semana', 'reset_sala', 'organiza_10', 'resgate_15'])
   })
   it('payload: só rotinas marcadas e novas, essencial pela escolha, passos limpos', () => {
     const a = base()
