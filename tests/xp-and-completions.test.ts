@@ -46,7 +46,7 @@ describe('conclusões e autoria', () => {
   ], 'task_id', today)
 
   it('marca feita hoje, por quem e o id da conclusão', () => {
-    expect(info('a')).toEqual({ completed_today: true, completed_by_today: 's', completion_id: 'c1', prev_done: null })
+    expect(info('a')).toEqual({ completed_today: true, completed_by_today: 's', completion_id: 'c1', prev_done: null, hist: [] })
   })
   it('registro antigo sem completed_by fica como não identificado', () => {
     const b = info('b')

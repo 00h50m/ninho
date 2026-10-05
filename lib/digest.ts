@@ -14,14 +14,15 @@ const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`
  * Bom dia: o que é da pessoa hoje (dela fixa ou pela vez do rodízio), ainda não feito.
  * `items` = itens de Hoje já filtrados para a pessoa (planToday + ownerOfItem).
  */
-export function morningMessage(who: Who, names: Names, items: HItem[], nowHM = '00:00'): PushPayload {
+export function morningMessage(who: Who, names: Names, items: HItem[], nowHM = '00:00', maint: MaintNote[] = []): PushPayload {
   const name = first(names[who])
   const pend = items.filter(i => !i.completed_today)
   const tasks = pend.filter(i => i.task)
   const dogs = pend.filter(i => i.dog)
   const ess = tasks.filter(i => i.essential).length
+  const mt = maintText(maint)
   if (!pend.length) {
-    return { title: `Bom dia, ${name}! ☀️`, body: 'Nada pendente para você hoje. Aproveite o dia! 🌿', tag: 'morning', url: '/' }
+    return { title: `Bom dia, ${name}! ☀️`, body: mt ? `Nenhuma tarefa pendente para você hoje.${mt}` : 'Nada pendente para você hoje. Aproveite o dia! 🌿', tag: 'morning', url: '/' }
   }
   const parts: string[] = []
   if (tasks.length) parts.push(plural(tasks.length, 'tarefa', 'tarefas') + (ess ? ` (${plural(ess, 'essencial', 'essenciais')})` : ''))
@@ -32,14 +33,24 @@ export function morningMessage(who: Who, names: Names, items: HItem[], nowHM = '
   const bonus = pend.filter(i => canEarnOnTime(i, nowHM)).length
   let body = `Hoje: ${parts.join(' e ')}. Primeira: ${nextTitle}${next.scheduled_time ? ` às ${hhmm(next.scheduled_time)}` : ''}.`
   if (bonus) body += bonus === 1 ? ' ⚡ 1 item vale ×1,5 se feito no horário.' : ` ⚡ ${bonus} itens valem ×1,5 se feitos no horário.`
+  body += mt
   return { title: `Bom dia, ${name}! ☀️`, body, tag: 'morning', url: '/' }
+}
+
+/** Manutenção que vence hoje (ou já venceu) para a pessoa. */
+export interface MaintNote { title: string, late: boolean }
+
+function maintText(m: MaintNote[]): string {
+  if (!m.length) return ''
+  const list = m.slice(0, 2).map(x => x.title + (x.late ? ' (atrasada)' : '')).join(', ')
+  return ` 🔧 Manutenção: ${list}${m.length > 2 ? ` e mais ${m.length - 2}` : ''}.`
 }
 
 /**
  * Resumo de domingo: placar da semana, quem paga a aposta e o que ficou pendente do período.
  * `pending` = títulos de tarefas semanais/quinzenais/mensais ainda devidas no domingo.
  */
-export function weeklyMessage(names: Names, scores: WeeklyScores, bet: string | null | undefined, streak: number, pending: Array<{ title: string, frequency: string }>): PushPayload {
+export function weeklyMessage(names: Names, scores: WeeklyScores, bet: string | null | undefined, streak: number, pending: Array<{ title: string, frequency: string }>, nextMaint: string[] = []): PushPayload {
   const g = first(names.g), s = first(names.s)
   const done = scores.g.done + scores.s.done + scores.unknown.done
   const lead = leaderOf(scores)
@@ -54,6 +65,7 @@ export function weeklyMessage(names: Names, scores: WeeklyScores, bet: string | 
     const list = pending.slice(0, 3).map(p => `${p.title} (${(FPT[p.frequency] || p.frequency).toLowerCase()})`).join(', ')
     body += ` Ficou para trás: ${list}${pending.length > 3 ? ` e mais ${pending.length - 3}` : ''}.`
   } else body += ' Nada ficou para trás. 👏'
+  if (nextMaint.length) body += ` 🔧 Na próxima semana: ${nextMaint.slice(0, 2).join(', ')}${nextMaint.length > 2 ? ` e mais ${nextMaint.length - 2}` : ''}.`
   return { title: 'Resumo da semana 🏆', body, tag: 'weekly', url: '/' }
 }
 

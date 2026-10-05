@@ -26,10 +26,12 @@ function friendly(e: RawError, context = ''): { message: string, retryable: bool
     return { message: 'Escolha em Ajustes quem está usando este aparelho.', retryable: false }
   if (msg.includes('NINHO_INVALID_DATE'))
     return { message: 'A data do aparelho parece errada. Confira o relógio do celular.', retryable: false }
+  if (msg.includes('NINHO_INVALID_INPUT'))
+    return { message: 'Confira o que foi digitado (nome vazio ou longo demais).', retryable: false }
   if (msg.includes('NINHO_NOT_FOUND'))
     return { message: 'Esse item não existe mais. Atualize a tela.', retryable: false }
-  if (e.code === 'PGRST202' || e.code === '42883')
-    return { message: 'O banco ainda não foi atualizado para esta versão do app (migrations da Fase 0).', retryable: false }
+  if (e.code === 'PGRST202' || e.code === '42883' || e.code === 'PGRST205' || e.code === '42P01')
+    return { message: 'O banco ainda não foi atualizado para esta versão do app (falta aplicar uma migration).', retryable: false }
   if (e.code === '23505')
     return { message: 'Isso já foi registrado.', retryable: false }
   if (e.code === '42501' || e.code === 'PGRST301' || /permission|JWT/i.test(msg))

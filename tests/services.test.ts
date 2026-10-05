@@ -81,7 +81,7 @@ describe('erros do banco nunca viram "feito"', () => {
   })
   it('banco sem as migrations: avisa que precisa atualizar', async () => {
     nextResult = () => ({ data: null, error: { code: 'PGRST202', message: 'Could not find the function' } })
-    await expect(api.uncompleteTask('t1', '2026-10-07')).rejects.toMatchObject({ userMessage: expect.stringContaining('migrations') })
+    await expect(api.uncompleteTask('t1', '2026-10-07')).rejects.toMatchObject({ userMessage: expect.stringContaining('falta aplicar uma migration') })
   })
   it('sem internet: pode tentar de novo', async () => {
     nextResult = () => { throw new TypeError('Failed to fetch') }
