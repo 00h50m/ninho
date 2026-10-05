@@ -182,18 +182,18 @@ button.chip:hover{border-color:var(--faint)}
 /* ── cards ── */
 .card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:16px}
 .stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
-.stat{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;min-width:0;text-align:left}
+.stat{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;min-width:0;text-align:left;overflow:hidden}
 button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd2)}
-.stat-l{font-size:12px;color:var(--sub);font-weight:500;margin-bottom:6px}
+.stat-l{font-size:12px;color:var(--sub);font-weight:500;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat-v{font-size:26px;font-weight:400;letter-spacing:-.03em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .stat-txt{font-size:19px;white-space:normal;line-height:1.2;padding-top:4px;letter-spacing:-.01em}
 .stat-v small{font-size:13px;color:var(--sub);margin-left:4px;letter-spacing:0}
 .stat-s{font-size:12px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .bar{background:var(--sf3);border-radius:99px;height:5px;overflow:hidden;margin-top:10px}
 .barf{height:100%;border-radius:99px;transition:width .5s ease}
-.week-dots{display:flex;gap:4px;margin-top:10px}
-.wd{flex:1;height:5px;border-radius:99px;background:var(--sf3)}
-.wd.on{background:var(--amb)}.wd.today{background:transparent;box-shadow:inset 0 0 0 1.5px var(--amb)}
+.week-dots{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:10px;width:100%;max-width:100%}
+.wd{display:block;min-width:0;width:auto;height:5px;border-radius:99px;background:var(--bd2)}
+.wd.on{background:var(--amb)}.wd.today{background:var(--abdr)}
 
 .banner{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--rs);margin-bottom:16px;font-size:13px;flex-wrap:wrap}
 .banner.surv{background:var(--cbg);border:1px solid var(--cbdr);color:var(--cor)}
@@ -235,6 +235,22 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .xp-l{color:var(--green);background:var(--gbg)}.xp-m{color:var(--amb);background:var(--abg)}.xp-h{color:var(--cor);background:var(--cbg)}
 .tr .ib{opacity:0}.tr:hover .ib,.tr .ib:focus-visible{opacity:1}
 @media(hover:none){.tr .ib{opacity:1}}
+.tr .ib.mob{display:none}
+.sm-only{display:none}
+.mini{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;font-family:'DM Mono',monospace;flex-shrink:0}
+.accb{font-size:11px;color:var(--amb);margin-left:6px}
+.menu{display:flex;flex-direction:column;gap:6px}
+.menu .btn{justify-content:flex-start;padding:13px 14px;font-size:14px}
+.guide details{border-top:1px solid var(--bd);padding:2px 0}
+.guide details:first-of-type{border-top:none}
+.guide summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:12px 0;font-size:14px;font-weight:500}
+.guide summary::-webkit-details-marker{display:none}
+.guide summary::after{content:'▸';margin-left:auto;color:var(--faint);transition:transform .15s}
+.guide details[open] summary::after{transform:rotate(90deg)}
+.guide .gb{font-size:13px;color:var(--mu);line-height:1.6;padding:0 0 14px 30px}
+.guide .gb p+p,.guide .gb p+ul,.guide .gb ul+p{margin-top:8px}
+.guide .gb ul{padding-left:18px}.guide .gb li{margin:3px 0}
+.guide .gb b{color:var(--tx);font-weight:500}
 .dtog{width:100%;display:flex;align-items:center;gap:8px;border:none;background:transparent;color:var(--sub);font-size:13px;padding:12px 0 6px;margin-top:8px;border-top:1px solid var(--bd)}
 .dtog:hover{color:var(--tx)}
 .alldone{text-align:center;padding:18px 8px 10px;color:var(--green);font-size:14px}
@@ -343,6 +359,8 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 
 /* ── FAB / toast ── */
 .fab{position:fixed;bottom:28px;right:28px;height:52px;padding:0 20px 0 16px;background:var(--gdk);border-radius:99px;display:flex;align-items:center;gap:8px;border:none;color:#fff;font-size:14px;font-weight:500;box-shadow:0 8px 28px rgba(29,158,117,.35);transition:transform .15s;z-index:25}
+.mob-fab{display:none}
+@media(max-width:860px){.mob-fab{display:flex}}
 .fab span{font-size:22px;line-height:1;font-weight:300}
 .fab:hover{transform:translateY(-2px)}
 .toast{position:fixed;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);background:#132a20;border:1px solid var(--gbdr);border-radius:12px;padding:10px 12px 10px 16px;font-size:13px;color:var(--green);display:flex;align-items:center;gap:12px;z-index:100;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fu .2s ease}
@@ -400,6 +418,11 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
   .main{padding:16px 16px calc(150px + var(--safe-b))}
   .fab{bottom:calc(78px + var(--safe-b));right:16px;height:52px;width:52px;padding:0;justify-content:center}
   .fab b{display:none}
+  .lg-only{display:none}
+  .trt{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+  .tr .ib.desk{display:none}.tr .ib.mob{display:flex}
+  .card{padding:14px}
+  .desk-only{display:none}
   .chip-hide{display:none}
   .stats{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
   .stat{padding:12px 14px}.stat-v{font-size:22px}.stat-txt{font-size:16px}
@@ -414,9 +437,10 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
   .wgrid{grid-template-columns:minmax(0,1fr);gap:12px}
   .col{gap:12px}
   .sh{margin-bottom:14px}.sh h1,.sh h2{font-size:22px}
-  .tc{flex-wrap:wrap;row-gap:8px}
-  .tc-info{flex:1 1 calc(100% - 70px)}
-  .tc .asg{order:5;margin-left:20px}
+  .tc{padding:10px 10px 10px 12px;gap:10px}
+  .tc .ib.danger{display:none}
+  .asg button{padding:5px 9px}
+  .sm-only{display:inline}
   .mwrap{align-items:flex-end;padding:0}
   .modal,.modal-lg,.modal-sm{max-width:none;border-radius:20px 20px 0 0;max-height:92vh;border-bottom:none}
   .grab{display:block;width:38px;height:4px;border-radius:99px;background:var(--bd2);margin:8px auto 0;flex-shrink:0}
@@ -1023,15 +1047,16 @@ export default function NinhoApp({householdId}:{householdId:string}){
           <div className="trm">
             <span title={CAT[t.category]}>{catIc(t.category)}</span>
             {o.next&&<span className="tag-next">▸ próxima</span>}
-            {t.essential&&!t.completed_today&&<span className="tag-e">● essencial</span>}
+            {t.essential&&!t.completed_today&&<span className="tag-e" title="Essencial">●<span className="lg-only"> essencial</span></span>}
             {t.scheduled_time&&<span className={`tag-t ${late?'late':''}`}>⏰ {hhmm(t.scheduled_time)}</span>}
-            {t.frequency!=='daily'&&<span>{FPT[t.frequency]}{!t.completed_today&&t.frequency!=='once'&&` · ${lastLabel(t.prev_done||null,today)}`}</span>}
-            {!isFixed(t)&&<span className="tag-r" title="Rodízio: alterna entre vocês">↻ rodízio</span>}
+            {t.frequency!=='daily'&&<span><span className="lg-only">{FPT[t.frequency]}{!t.completed_today&&t.frequency!=='once'&&' · '}</span>{!t.completed_today&&t.frequency!=='once'&&lastLabel(t.prev_done||null,today)}</span>}
+            {!isFixed(t)&&<span className="tag-r" title="Rodízio: alterna entre vocês">↻<span className="lg-only"> rodízio</span></span>}
           </div>
         </div>
         <span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>
-        {actions&&<button className="ib" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
-        {actions&&<button className="ib" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
+        {actions&&<button className="ib desk" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
+        {actions&&<button className="ib desk" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
+        {actions&&<button className="ib mob" onClick={()=>openModal('taskmenu',t)} aria-label={`Opções de ${t.title}`}>⋯</button>}
       </div>
     )
   }
@@ -1048,8 +1073,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
             <span>🐾 {it.parts.map(p=>p.dog.name+(multi&&p.r.completed_today&&!it.completed_today?' ✓':'')).join(', ')}</span>
             {o.next&&<span className="tag-next">▸ próxima</span>}
             {it.scheduled_time&&<span className={`tag-t ${late?'late':''}`}>⏰ {hhmm(it.scheduled_time)}</span>}
-            {it.frequency!=='daily'&&<span>{FPT[it.frequency]||it.frequency}</span>}
-            <span className="tag-r" title="Rotinas dos cães alternam entre vocês">↻ rodízio</span>
+            {it.frequency!=='daily'&&<span className="lg-only">{FPT[it.frequency]||it.frequency}</span>}
+            <span className="tag-r" title="Rotinas dos cães alternam entre vocês">↻<span className="lg-only"> rodízio</span></span>
           </div>
         </div>
         <span className="xp xp-l">+{it.parts.length}</span>
@@ -1117,7 +1142,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {sat?<span className="dr-m">✓ {lastLabel(r.prev_done||null,today)}</span>
           :r.frequency!=='daily'&&<span className="bdg bdg-n">{FPT[r.frequency]||r.frequency}</span>}
         {r.scheduled_time&&<span className={`dr-m ${late?'late':''}`}>{hhmm(r.scheduled_time)}</span>}
-        {!sat&&!r.completed_today&&<span className="dr-m" style={{color:turnBy('dog:'+dogKey(r),r.frequency,today,slots)==='g'?'var(--green)':'var(--pur)'}} title="De quem é a vez">↻ {firstName(names[turnBy('dog:'+dogKey(r),r.frequency,today,slots)])}</span>}
+        {!sat&&!r.completed_today&&(()=>{const w=turnBy('dog:'+dogKey(r),r.frequency,today,slots);return <span className={`mini av-${w}`} title={`Vez de ${firstName(names[w])}`}>{names[w].slice(0,1).toUpperCase()}</span>})()}
         {o.dog&&<button className="ib" onClick={()=>openModal('routine',{dog:o.dog,routine:r})} title="Editar rotina" aria-label={`Editar ${r.title}`}>✎</button>}
       </div>
     )
@@ -1182,6 +1207,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {tab==='today'&&<div className="scr">
           <div className="sh">
             <div><h1>{hello} 👋</h1><p>{dateLabel}</p></div>
+            <div className="sh-a desk-only"><button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button></div>
           </div>
 
           <div className="stats">
@@ -1196,7 +1222,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <div className="bar"><div className="barf" style={{width:chaos+'%',background:ci.color}}/></div>
             </div>
             <button className="stat" onClick={()=>setTab('week')}>
-              <div className="stat-l">Nível {lv.l} · {lv.n}</div>
+              <div className="stat-l">Nível {lv.l}<span className="lg-only"> · {lv.n}</span></div>
               <div className="stat-v">{xp}<small>/ {lv.max} XP</small></div>
               <div className="bar"><div className="barf" style={{width:xpPct+'%',background:'var(--pur)'}}/></div>
             </button>
@@ -1243,9 +1269,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
                     <button key={dog.id} className="dsum" onClick={()=>setTab('pets')}>
                       <span className="dav" style={{width:36,height:36,fontSize:18}}>{dog.is_puppy?'🐶':'🐕'}</span>
                       <span style={{flex:1,minWidth:0}}>
-                        <span className="dsum-h"><b>{dog.name}</b><span className="mono">{dn}/{due.length}</span></span>
+                        <span className="dsum-h"><span><b>{dog.name}</b>{dog.is_puppy&&<span className="accb" title="Acidentes hoje">💧 {acc}</span>}</span><span className="mono">{dn}/{due.length}</span></span>
                         <span className="bar" style={{marginTop:6,display:'block'}}><span className="barf" style={{display:'block',width:(due.length?dn/due.length*100:100)+'%',background:'var(--gdk)'}}/></span>
-                        <span className="dsum-s">{nxt?<>Próxima: {nxt.title}{nxt.scheduled_time&&<span className={isLate(nxt,nowHM)?'late':''}> · {hhmm(nxt.scheduled_time)}</span>}</>:due.length?'✓ Tudo feito hoje':'Sem rotinas hoje'}{dog.is_puppy&&` · ${acc} acidente${acc!==1?'s':''}`}</span>
+                        <span className="dsum-s">{nxt?<>Próxima: {nxt.title}{nxt.scheduled_time&&<span className={isLate(nxt,nowHM)?'late':''}> · {hhmm(nxt.scheduled_time)}</span>}</>:due.length?'✓ Tudo feito hoje':'Sem rotinas hoje'}</span>
                       </span>
                     </button>
                   )
@@ -1304,17 +1330,16 @@ export default function NinhoApp({householdId}:{householdId:string}){
                       <div className="tc-meta">
                         <button className={`bdg qb ${t.essential?'bdg-e':'bdg-n'}`} onClick={e=>{e.stopPropagation();quickUpdate(t.id,{essential:!t.essential})}} title={t.essential?'Tirar de essencial':'Marcar como essencial'} aria-pressed={t.essential}>{t.essential?'● essencial':'○ essencial'}</button>
                         <QuickTime value={hhmm(t.scheduled_time)} onSave={v=>quickUpdate(t.id,{scheduled_time:v||null})}/>
-                        <span className={`bdg bdg-${wCls(t.weight)}`}>{WPT[t.weight]} +{XPW[t.weight]}</span>
-                        <span className="bdg bdg-n">{FPT[t.frequency]}</span>
-                        {!isFixed(t)&&<span className="bdg" style={{background:'var(--pbg)',color:'var(--pur)'}}>↻ vez de {firstName(names[turnOf(t,today,slots)])}</span>}
-                        {t.frequency!=='daily'&&(doneInPeriod(t,today)
-                          ?<span className="bdg bdg-l">✓ feita {lastLabel(lastDone(t,today),today)}</span>
-                          :<span className="bdg bdg-n">{t.frequency==='once'?'pendente':`última: ${lastLabel(t.prev_done||null,today)}`}</span>)}
+                        <span className={`bdg bdg-${wCls(t.weight)}`} title={`Esforço ${WPT[t.weight].toLowerCase()} · +${XPW[t.weight]} XP`}>+{XPW[t.weight]}</span>
+                        {!isFixed(t)&&<span className="bdg" style={{background:'var(--pbg)',color:'var(--pur)'}}>↻ {firstName(names[turnOf(t,today,slots)])}</span>}
+                        {t.frequency==='daily'?null:doneInPeriod(t,today)
+                          ?<span className="bdg bdg-l">✓ {FPT[t.frequency]} · {lastLabel(lastDone(t,today),today)}</span>
+                          :<span className="bdg bdg-n">{FPT[t.frequency]}{t.frequency!=='once'&&` · ${lastLabel(t.prev_done||null,today)}`}</span>}
                       </div>
                     </div>
                     <div className="asg" role="group" aria-label="Responsável">
-                      <button className={t.assigned_to==='g'?'on-g':''} onClick={()=>assignTask(t.id,'g')}>{firstName(names.g)}</button>
-                      <button className={t.assigned_to==='s'?'on-s':''} onClick={()=>assignTask(t.id,'s')}>{firstName(names.s)}</button>
+                      <button className={t.assigned_to==='g'?'on-g':''} onClick={()=>assignTask(t.id,'g')} title={firstName(names.g)}><span className="lg-only">{firstName(names.g)}</span><span className="sm-only">{names.g.slice(0,1).toUpperCase()}</span></button>
+                      <button className={t.assigned_to==='s'?'on-s':''} onClick={()=>assignTask(t.id,'s')} title={firstName(names.s)}><span className="lg-only">{firstName(names.s)}</span><span className="sm-only">{names.s.slice(0,1).toUpperCase()}</span></button>
                       <button className={!t.assigned_to?'on-r':''} onClick={()=>assignTask(t.id,null)} title="Rodízio">↻</button>
                     </div>
                     <button className="ib danger" onClick={()=>deleteTask(t.id)} title="Remover" aria-label="Remover">✕</button>
@@ -1457,7 +1482,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
         {/* ── AJUSTES ── */}
         {tab==='settings'&&<div className="scr narrow">
-          <div className="sh"><div><h2>Ajustes</h2><p>Integrantes e como o Ninho funciona</p></div></div>
+          <div className="sh"><div><h2>Ajustes</h2><p>Integrantes e guia de uso</p></div></div>
           <div className="card" style={{marginBottom:14}}>
             <div className="slbl">Integrantes</div>
             {(['g','s'] as Who[]).map(w=>(
@@ -1475,19 +1500,72 @@ export default function NinhoApp({householdId}:{householdId:string}){
             <div className="row"><span className="row-t">XP total</span><span className="mono" style={{marginLeft:'auto',color:'var(--sub)'}}>{xp} · Nv{lv.l}</span></div>
             <div className="row"><span className="row-t">Sequência</span><span className="mono" style={{marginLeft:'auto',color:'var(--sub)'}}>🔥 {streak} dias</span></div>
           </div>
-          <div className="card">
-            <div className="slbl">Como funciona</div>
-            <div className="legend">
-              <div className="lg"><span className="lg-k"><span className="xp xp-l">+1</span> <span className="xp xp-m">+2</span> <span className="xp xp-h">+3</span></span><span><b>Esforço</b> — leve, médio e pesado. O XP acumula para o casal.</span></div>
-              <div className="lg"><span className="lg-k"><span className="tag-e">● essencial</span></span><span><b>Essencial</b> — não pode falhar. Fica em destaque e aparece mesmo no modo sobrevivência.</span></div>
-              <div className="lg"><span className="lg-k"><span className="tag-t">⏰ 08:00</span></span><span><b>Horário</b> — tarefas com hora marcada.</span></div>
-              <div className="lg"><span className="lg-k">🔥</span><span><b>Sequência</b> — dias seguidos com pelo menos uma tarefa concluída.</span></div>
-              <div className="lg"><span className="lg-k">🏠</span><span><b>Casa</b> — mede quantas tarefas diárias ainda estão pendentes hoje.</span></div>
-              <div className="lg"><span className="lg-k">📅</span><span><b>Frequência</b> — semanais, quinzenais e mensais aparecem em Hoje até serem feitas; depois somem até o próximo período (semana começa na segunda).</span></div>
-              <div className="lg"><span className="lg-k"><span className="tag-r">↻ rodízio</span></span><span><b>Rodízio</b> — a tarefa alterna entre vocês: diárias a cada dia, semanais a cada semana, mensais a cada mês. As rotinas dos cães também: a mesma rotina de cães diferentes (ex.: ração manhã) fica com a mesma pessoa e vira um item só.</span></div>
-              <div className="lg"><span className="lg-k"><span className="tag-t late">⏰ atrasada</span></span><span><b>Atrasada</b> — tarefa diária cujo horário já passou.</span></div>
-              <div className="lg"><span className="lg-k">⇄</span><span><b>Trocar</b> — passa a tarefa para a outra pessoa (no rodízio, fixa com ela).</span></div>
-            </div>
+          <div className="card guide">
+            <div className="slbl">Guia do Ninho</div>
+            <details open><summary>☀️ Hoje</summary><div className="gb">
+              <p>A tela do dia. Cada uma tem sua coluna (no celular, troque pelo seletor no topo) com o anel de progresso e só o que está pendente <b>hoje</b>.</p>
+              <ul>
+                <li><b>Grupos por horário:</b> ⚠ Atrasadas (diárias com horário que já passou), 🌅 Manhã, ☀️ Tarde, 🌙 Noite, a qualquer hora e, por fim, as do período (até o fim da semana, quinzena ou mês) e as pontuais.</li>
+                <li><b>▸ próxima</b> destaca a próxima tarefa com horário.</li>
+                <li>Toque na tarefa para concluir. Aparece <b>+XP · Desfazer</b> por alguns segundos. As concluídas ficam recolhidas no fim da coluna.</li>
+                <li>No computador, <b>⇄</b> passa para a outra e <b>✎</b> edita. No celular, tudo isso fica no <b>⋯</b>.</li>
+                <li>Indicadores do topo: % do dia, estado da <b>Casa</b> (quanto das diárias ainda falta: organizada, atenção ou alerta), nível/XP e sequência.</li>
+              </ul>
+            </div></details>
+            <details><summary>📋 Tarefas</summary><div className="gb">
+              <p>A lista completa, agrupada por cômodo, com busca e filtros (essenciais, por pessoa, rodízio, sem horário e por cômodo).</p>
+              <ul>
+                <li><b>Ajuste rápido:</b> toque em “○ essencial” para ligar/desligar e em “+ horário” para definir a hora — sem abrir o formulário.</li>
+                <li><b>Responsável:</b> escolha {firstName(names.g)}, {firstName(names.s)} ou ↻ rodízio direto no card.</li>
+                <li>Toque no nome para editar tudo (cômodo, esforço, frequência, horário) ou remover.</li>
+                <li><b>✦ Sugestões:</b> listas prontas por cômodo; selecione várias ou toque em ✎ para ajustar antes de criar.</li>
+              </ul>
+            </div></details>
+            <details><summary>📅 Frequência</summary><div className="gb">
+              <ul>
+                <li><b>Diária:</b> volta todo dia.</li>
+                <li><b>Semanal:</b> aparece até ser feita; depois some até a próxima segunda.</li>
+                <li><b>Quinzenal:</b> uma vez a cada duas semanas (blocos fixos de 2 semanas).</li>
+                <li><b>Mensal:</b> uma vez por mês do calendário.</li>
+                <li><b>Pontual:</b> feita uma vez, some de vez.</li>
+              </ul>
+              <p>Cada tarefa mostra quando foi feita pela última vez (“há 9 dias”, “nunca feita”). Só dá para desmarcar o que foi feito hoje.</p>
+            </div></details>
+            <details><summary>↻ Rodízio e divisão</summary><div className="gb">
+              <p>Tarefas sem responsável fixo entram no rodízio: alternam entre vocês a cada dia (diárias), semana (semanais) ou mês (mensais). A ordem segue o horário, então a divisão sai equilibrada — e é a mesma nos dois celulares.</p>
+              <p>Usar ⇄ numa tarefa de rodízio fixa ela com a outra pessoa (dá para desfazer).</p>
+              <p>Em <b>Semana › Divisão da carga</b> vocês veem os pontos de cada uma (esforço × frequência; rodízio conta metade para cada). <b>✦ Distribuir automaticamente</b> reparte tudo de forma equilibrada — atenção: ele define responsável fixo para todas e tira do rodízio.</p>
+            </div></details>
+            <details><summary>🐾 Cães</summary><div className="gb">
+              <ul>
+                <li>Cada cão tem suas <b>rotinas</b> (diárias, semanais, quinzenais ou mensais, com horário opcional). Use ✎ no cão para editar nome, raça e fase, e ✎ na rotina para mudar ou remover. “+ Nova rotina” adiciona.</li>
+                <li>Em Hoje, a mesma rotina de cães diferentes (ex.: Ração manhã) vira <b>um item só</b>: um toque marca para todos. Elas entram no rodízio e aparecem na lista de quem é a vez; a bolinha com a inicial na aba Cães mostra de quem é.</li>
+                <li><b>Modo filhote:</b> registre acidentes por cômodo e acompanhe o dia.</li>
+                <li>Tarefas da categoria Cães repetem as rotinas e por isso não aparecem em Hoje; dá para arquivá-las pelo aviso em Tarefas.</li>
+              </ul>
+            </div></details>
+            <details><summary>🌤 Energia e modo sobrevivência</summary><div className="gb">
+              <p>Escolham a <b>energia da semana</b> (alta, média ou baixa). Em energia baixa ou no <b>🛡 modo sobrevivência</b>, Hoje mostra só as essenciais e as rotinas dos cães, com o botão “Mostrar todas”. Vale para a semana atual.</p>
+            </div></details>
+            <details><summary>📋 Reunião semanal</summary><div className="gb">
+              <p>15 minutos, sem cobranças: o que funcionou, o que pesou, ajuste, prioridades, como cada uma chega, vitórias, modo da próxima semana e recompensa. Fica no histórico em Semana.</p>
+            </div></details>
+            <details><summary>🏆 XP, níveis e sequência</summary><div className="gb">
+              <ul>
+                <li>Cada tarefa vale pelo esforço: <span className="xp xp-l">+1</span> leve, <span className="xp xp-m">+2</span> médio, <span className="xp xp-h">+3</span> pesado. Rotina de cão vale +1 por cão. O XP é do casal.</li>
+                <li>Níveis: {LEVELS.map(l=>`${l.n} (${l.min})`).join(' · ')}.</li>
+                <li>🔥 Sequência: dias seguidos com pelo menos uma tarefa concluída.</li>
+              </ul>
+            </div></details>
+            <details><summary>🔣 Símbolos</summary><div className="gb">
+              <ul>
+                <li><span className="tag-e">● essencial</span> — não pode falhar; caixinha laranja; aparece mesmo no modo sobrevivência.</li>
+                <li><span className="tag-t">⏰ 08:00</span> horário · <span className="tag-t late">⏰ 07:00</span> atrasada.</li>
+                <li><span className="tag-r">↻</span> rodízio · <span className="tag-next">▸ próxima</span> próxima com horário.</li>
+                <li>Bolinha <span style={{color:'var(--green)'}}>●</span> leve, <span style={{color:'var(--amb)'}}>●</span> média, <span style={{color:'var(--cor)'}}>●</span> pesada (na lista de Tarefas).</li>
+              </ul>
+              <p>Tudo sincroniza na hora entre os celulares de vocês.</p>
+            </div></details>
           </div>
         </div>}
       </main>
@@ -1497,12 +1575,21 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {TABS.map(([k,ic,l])=><button key={k} className={`bnb ${tab===k?'on':''}`} onClick={()=>setTab(k)} aria-current={tab===k?'page':undefined}><span className="ic">{ic}</span>{l}</button>)}
       </nav>
 
-      {(tab==='today'||tab==='tasks')&&<button className="fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>}
+      {(tab==='today'||tab==='tasks')&&<button className="fab mob-fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>}
 
       {toast&&<div className="toast" role="status"><span className="toast-m">{toast.msg}</span>{toast.undo&&<button onClick={toast.undo}>Desfazer</button>}</div>}
       {modal==='task'&&<TaskFormModal task={modalData} names={names} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
       {modal==='sugg'&&<SuggModal tasks={tasks} onClose={closeModal} onAdd={addSuggestions} onCustomize={s=>openModal('task',{title:s.t,category:s.cat,weight:s.w,frequency:s.f,essential:s.ess,assigned_to:null,scheduled_time:null,active:true,id:null})}/>}
       {modal==='pet'&&<PetModal onClose={closeModal} onSave={savePet}/>}
+      {modal==='taskmenu'&&(()=>{const t:Task=modalData;const other:Who=ownerOf(t,today,slots)==='g'?'s':'g';return(
+        <Sheet size="sm" title={t.title} onClose={closeModal}>
+          <div className="menu">
+            <button className="btn btn-s" onClick={()=>{closeModal();toggleTask(t)}}>{t.completed_today?'↺ Desmarcar':'✓ Concluir'}</button>
+            <button className="btn btn-g" onClick={()=>{closeModal();swapTask(t)}}>⇄ Passar para {firstName(names[other])}</button>
+            <button className="btn btn-g" onClick={()=>openModal('task',t)}>✎ Editar tarefa</button>
+          </div>
+        </Sheet>
+      )})()}
       {modal==='dog'&&<DogModal dog={modalData} onClose={closeModal} onSave={updateDog} onDelete={removeDog}/>}
       {modal==='routine'&&<RoutineModal routine={modalData.routine} dogName={modalData.dog.name} onClose={closeModal} onSave={(d,id)=>saveRoutine(modalData.dog.id,d,id)} onDelete={removeRoutine}/>}
       {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy}/>}
