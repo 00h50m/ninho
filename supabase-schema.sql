@@ -17,7 +17,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict Z9b6qTumcLpSva30G5ZjFv6GLm0L3KvQ9jByUXyaKHybEnIYeTcOrdgkl8fagqg
+\restrict OeeHmp6Wzr6PacyZJmpnrL6QxBvZYyWIPUsDBoh7BV4bwzlCacR7NqO6ZrG2OD9
 
 -- Dumped from database version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -599,6 +599,31 @@ $$;
 
 
 --
+-- Name: ninho_telegram_link_code(uuid, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_telegram_link_code(p_household_id uuid, p_who text) RETURNS text
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+declare v_code text;
+begin
+  if p_who is null or p_who not in ('g','s') then
+    raise exception 'NINHO_INVALID_PERSON: pessoa deve ser g ou s (recebido: %)', coalesce(p_who, 'vazio') using errcode = '22023';
+  end if;
+  v_code := upper(substr(replace(uuid_generate_v4()::text, '-', ''), 1, 8));
+  -- Um código pendente por pessoa: renova o que ainda não foi usado
+  update public.telegram_links set link_code = v_code, code_expires_at = now() + interval '30 minutes'
+  where household_id = p_household_id and who = p_who and chat_id is null;
+  if not found then
+    insert into public.telegram_links (household_id, who, link_code, code_expires_at)
+    values (p_household_id, p_who, v_code, now() + interval '30 minutes');
+  end if;
+  return v_code;
+end $$;
+
+
+--
 -- Name: ninho_today(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -778,6 +803,20 @@ $$;
 SET default_tablespace = '';
 
 SET default_table_access_method = heap;
+
+--
+-- Name: ai_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.ai_log (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    household_id uuid NOT NULL,
+    kind text NOT NULL,
+    input_tokens integer,
+    output_tokens integer,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
 
 --
 -- Name: dog_completions; Type: TABLE; Schema: public; Owner: -
@@ -1092,6 +1131,51 @@ COMMENT ON COLUMN public.tasks.due_date IS 'Tarefa pontual: data a partir da qua
 
 
 --
+-- Name: telegram_links; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.telegram_links (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    household_id uuid NOT NULL,
+    who text NOT NULL,
+    chat_id bigint,
+    link_code text,
+    code_expires_at timestamp with time zone,
+    linked_at timestamp with time zone,
+    morning boolean DEFAULT true NOT NULL,
+    weekly boolean DEFAULT true NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT telegram_links_who_check CHECK ((who = ANY (ARRAY['g'::text, 's'::text])))
+);
+
+
+--
+-- Name: TABLE telegram_links; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.telegram_links IS 'Conversas do Telegram ligadas a uma pessoa da casa. link_code vale 30 minutos e é apagado ao ligar.';
+
+
+--
+-- Name: telegram_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.telegram_log (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    link_id uuid NOT NULL,
+    kind text NOT NULL,
+    day date DEFAULT public.ninho_today() NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    detail text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT telegram_log_kind_check CHECK ((kind = ANY (ARRAY['morning'::text, 'weekly'::text, 'test'::text]))),
+    CONSTRAINT telegram_log_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text])))
+);
+
+
+--
 -- Name: weekly_meetings; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1179,6 +1263,14 @@ COMMENT ON COLUMN public.xp_history.activity_date IS 'Dia doméstico (São Paulo
 --
 
 COMMENT ON COLUMN public.xp_history.on_time IS 'true quando a conclusão foi até o horário marcado (bônus ×1,5).';
+
+
+--
+-- Name: ai_log ai_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_log
+    ADD CONSTRAINT ai_log_pkey PRIMARY KEY (id);
 
 
 --
@@ -1374,6 +1466,38 @@ ALTER TABLE public.tasks
 
 
 --
+-- Name: telegram_links telegram_links_chat_id_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_links
+    ADD CONSTRAINT telegram_links_chat_id_key UNIQUE (chat_id);
+
+
+--
+-- Name: telegram_links telegram_links_link_code_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_links
+    ADD CONSTRAINT telegram_links_link_code_key UNIQUE (link_code);
+
+
+--
+-- Name: telegram_links telegram_links_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_links
+    ADD CONSTRAINT telegram_links_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: telegram_log telegram_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_log
+    ADD CONSTRAINT telegram_log_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: weekly_meetings weekly_meetings_household_id_week_start_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1427,6 +1551,13 @@ ALTER TABLE public.xp_history
 
 ALTER TABLE ONLY public.xp_history
     ADD CONSTRAINT xp_history_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: ai_log_household_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX ai_log_household_idx ON public.ai_log USING btree (household_id, created_at DESC);
 
 
 --
@@ -1542,6 +1673,20 @@ CREATE INDEX tasks_household_active_idx ON public.tasks USING btree (household_i
 
 
 --
+-- Name: telegram_links_household_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX telegram_links_household_idx ON public.telegram_links USING btree (household_id) WHERE active;
+
+
+--
+-- Name: telegram_log_once_per_day; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX telegram_log_once_per_day ON public.telegram_log USING btree (link_id, kind, day) WHERE (kind <> 'test'::text);
+
+
+--
 -- Name: xp_history_household_activity_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1633,6 +1778,13 @@ CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.tasks FOR EACH ROW E
 
 
 --
+-- Name: telegram_links ninho_set_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.telegram_links FOR EACH ROW EXECUTE FUNCTION public.ninho_set_updated_at();
+
+
+--
 -- Name: weekly_meetings ninho_set_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1644,6 +1796,14 @@ CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.weekly_meetings FOR 
 --
 
 CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.weekly_settings FOR EACH ROW EXECUTE FUNCTION public.ninho_set_updated_at();
+
+
+--
+-- Name: ai_log ai_log_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.ai_log
+    ADD CONSTRAINT ai_log_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
 
 
 --
@@ -1807,6 +1967,22 @@ ALTER TABLE ONLY public.tasks
 
 
 --
+-- Name: telegram_links telegram_links_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_links
+    ADD CONSTRAINT telegram_links_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
+
+
+--
+-- Name: telegram_log telegram_log_link_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_log
+    ADD CONSTRAINT telegram_log_link_id_fkey FOREIGN KEY (link_id) REFERENCES public.telegram_links(id) ON DELETE CASCADE;
+
+
+--
 -- Name: weekly_meetings weekly_meetings_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1829,6 +2005,12 @@ ALTER TABLE ONLY public.weekly_settings
 ALTER TABLE ONLY public.xp_history
     ADD CONSTRAINT xp_history_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
 
+
+--
+-- Name: ai_log; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.ai_log ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: dog_completions allow_all_auth; Type: POLICY; Schema: public; Owner: -
@@ -1919,6 +2101,13 @@ CREATE POLICY allow_all_auth ON public.task_skips TO authenticated USING (true) 
 --
 
 CREATE POLICY allow_all_auth ON public.tasks TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- Name: telegram_links allow_all_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY allow_all_auth ON public.telegram_links TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -2027,6 +2216,18 @@ ALTER TABLE public.task_skips ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: telegram_links; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.telegram_links ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: telegram_log; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.telegram_log ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: weekly_meetings; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -2048,5 +2249,5 @@ ALTER TABLE public.xp_history ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict Z9b6qTumcLpSva30G5ZjFv6GLm0L3KvQ9jByUXyaKHybEnIYeTcOrdgkl8fagqg
+\unrestrict OeeHmp6Wzr6PacyZJmpnrL6QxBvZYyWIPUsDBoh7BV4bwzlCacR7NqO6ZrG2OD9
 

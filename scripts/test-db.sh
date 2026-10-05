@@ -63,7 +63,7 @@ echo "══ Cenário A: banco novo ══"
 psql_run fresh "$T/00-supabase-stubs.sql"
 echo "› migrations (1ª vez)"; psql_run fresh "${MIGRATIONS[@]}"
 echo "› migrations (2ª vez, devem ser idempotentes)"; psql_run fresh "${MIGRATIONS[@]}"
-psql_run fresh "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/30-push.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql"
+psql_run fresh "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/30-push.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql" "$T/70-telegram-ia.test.sql"
 
 echo
 echo "══ Cenário B: produção antiga simulada ══"
@@ -79,7 +79,7 @@ echo "› pós-checagem rodada por engano ANTES das migrations: deve avisar, nã
   && echo "  ok - pós-checagem antecipada mostra 'migrations ainda não aplicadas'" || { echo "✗ pós-checagem antecipada quebrou:"; cat "$WORK/early.txt"; exit 1; }
 echo "› migrations (1ª vez)"; psql_run legacy "${MIGRATIONS[@]}"
 echo "› migrations (2ª vez)"; psql_run legacy "${MIGRATIONS[@]}"
-psql_run legacy "$T/03-legacy-after.test.sql" "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/21-gamification-legacy.test.sql" "$T/30-push.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql"
+psql_run legacy "$T/03-legacy-after.test.sql" "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/21-gamification-legacy.test.sql" "$T/30-push.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql" "$T/70-telegram-ia.test.sql"
 echo "› pós-checagem"
 check_report legacy "$ROOT/supabase/scripts/post-migration-check.sql"
 check_report fresh "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
@@ -94,7 +94,7 @@ psql_run prod "$T/00-supabase-stubs.sql" "$T/fixtures-prod-2026-10.sql"
 psql_run prod "${MIGRATIONS[0]}"
 echo "› migrations 002–006 (1ª vez)"; psql_run prod "${MIGRATIONS[@]:1}"
 echo "› migrations 001–006 (2ª vez)"; psql_run prod "${MIGRATIONS[@]}"
-psql_run prod "$T/40-prod-schema.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql"
+psql_run prod "$T/40-prod-schema.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql" "$T/70-telegram-ia.test.sql"
 check_report prod "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 echo "  ok - pós-checagem sem FALHA no schema real"
 

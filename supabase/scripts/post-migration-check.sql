@@ -27,7 +27,9 @@ begin
     -- Fase 3 (migration 007)
     ('households','split_mode'), ('shopping_items','title'), ('maintenance_items','next_due'), ('maintenance_log','done_on'),
     -- Fase 4 (migration 008)
-    ('tasks','weekdays'), ('tasks','due_date'), ('task_skips','kind')
+    ('tasks','weekdays'), ('tasks','due_date'), ('task_skips','kind'),
+    -- Fase 5 (migration 009)
+    ('telegram_links','chat_id'), ('telegram_log','kind'), ('ai_log','kind')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -45,7 +47,9 @@ begin
                                -- Fase 3 (migration 007)
                                'ninho_add_shopping_item','ninho_next_due','ninho_complete_maintenance','ninho_undo_maintenance',
                                -- Fase 4 (migration 008)
-                               'ninho_task_on_day']) as f loop
+                               'ninho_task_on_day',
+                               -- Fase 5 (migration 009)
+                               'ninho_telegram_link_code']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';

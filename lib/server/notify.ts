@@ -18,13 +18,13 @@ export type Sender = (sub: Subscription, payload: PushPayload) => Promise<SendRe
 export interface NotifyDeps { db: SupabaseClient, send: Sender, now?: Date }
 export interface Report { kind: string, day: string, households: number, sent: number, skipped: number, failed: number, deactivated: number, errors: string[] }
 
-function must<T>(res: { data: T | null, error: any }, ctx: string): T {
+export function must<T>(res: { data: T | null, error: any }, ctx: string): T {
   if (res.error) throw new Error(`${ctx}: ${res.error.message}`)
   return res.data as T
 }
 
 /** Carrega o necessário para montar o Hoje de uma casa (mesmas consultas do app). */
-async function loadHousehold(db: SupabaseClient, householdId: string, today: string) {
+export async function loadHousehold(db: SupabaseClient, householdId: string, today: string) {
   const since = addDays(today, -COMPLETION_WINDOW_DAYS)
   const [tasks, tcomps, dogs, dcomps, settings, profiles] = await Promise.all([
     db.from('tasks').select('*').eq('household_id', householdId).eq('active', true).then(r => must(r, 'tarefas')),
@@ -94,6 +94,30 @@ function groupByHousehold(subs: Subscription[]) {
   return m
 }
 
+/** Texto do bom dia de cada pessoa da casa (o mesmo no celular e no Telegram). */
+export async function morningPayloads(db: SupabaseClient, householdId: string, date: string, hm: string): Promise<(w: Who) => PushPayload> {
+  const h = await loadHousehold(db, householdId, date)
+  const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split })
+  const mine = (w: Who): HItem[] => plan.items.filter(i => plan.ownerOfItem(i) === w)
+  const maintOf = (w: Who): MaintNote[] => dueForPerson(h.maint as MaintenanceItem[], w, date).map(m => ({ title: m.title, late: m.next_due < date }))
+  return (w: Who) => morningMessage(w, h.names, mine(w), hm, maintOf(w))
+}
+
+/** Texto do resumo de domingo da casa (o mesmo no celular e no Telegram). */
+export async function weeklyPayload(db: SupabaseClient, householdId: string, date: string): Promise<PushPayload> {
+  const h = await loadHousehold(db, householdId, date)
+  const [scoresRaw, streaksRaw] = await Promise.all([
+    db.rpc('ninho_weekly_scores', { p_household_id: householdId, p_week_start: weekStartOf(date) }).then(r => must(r, 'placar')),
+    db.rpc('ninho_streaks', { p_household_id: householdId, p_today: date }).then(r => must(r, 'sequências')),
+  ])
+  const sc = (scoresRaw || {}) as any
+  const scores: WeeklyScores = { g: { ...EMPTY_SCORES.g, ...sc.g }, s: { ...EMPTY_SCORES.s, ...sc.s }, unknown: { ...EMPTY_SCORES.unknown, ...sc.unknown } }
+  const plan = planToday(h.tasks, h.dogs, date, { split: h.split })
+  const nextMaint = h.maint.filter(m => m.next_due > date && m.next_due <= addDays(date, 7)).sort((a, b) => a.next_due.localeCompare(b.next_due)).map(m => m.title)
+  const pending = plan.dueList.filter(t => t.frequency !== 'daily' && t.frequency !== 'once' && !t.completed_today).map(t => ({ title: t.title, frequency: t.frequency }))
+  return weeklyMessage(h.names, scores, h.bet, Number((streaksRaw as any)?.house) || 0, pending, nextMaint)
+}
+
 /** Bom dia: o que é de cada pessoa hoje. */
 export async function runMorning(deps: NotifyDeps): Promise<Report> {
   const clock = homeClock(deps.now)
@@ -102,14 +126,11 @@ export async function runMorning(deps: NotifyDeps): Promise<Report> {
   for (const [householdId, subs] of Array.from(byHouse.entries())) {
     report.households++
     try {
-      const h = await loadHousehold(deps.db, householdId, clock.date)
-      const plan = planToday(h.tasks, h.dogs, clock.date, { focus: h.focus, split: h.split })
-      const mine = (w: Who): HItem[] => plan.items.filter(i => plan.ownerOfItem(i) === w)
-      const maintOf = (w: Who): MaintNote[] => dueForPerson(h.maint as MaintenanceItem[], w, clock.date).map(m => ({ title: m.title, late: m.next_due < clock.date }))
+      const payloadOf = await morningPayloads(deps.db, householdId, clock.date, clock.hm)
       for (const sub of subs) {
         const logId = await claim(deps.db, sub.id, 'morning', clock.date)
         if (!logId) { report.skipped++; continue }
-        await deliver(deps, sub, logId, morningMessage(sub.who, h.names, mine(sub.who), clock.hm, maintOf(sub.who)), report)
+        await deliver(deps, sub, logId, payloadOf(sub.who), report)
       }
     } catch (e: any) {
       report.failed += subs.length
@@ -127,17 +148,7 @@ export async function runWeekly(deps: NotifyDeps): Promise<Report> {
   for (const [householdId, subs] of Array.from(byHouse.entries())) {
     report.households++
     try {
-      const h = await loadHousehold(deps.db, householdId, clock.date)
-      const [scoresRaw, streaksRaw] = await Promise.all([
-        deps.db.rpc('ninho_weekly_scores', { p_household_id: householdId, p_week_start: weekStartOf(clock.date) }).then(r => must(r, 'placar')),
-        deps.db.rpc('ninho_streaks', { p_household_id: householdId, p_today: clock.date }).then(r => must(r, 'sequências')),
-      ])
-      const sc = (scoresRaw || {}) as any
-      const scores: WeeklyScores = { g: { ...EMPTY_SCORES.g, ...sc.g }, s: { ...EMPTY_SCORES.s, ...sc.s }, unknown: { ...EMPTY_SCORES.unknown, ...sc.unknown } }
-      const plan = planToday(h.tasks, h.dogs, clock.date, { split: h.split })
-      const nextMaint = h.maint.filter(m => m.next_due > clock.date && m.next_due <= addDays(clock.date, 7)).sort((a, b) => a.next_due.localeCompare(b.next_due)).map(m => m.title)
-      const pending = plan.dueList.filter(t => t.frequency !== 'daily' && t.frequency !== 'once' && !t.completed_today).map(t => ({ title: t.title, frequency: t.frequency }))
-      const payload = weeklyMessage(h.names, scores, h.bet, Number((streaksRaw as any)?.house) || 0, pending, nextMaint)
+      const payload = await weeklyPayload(deps.db, householdId, clock.date)
       for (const sub of subs) {
         const logId = await claim(deps.db, sub.id, 'weekly', clock.date)
         if (!logId) { report.skipped++; continue }

@@ -17,12 +17,27 @@ export function missingConfig(env = process.env): string[] {
   return need.filter(([, v]) => !v).map(([k]) => k)
 }
 
-export function createDeps(env = process.env): NotifyDeps {
+/** Cliente do banco com a chave service_role (ignora a RLS: só no servidor). */
+export function createDb(env = process.env) {
   // cache: 'no-store' — o Next.js 14 guarda fetch do servidor em cache; aqui os dados precisam ser sempre os de agora
-  const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, {
+  return createClient(env.NEXT_PUBLIC_SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
     global: { fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }) },
   })
+}
+
+/** Banco do servidor configurado (necessário para Telegram e IA). */
+export function dbConfigured(env = process.env): boolean {
+  return !!env.NEXT_PUBLIC_SUPABASE_URL && !!env.SUPABASE_SERVICE_ROLE_KEY
+}
+
+/** Push configurado (chaves VAPID). */
+export function pushConfigured(env = process.env): boolean {
+  return missingConfig(env).length === 0
+}
+
+export function createDeps(env = process.env): NotifyDeps {
+  const db = createDb(env)
   webpush.setVapidDetails(env.VAPID_SUBJECT!, env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!, env.VAPID_PRIVATE_KEY!)
   const send: Sender = async (sub, payload) => {
     try {
