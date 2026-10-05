@@ -3,7 +3,7 @@ import { useEffect, useState, useRef } from 'react'
 import type { Accident, Dog, DogItem, DogRoutine, Energy, HistoryWeek, HItem, Meeting, Names, Task, Who } from '@/lib/types'
 import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, TABS, WPT } from '@/lib/constants'
 import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '@/lib/dates'
-import { doneInPeriod, dueToday, lastDone, lastLabel } from '@/lib/frequency'
+import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, weekdaysLabel, WEEKDAY_SHORT } from '@/lib/frequency'
 import { isFixed } from '@/lib/rotation'
 import { whyLabel, type SplitMode } from '@/lib/split'
 import * as casaApi from '@/lib/services/casa'
@@ -395,6 +395,18 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .mt-row .trb{cursor:pointer}
 .mt-ago{width:auto;max-width:130px;margin:0;padding:6px 8px;font-size:12.5px}
 
+/* ── Fase 4: rotina flexível ── */
+.wdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
+.wday{padding:10px 0;border-radius:10px;border:1px solid var(--bd);background:transparent;color:var(--sub);font-size:13px;font-weight:500;text-transform:capitalize}
+.wday.on{background:var(--gbg);border-color:var(--gbdr);color:var(--green)}
+.paused{margin-top:10px;padding-top:10px;border-top:1px dashed var(--bd)}
+.paused-h{font-size:12px;color:var(--sub);margin-bottom:4px}
+.paused-r{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13.5px;min-width:0}
+.paused-t{flex:1;min-width:0;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.paused-k{font-size:11.5px;color:var(--faint);font-family:'DM Mono',monospace;flex-shrink:0}
+.paused-r .lnk{background:none;border:none;color:var(--green);font-size:12.5px;font-weight:500;flex-shrink:0}
+.menu-s{display:block;margin-left:auto;font-size:11px;color:var(--faint);font-weight:400}
+
 /* ── responsivo ── */
 @media(max-width:1100px){
   .today{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -480,7 +492,17 @@ function TaskFormModal({task,names,saving,onClose,onSave,onDelete}:{task:Task|nu
   const[assign,setAssign]=useState(t?.assigned_to||'')
   const[time,setTime]=useState(hhmm(t?.scheduled_time||null))
   const[ess,setEss]=useState(t?.essential||false)
-  const handle=()=>{if(!title.trim()||saving)return;onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess},editing?t!.id:undefined)}
+  const[days,setDays]=useState<number[]>(t?.weekdays||[])
+  const[due,setDue]=useState(t?.due_date||'')
+  const usesDays=['daily','weekly','biweekly'].includes(freq)
+  const toggleDay=(d:number)=>setDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d])
+  const handle=()=>{if(!title.trim()||saving)return
+    const wd=usesDays&&days.length&&days.length<7?[...days].sort():null
+    const extra:any={}
+    // Só envia as colunas novas quando usadas (o app funciona mesmo antes da migration 008)
+    if(wd||t?.weekdays)extra.weekdays=wd
+    if((freq==='once'&&due)||t?.due_date)extra.due_date=freq==='once'&&due?due:null
+    onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess,...extra},editing?t!.id:undefined)}
   return(
     <Sheet title={editing?'Editar tarefa':'Nova tarefa'} onClose={onClose} footer={<>
       {editing&&<button className="btn btn-danger" disabled={saving} onClick={()=>onDelete(t!.id)}>Remover</button>}
@@ -502,6 +524,16 @@ function TaskFormModal({task,names,saving,onClose,onSave,onDelete}:{task:Task|nu
       </div>
       <label className="fl">Frequência</label>
       <div className="btng c3">{Object.entries(FPT).map(([k,v])=><button key={k} className={`sbtn ${freq===k?'on':''}`} onClick={()=>setFreq(k)}>{v}</button>)}</div>
+      {usesDays&&<>
+        <label className="fl">Dias da semana <span className="hint">({freq==='daily'?'só nesses dias':'aparece a partir do primeiro dia escolhido'}; nenhum = qualquer dia)</span></label>
+        <div className="wdays" role="group" aria-label="Dias da semana">
+          {[1,2,3,4,5,6,0].map(d=><button key={d} type="button" className={`wday ${days.includes(d)?'on':''}`} aria-pressed={days.includes(d)} onClick={()=>toggleDay(d)}>{WEEKDAY_SHORT[d]}</button>)}
+        </div>
+      </>}
+      {freq==='once'&&<>
+        <label className="fl">Data <span className="hint">(opcional · aparece em Hoje a partir dela)</span></label>
+        <input type="date" className="fi" value={due} onChange={e=>setDue(e.target.value)} style={{maxWidth:200}}/>
+      </>}
       <label className="fl">Horário <span className="hint">(opcional)</span></label>
       <input type="time" className="fi" value={time} onChange={e=>setTime(e.target.value)} style={{maxWidth:180}}/>
       <label className="fl">Prioridade</label>
@@ -852,6 +884,36 @@ export default function NinhoApp({householdId}:{householdId:string}){
       showToast(`Passada para ${firstName(names[n])}${isFixed(t)?'':' (sai do rodízio)'}`,()=>{setToast(null);assignTask(t.id,prev)})
   }
 
+  // ── PULAR / DEIXAR PARA AMANHÃ ────────────────────────
+  const SKIP_LABEL:Record<string,string>={daily:'Pular hoje',weekly:'Pular esta semana',biweekly:'Pular esta quinzena',monthly:'Pular este mês'}
+  async function pauseTask(t:Task,kind:'snooze'|'skip'){
+    const by=requireMe();if(!by)return
+    // Pontual: "amanhã" muda a data dela
+    if(t.frequency==='once'&&kind==='snooze'){
+      const prev=t.due_date??null
+      if(await updateTaskFields(t.id,{due_date:addDays(today,1)}))showToast(`Para amanhã · ${t.title}`,()=>{setToast(null);updateTaskFields(t.id,{due_date:prev})})
+      return
+    }
+    const before=t.skip??null
+    await withPending(['task:'+t.id],async()=>{
+      patchTask(t.id,{skip:{id:'tmp',date:today,kind,by}})
+      try{
+        const r=await api.skipTask(householdId,t.id,today,kind,by)
+        const skip={id:r.id,date:r.date,kind:r.kind,by}
+        patchTask(t.id,{skip})
+        showToast(kind==='skip'?`${SKIP_LABEL[t.frequency]||'Pulada'} · ${t.title}`:`Fica para amanhã · ${t.title}`,()=>{setToast(null);unpauseTask({...t,skip})})
+      }catch(e){patchTask(t.id,{skip:before});showError(toNinhoError(e,kind==='skip'?'pular tarefa':'adiar tarefa'),()=>pauseTask(t,kind))}
+    })
+  }
+  async function unpauseTask(t:Task){
+    const s=t.skip;if(!s||s.id==='tmp')return
+    await withPending(['task:'+t.id],async()=>{
+      patchTask(t.id,{skip:null})
+      try{await api.unskipTask(s.id);showToast(`De volta · ${t.title}`)}
+      catch(e){patchTask(t.id,{skip:s});showError(toNinhoError(e,'desfazer pausa'),()=>unpauseTask({...t,skip:s}))}
+    })
+  }
+
   async function archiveTasks(list:Task[]){
     if(!confirm(`Arquivar ${list.length} tarefa${list.length!==1?'s':''} de cães? As rotinas da aba Cães continuam.`))return
     const ids=list.map(t=>t.id)
@@ -1060,6 +1122,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
           :<span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>}
         {actions&&<button className="ib desk" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
         {actions&&<button className="ib desk" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
+        {actions&&!t.completed_today&&<button className="ib desk" onClick={()=>openModal('taskmenu',t)} title="Pular ou deixar para amanhã" aria-label={`Mais opções de ${t.title}`}>⏭</button>}
         {actions&&<button className="ib mob" onClick={()=>openModal('taskmenu',t)} aria-label={`Opções de ${t.title}`}>⋯</button>}
       </div>
     )
@@ -1118,7 +1181,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
         )):<>
           {pend.length===0&&<div className="alldone">🎉 Tudo feito por hoje!<small>+{doneXP} XP conquistados</small></div>}
           {(()=>{
-            const groups=groupToday(pend,nowHM)
+            const groups=groupToday(pend,nowHM,today)
             const nextId=groups.find(g=>['morning','afternoon','night'].includes(g.k))?.items[0]?.id
             return groups.map(g=>(
               <div key={g.k}>
@@ -1134,6 +1197,14 @@ export default function NinhoApp({householdId}:{householdId:string}){
             </button>
             {showDone[who]&&done.map(i=>itemRow(i,{actions:false}))}
           </>}
+          {(()=>{const paused=homeTasks.filter(t=>pausedToday(t,today)&&ownerOfTask(t)===who);return paused.length>0&&<div className="paused">
+            <div className="paused-h">⏸ Puladas ou para amanhã ({paused.length})</div>
+            {paused.map(t=><div key={t.id} className="paused-r">
+              <span className="paused-t">{t.title}</span>
+              <span className="paused-k">{t.skip!.kind==='snooze'?'amanhã':t.frequency==='daily'?'pulada hoje':'pulada no período'}</span>
+              <button className="lnk" disabled={isPending('task:'+t.id)} onClick={()=>unpauseTask(t)}>↺ Voltar</button>
+            </div>)}
+          </div>})()}
         </>}
       </section>
     )
@@ -1368,6 +1439,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
                       <div className="tc-meta">
                         <button className={`bdg qb ${t.essential?'bdg-e':'bdg-n'}`} onClick={e=>{e.stopPropagation();quickUpdate(t.id,{essential:!t.essential})}} title={t.essential?'Tirar de essencial':'Marcar como essencial'} aria-pressed={t.essential}>{t.essential?'● essencial':'○ essencial'}</button>
                         <QuickTime value={hhmm(t.scheduled_time)} onSave={v=>quickUpdate(t.id,{scheduled_time:v||null})}/>
+                        {weekdaysLabel(t.weekdays)&&t.frequency!=='monthly'&&t.frequency!=='once'&&<span className="bdg bdg-t" title="Dias da semana">📆 {weekdaysLabel(t.weekdays)}</span>}
+                        {t.frequency==='once'&&t.due_date&&<span className={`bdg ${t.due_date<today?'bdg-h':'bdg-t'}`} title="Data">📆 {fmtDate(t.due_date)}</span>}
+                        {pausedToday(t,today)&&<span className="bdg bdg-n">⏸ {t.skip!.kind==='snooze'?'amanhã':'pulada'}</span>}
                         <span className={`bdg bdg-${wCls(t.weight)}`} title={`Esforço ${WPT[t.weight].toLowerCase()} · +${XPW[t.weight]} XP`}>+{XPW[t.weight]}</span>
                         {!isFixed(t)&&<span className="bdg" style={{background:'var(--pbg)',color:'var(--pur)'}}>↻ {firstName(names[ownerOfTask(t)])}</span>}
                         {t.frequency==='daily'?null:doneInPeriod(t,today)
@@ -1607,6 +1681,11 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 <li><b>Pontual:</b> feita uma vez, some de vez.</li>
               </ul>
               <p>Cada tarefa mostra quando foi feita pela última vez (“há 9 dias”, “nunca feita”). Só dá para desmarcar o que foi feito hoje.</p>
+              <ul>
+                <li><b>📆 Dias da semana</b> (no formulário da tarefa): a diária aparece só nesses dias (ex.: lixo seg, qua e sex). A semanal ou quinzenal aparece a partir do primeiro dia escolhido (ex.: faxina a partir de sábado).</li>
+                <li><b>Pontual com data:</b> aparece em Hoje a partir da data e fica em ⚠ Atrasadas se passar.</li>
+                <li><b>⤼ Pular</b> (no ⋯ da tarefa, ou ⏭ no computador): resolve o dia, a semana ou o mês sem XP e <b>sem quebrar a sequência</b>. <b>⏭ Deixar para amanhã:</b> some só hoje. As puladas ficam no fim da coluna com “↺ Voltar”.</li>
+              </ul>
             </div></details>
             <details><summary>↻ Divisão das tarefas</summary><div className="gb">
               <p>Tarefas sem responsável fixa (↻) são divididas entre vocês. Escolha o jeito em <b>Semana › Divisão da carga</b>:</p>
@@ -1704,6 +1783,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
           {why&&<div className="why">↻ {why}</div>}
           <div className="menu">
             <button className="btn btn-s" onClick={()=>{closeModal();toggleTask(t)}}>{t.completed_today?'↺ Desmarcar':'✓ Concluir'}</button>
+            {!t.completed_today&&t.frequency!=='daily'&&<button className="btn btn-g" onClick={()=>{closeModal();pauseTask(t,'snooze')}}>⏭ Deixar para amanhã</button>}
+            {!t.completed_today&&SKIP_LABEL[t.frequency]&&<button className="btn btn-g" onClick={()=>{closeModal();pauseTask(t,'skip')}}>⤼ {SKIP_LABEL[t.frequency]}<small className="menu-s">sem XP · não quebra a sequência</small></button>}
             <button className="btn btn-g" onClick={()=>{closeModal();swapTask(t)}}>⇄ Passar para {firstName(names[other])}</button>
             <button className="btn btn-g" onClick={()=>openModal('task',t)}>✎ Editar tarefa</button>
           </div>

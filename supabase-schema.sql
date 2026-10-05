@@ -17,7 +17,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict LPoM8ffaWFSkYOMlQ7c2Iyn8KFt27Y3XHRhkt6ppCj0f0oAaFVMDKh0CCNyMIY0
+\restrict Z9b6qTumcLpSva30G5ZjFv6GLm0L3KvQ9jByUXyaKHybEnIYeTcOrdgkl8fagqg
 
 -- Dumped from database version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -357,14 +357,17 @@ CREATE FUNCTION public.ninho_day_on_track(p_household_id uuid, p_day date) RETUR
 begin
   if not exists (select 1 from public.tasks t
                  where t.household_id = p_household_id and t.active and t.essential and t.frequency = 'daily'
-                   and public.ninho_local_date(t.created_at) <= p_day) then
+                   and public.ninho_local_date(t.created_at) <= p_day
+                   and public.ninho_task_on_day(t.weekdays, p_day)) then
     return public.ninho_day_active(p_household_id, p_day, null);
   end if;
   return not exists (
     select 1 from public.tasks t
     where t.household_id = p_household_id and t.active and t.essential and t.frequency = 'daily'
       and public.ninho_local_date(t.created_at) <= p_day
-      and not exists (select 1 from public.task_completions c where c.task_id = t.id and c.date = p_day));
+      and public.ninho_task_on_day(t.weekdays, p_day)
+      and not exists (select 1 from public.task_completions c where c.task_id = t.id and c.date = p_day)
+      and not exists (select 1 from public.task_skips s where s.task_id = t.id and s.date = p_day));
 end $$;
 
 
@@ -582,6 +585,17 @@ begin
     's',             public.ninho_streak_of(p_household_id, v_t, 'person', 's'),
     's_best',        public.ninho_best_streak_of(p_household_id, v_t, 'person', 's'));
 end $$;
+
+
+--
+-- Name: ninho_task_on_day(smallint[], date); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_task_on_day(p_weekdays smallint[], p_day date) RETURNS boolean
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select p_weekdays is null or cardinality(p_weekdays) = 0 or extract(dow from p_day)::smallint = any(p_weekdays)
+$$;
 
 
 --
@@ -1017,6 +1031,30 @@ CREATE TABLE public.task_completions (
 
 
 --
+-- Name: task_skips; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.task_skips (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    task_id uuid NOT NULL,
+    household_id uuid NOT NULL,
+    date date DEFAULT public.ninho_today() NOT NULL,
+    kind text NOT NULL,
+    skipped_by text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT task_skips_kind_check CHECK ((kind = ANY (ARRAY['snooze'::text, 'skip'::text]))),
+    CONSTRAINT task_skips_skipped_by_check CHECK (((skipped_by IS NULL) OR (skipped_by = ANY (ARRAY['g'::text, 's'::text]))))
+);
+
+
+--
+-- Name: TABLE task_skips; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.task_skips IS 'snooze = deixar para amanhã (some só naquele dia); skip = pular (resolve o dia/semana/quinzena/mês sem XP).';
+
+
+--
 -- Name: tasks; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -1033,8 +1071,24 @@ CREATE TABLE public.tasks (
     active boolean DEFAULT true,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now(),
+    weekdays smallint[],
+    due_date date,
     CONSTRAINT tasks_weight_check CHECK ((weight = ANY (ARRAY['light'::text, 'medium'::text, 'heavy'::text])))
 );
+
+
+--
+-- Name: COLUMN tasks.weekdays; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tasks.weekdays IS 'Dias da semana (0 = domingo … 6 = sábado). null = qualquer dia.';
+
+
+--
+-- Name: COLUMN tasks.due_date; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.tasks.due_date IS 'Tarefa pontual: data a partir da qual aparece em Hoje.';
 
 
 --
@@ -1272,6 +1326,22 @@ ALTER TABLE ONLY public.task_completions
 
 
 --
+-- Name: task_skips task_skips_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_skips
+    ADD CONSTRAINT task_skips_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: task_skips task_skips_task_id_date_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_skips
+    ADD CONSTRAINT task_skips_task_id_date_key UNIQUE (task_id, date);
+
+
+--
 -- Name: tasks tasks_assigned_to_check; Type: CHECK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1293,6 +1363,14 @@ ALTER TABLE public.tasks
 
 ALTER TABLE ONLY public.tasks
     ADD CONSTRAINT tasks_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: tasks tasks_weekdays_check; Type: CHECK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE public.tasks
+    ADD CONSTRAINT tasks_weekdays_check CHECK (((weekdays IS NULL) OR (((cardinality(weekdays) >= 1) AND (cardinality(weekdays) <= 7)) AND (weekdays <@ ARRAY[(0)::smallint, (1)::smallint, (2)::smallint, (3)::smallint, (4)::smallint, (5)::smallint, (6)::smallint])))) NOT VALID;
 
 
 --
@@ -1447,6 +1525,13 @@ CREATE UNIQUE INDEX shopping_items_open_title ON public.shopping_items USING btr
 --
 
 CREATE INDEX task_completions_household_date_idx ON public.task_completions USING btree (household_id, date);
+
+
+--
+-- Name: task_skips_household_date_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX task_skips_household_date_idx ON public.task_skips USING btree (household_id, date DESC);
 
 
 --
@@ -1698,6 +1783,22 @@ ALTER TABLE ONLY public.task_completions
 
 
 --
+-- Name: task_skips task_skips_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_skips
+    ADD CONSTRAINT task_skips_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
+
+
+--
+-- Name: task_skips task_skips_task_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.task_skips
+    ADD CONSTRAINT task_skips_task_id_fkey FOREIGN KEY (task_id) REFERENCES public.tasks(id) ON DELETE CASCADE;
+
+
+--
 -- Name: tasks tasks_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1807,6 +1908,13 @@ CREATE POLICY allow_all_auth ON public.task_completions TO authenticated USING (
 
 
 --
+-- Name: task_skips allow_all_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY allow_all_auth ON public.task_skips TO authenticated USING (true) WITH CHECK (true);
+
+
+--
 -- Name: tasks allow_all_auth; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1907,6 +2015,12 @@ ALTER TABLE public.shopping_items ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.task_completions ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: task_skips; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.task_skips ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: tasks; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -1934,5 +2048,5 @@ ALTER TABLE public.xp_history ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict LPoM8ffaWFSkYOMlQ7c2Iyn8KFt27Y3XHRhkt6ppCj0f0oAaFVMDKh0CCNyMIY0
+\unrestrict Z9b6qTumcLpSva30G5ZjFv6GLm0L3KvQ9jByUXyaKHybEnIYeTcOrdgkl8fagqg
 

@@ -2,7 +2,7 @@
 // Nunca importe este arquivo em componentes do navegador.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { HItem, Names, Who } from '@/lib/types'
-import { buildDogs, buildTasks } from '@/lib/build'
+import { buildDogs, buildTasks, type SkipRow } from '@/lib/build'
 import { addDays, homeClock, weekStartOf } from '@/lib/dates'
 import { planToday } from '@/lib/today'
 import { COMPLETION_WINDOW_DAYS, DEFAULT_NAMES } from '@/lib/constants'
@@ -37,6 +37,9 @@ async function loadHousehold(db: SupabaseClient, householdId: string, today: str
   // Pontuais: conclusões antigas também valem
   const onceIds = (tasks as any[]).filter(t => t.frequency === 'once').map(t => t.id)
   const old = onceIds.length ? must(await db.from('task_completions').select('id,task_id,date,completed_by').in('task_id', onceIds).lt('date', since), 'pontuais') : []
+  // Fase 4 (migration 008): pular/adiar
+  const sk = await db.from('task_skips').select('id,task_id,date,kind,skipped_by').eq('household_id', householdId).gte('date', addDays(today, -31))
+  const skips = (sk.error ? [] : sk.data || []) as SkipRow[]
   // Fase 3 (migration 007): sem a migration, segue com o rodízio e sem manutenção
   const house = await db.from('households').select('split_mode').eq('id', householdId).maybeSingle()
   const split: SplitMode = house.error || (house.data as any)?.split_mode === 'rotation' ? 'rotation' : 'smart'
@@ -46,7 +49,7 @@ async function loadHousehold(db: SupabaseClient, householdId: string, today: str
   const names: Names = { g: g?.display_name || DEFAULT_NAMES.g, s: s?.display_name || DEFAULT_NAMES.s }
   const st = settings as any
   return {
-    tasks: buildTasks(tasks as any[], [...(tcomps as any[]), ...(old as any[])], today),
+    tasks: buildTasks(tasks as any[], [...(tcomps as any[]), ...(old as any[])], today, skips),
     dogs: buildDogs(dogs as any[], dcomps as any[], today),
     focus: !!st?.survival || st?.energy === 'low',
     bet: (st?.bet as string | null) ?? null,
