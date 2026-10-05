@@ -37,6 +37,13 @@ import { useNinhoData } from '@/hooks/useNinhoData'
 import { Onboarding } from '@/components/onboarding/Onboarding'
 import * as setupApi from '@/lib/services/onboarding'
 import { LAST_STEP, daysLabel, shouldAutoOpen } from '@/lib/onboarding'
+import { useDays } from '@/hooks/useDays'
+import { markSurvivalDay } from '@/lib/services/days'
+import { dogCare, nowSummary, routineNow, weekDays } from '@/lib/week'
+import { turnBy } from '@/lib/rotation'
+import { WeekStrip } from '@/components/inicio/WeekStrip'
+import { CheckinCard } from '@/components/inicio/CheckinCard'
+import { RoutineNowCard } from '@/components/inicio/RoutineNowCard'
 
 function firstName(n:string){return (n||'').split(' ')[0]}
 function initials(n:string){return (n||'??').slice(0,2).toUpperCase()}
@@ -337,6 +344,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const data=useNinhoData(householdId,today,weekStart,e=>showError(e))
   const {tasks,setTasks,dogs,setDogs,settings,setSettings,xp,setXp,streak,names,setNames,accidents,setAccidents,game}=data
   const casa=useCasa(householdId,today)
+  // Check-ins e dias da semana (migration 015)
+  const week=useDays(householdId,weekStart)
+  const survivalMarked=useRef('')
+  useEffect(()=>{
+    if(!week.available||!settings.survival||survivalMarked.current===today)return
+    survivalMarked.current=today
+    markSurvivalDay(householdId,today).then(()=>week.reload())
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[week.available,settings.survival,today,householdId])
   // Configuração inicial (migration 014) e rotinas cadastradas
   const [setup,setSetup]=useState<setupApi.SetupState|null>(null)
   const [routines,setRoutines]=useState<setupApi.RoutineRow[]>([])
@@ -713,11 +729,25 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const hello=greeting(hour)
   const dateLabel=longDateLabel(now)
   const countFor=(w:Who)=>{const all=hItems.filter(i=>ownerOfItem(i)===w);return{all:all.length,done:all.filter(i=>i.completed_today).length}}
+  // Início: semana real, rotina do momento, resumo de agora, cuidados dos cães, desafio sugerido
+  const weekInfo=weekDays(weekStart,today,{tasks,dogs,checkins:week.checkins,days:week.days,survivalNow:settings.survival})
+  const rn=routineNow(routines,today,nowHM)
+  const nowSum=nowSummary(hItems,me,ownerOfItem,nowHM)
+  const care=dogCare(casa.maint,today)
+  const challenge=(setup?.answers as any)?.challenge as {title:string,days:number,why:string}|undefined
+  const itemTitle=(i:HItem)=>i.task?i.task.title:i.dog!.title
+  async function saveCheckin(v:Parameters<typeof week.checkin>[2]){
+    if(!me)return
+    try{await week.checkin(today,me,v)}catch(e){showError(toNinhoError(e,'salvar check-in'));throw e}
+  }
 
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
+    {id:'routine',icon:'rotinas',label:'Iniciar rotina',sub:rn.now?rn.now.title:rn.next?`Próxima: ${rn.next.title}`:'Ver as rotinas',run:()=>go('rotinas')},
+    {id:'dogs',icon:'caes',label:'Cuidado dos cães',sub:'Comida, passeio, acidente',run:()=>go('caes')},
+    {id:'checkin',icon:'nos',label:'Check-in do dia',sub:'Humor e energia',run:()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}},
     {id:'maint',icon:'ferramenta',label:'Nova manutenção',sub:'Filtro, vacina, revisão…',run:()=>openModal('maint',null)},
     {id:'meeting',icon:'reuniao',label:'Reunião semanal',sub:'15 minutos, sem cobranças',run:()=>openModal('meeting')},
     {id:'energy',icon:'energia',label:'Energia da semana',sub:en.l,run:()=>openModal('energy')},
@@ -931,7 +961,13 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── HOJE ── */}
         {screen==='inicio'&&<div className="scr">
           <div className="sh">
-            <div><h1>{hello} 👋</h1><p>{dateLabel}</p></div>
+            <div><h1>{hello}{me?`, ${firstName(names[me])}`:''} 👋</h1><p>{dateLabel}</p>
+              <div className="hd-chips">
+                {me&&<span className="chip"><span className={`mini av-${me}`} aria-hidden="true">{names[me].slice(0,1).toUpperCase()}</span>{account?'Sua conta':'Este aparelho'}</span>}
+                <button className={`chip ${en.cls}`} onClick={()=>openModal('energy')} aria-label={`Energia da semana: ${en.l}. Alterar`}>{en.ic} {en.l}</button>
+                <button className={`chip ${settings.survival?'coral':''}`} onClick={toggleSurvival} aria-label={settings.survival?'Modo sobrevivência ativo. Desativar':'Modo normal. Ativar modo sobrevivência'}>{settings.survival?'🛡 Modo sobrevivência':'Modo normal'}</button>
+              </div>
+            </div>
             <div className="sh-a desk-only"><button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button></div>
           </div>
           {setup?.available&&!setup.completed&&!onb&&<div className="setup-cta">
@@ -957,11 +993,18 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
               <div className="bar"><div className="barf" style={{width:xpPct+'%',background:'var(--pur)'}}/></div>
             </button>
             <div className="stat">
-              <div className="stat-l">Sequência{game.streaks.house_best>0&&<span className="lg-only"> · recorde {game.streaks.house_best}</span>}</div>
+              <div className="stat-l">Sequência do casal{game.streaks.house_best>0&&<span className="lg-only"> · recorde {game.streaks.house_best}</span>}</div>
               <div className="stat-v">🔥 {streak}<small>dia{streak!==1?'s':''}</small></div>
               <div className="week-dots">{weekDots(todayIndex,streak,doneToday>0).map((c,i)=><div key={i} className={`wd ${c}`}/>)}</div>
             </div>
+            <button className="stat stat-ch" onClick={()=>challenge?go('nos'):setOnb(setup?.completed?'redo':'open')}>
+              <div className="stat-l">Desafio{challenge?' sugerido':''}</div>
+              <div className="stat-v stat-txt">{challenge?challenge.title:'Nenhum ainda'}</div>
+              <div className="stat-s">{challenge?`${challenge.days} dias, as duas juntas`:setup?.available?'Sugerido na configuração':'Em breve'}</div>
+            </button>
           </div>
+
+          {week.available&&<WeekStrip days={weekInfo} names={names}/>}
 
           {settings.survival?(
             <div className="banner surv">🛡 <span>Modo sobrevivência — {showAllToday?'mostrando todas as tarefas':`só essenciais${hiddenCount>0?` · ${hiddenCount} ocultas`:''}`}</span>
@@ -974,6 +1017,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             </div>
           )}
 
+          <div className="now-h">
+            <h2>Para agora</h2>
+            <div className="now-s" aria-live="polite">
+              {nowSum.late>0&&<span className="chip coral">⚠ {nowSum.late} atrasada{nowSum.late>1?'s':''}</span>}
+              {nowSum.essentials>0&&<span className="chip">● {nowSum.essentials} essencia{nowSum.essentials>1?'is':'l'} pendente{nowSum.essentials>1?'s':''}</span>}
+              {nowSum.next&&<span className="chip">▸ {itemTitle(nowSum.next)} às {hhmm(nowSum.next.scheduled_time)}</span>}
+              {!nowSum.late&&!nowSum.essentials&&!nowSum.next&&<span className="chip green">✓ Nada urgente{me?' para você':''}</span>}
+            </div>
+          </div>
           <div className="today">
             <div className="seg" style={{gridColumn:'1/-1'}}>
               {(['g','s'] as Who[]).map(w=>{const c=countFor(w);return(
@@ -985,6 +1037,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {personCard('g')}
             {personCard('s')}
             <aside className="side">
+              {week.available&&me&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
+              {setup?.available&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
+                turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
               <div className="card">
                 <div className="slbl">🐾 Cães hoje {dogDaily.length>0&&<span className="mono" style={{color:'var(--faint)'}}>{dogDone}/{dogDaily.length}</span>}<button className="lnk" onClick={()=>setTab('pets')}>Ver →</button></div>
                 {dogs.length===0?(
@@ -1006,6 +1061,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                     </button>
                   )
                 })}
+                {care.length>0&&<div className="care">
+                  <div className="care-l">Cuidados próximos</div>
+                  {care.slice(0,3).map(c=><button key={c.id} className="care-i" onClick={()=>goCasa('manutencao')}><span>{c.title}</span><span className={`mono ${c.next_due<today?'late':''}`}>{c.next_due<today?'atrasado':c.next_due===today?'hoje':fmtDate(c.next_due)}</span></button>)}
+                </div>}
                 {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
               </div>
               <MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>
@@ -1016,7 +1075,6 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                     <span className="dsum-s">{casa.shop.filter(i=>!i.checked_at).slice(0,4).map(i=>i.title).join(', ')}{sc.toBuy>4?'…':''}</span></span>
                   <span className="chev">›</span>
                 </button>)})()}
-              <Scoreboard compact scores={game.scores} lastWeek={game.lastWeek} lastWeekBet={game.lastWeekBet} bet={settings.bet} names={names} me={me} onOpen={()=>setTab('week')}/>
               <div className="card">
                 <div className="slbl">Atalhos</div>
                 <div className="acts">

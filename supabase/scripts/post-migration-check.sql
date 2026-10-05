@@ -35,7 +35,9 @@ begin
     -- Telegram sem duplicar (migration 013)
     ('telegram_updates','update_id'),
     -- Redesign F2: configuração inicial e rotinas (migration 014)
-    ('household_setup','answers'), ('onboarding_progress','step'), ('routines','assign_mode'), ('routine_steps','survival')
+    ('household_setup','answers'), ('onboarding_progress','step'), ('routines','assign_mode'), ('routine_steps','survival'),
+    -- Redesign F3: check-in e dia (migration 015)
+    ('daily_checkins','mood'), ('household_days','survival')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -59,7 +61,9 @@ begin
                                -- Fase 6 (migration 010)
                                'ninho_link_member','ninho_is_member',
                                -- Redesign F2 (migration 014)
-                               'ninho_finish_onboarding']) as f loop
+                               'ninho_finish_onboarding',
+                               -- Redesign F3 (migration 015)
+                               'ninho_checkin']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';
@@ -147,7 +151,7 @@ begin
     for r in select unnest(array['tasks','task_completions','dogs','dog_routines','dog_completions','weekly_settings',
                                  'weekly_meetings','profiles','xp_history','puppy_accidents',
                                  'shopping_items','maintenance_items','maintenance_log','households','task_skips',
-                                 'household_setup','routines','routine_steps']) as t loop
+                                 'household_setup','routines','routine_steps','daily_checkins','household_days']) as t loop
       insert into ninho_check("check", status, detalhe)
       select 'realtime ' || r.t,
              case when exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = r.t) then 'ok' else 'FALHA' end, '';
