@@ -29,13 +29,41 @@ interface Link { id: string, household_id: string, who: Who, chat_id: number, mo
 
 const first = (n: string) => (n || '').split(' ')[0]
 
+/** Menu fixo embaixo do teclado (botões viram os comandos). */
+export const MENU = {
+  keyboard: [
+    [{ text: '📋 Hoje' }, { text: '🛒 Compras' }],
+    [{ text: '➕ Adicionar à lista' }, { text: '✦ Dicas' }],
+    [{ text: '❓ Ajuda' }],
+  ],
+  resize_keyboard: true,
+  is_persistent: true,
+  input_field_placeholder: 'Toque numa opção ou digite',
+}
+
+/** Texto do botão do menu → comando. */
+export function menuCommand(text: string): string | null {
+  if (text.trim().startsWith('/')) return null // comandos digitados seguem o caminho normal
+  const t = text.replace(/^[^A-Za-zÀ-ÿ]+/, '').trim().toLowerCase()
+  if (t === 'hoje') return '/hoje'
+  if (t === 'compras') return '/compras'
+  if (t === 'adicionar à lista' || t === 'adicionar a lista') return '/adicionar'
+  if (t === 'dicas') return '/dicas'
+  if (t === 'ajuda' || t === 'menu') return '/ajuda'
+  return null
+}
+
+/** Pergunta do "Adicionar à lista" (a resposta a ela vira itens da lista). */
+export const ADD_PROMPT = 'O que vai na lista? Mande os itens separados por vírgula (ex.: leite, 2 kg arroz, café).'
+
 export const HELP = [
-  'O que eu sei fazer:',
+  'Use o menu aqui embaixo ou os comandos:',
   '/hoje — o que é seu hoje (com botões para concluir)',
   '/feito louça — conclui uma tarefa pelo nome',
   '/compras — a lista de compras',
   '/compras leite, 2 kg arroz — adiciona itens (ou mande "+leite")',
   '/dicas — sugestões da IA para a semana',
+  '/menu — mostra o menu de novo',
   '/sair — desliga esta conversa do Ninho',
 ].join('\n')
 
@@ -58,7 +86,7 @@ async function start(deps: BotDeps, chatId: number, code: string) {
   const c = code.trim().toUpperCase()
   if (!c) {
     const l = await linkOf(deps.db, chatId)
-    if (l) return send(deps, chatId, `Esta conversa já está ligada ao Ninho. ✅\n\n${HELP}`)
+    if (l) return send(deps, chatId, `Esta conversa já está ligada ao Ninho. ✅\n\n${HELP}`, { reply_markup: MENU })
     return send(deps, chatId, 'Oi! Para ligar esta conversa ao Ninho, abra o app › Ajustes › Telegram › Conectar.')
   }
   const r = await deps.db.from('telegram_links').select('*').eq('link_code', c).maybeSingle()
@@ -70,7 +98,7 @@ async function start(deps: BotDeps, chatId: number, code: string) {
   must(await deps.db.from('telegram_links').delete().eq('chat_id', chatId).neq('id', link.id).select('id'), 'vínculo antigo')
   must(await deps.db.from('telegram_links').update({ chat_id: chatId, linked_at: new Date().toISOString(), link_code: null, code_expires_at: null, active: true }).eq('id', link.id).select('id'), 'ligar')
   const names = await namesOf(deps.db, link.household_id)
-  return send(deps, chatId, `Pronto, ${first(names[link.who])}! 🪺 Esta conversa está ligada ao Ninho.\nVocê vai receber o bom dia e o resumo de domingo aqui também.\n\n${HELP}`)
+  return send(deps, chatId, `Pronto, ${first(names[link.who])}! 🪺 Esta conversa está ligada ao Ninho.\nVocê vai receber o bom dia e o resumo de domingo aqui também.\n\n${HELP}`, { reply_markup: MENU })
 }
 
 // ── /hoje ───────────────────────────────────────────────────────────────
@@ -183,8 +211,22 @@ async function shoppingAdd(deps: BotDeps, link: Link, text: string) {
 
 // ── Entrada principal ───────────────────────────────────────────────────
 
+/**
+ * Registra o update_id; devolve false se já foi processado (o Telegram reenvia
+ * quando a resposta demora). Sem a migration 013, segue sem essa proteção.
+ */
+async function firstTime(db: SupabaseClient, updateId: unknown): Promise<boolean> {
+  if (typeof updateId !== 'number') return true
+  const r = await db.from('telegram_updates').insert({ update_id: updateId })
+  if (r.error) return r.error.code !== '23505'
+  // Faxina ocasional: guarda só os últimos dias
+  if (updateId % 50 === 0) await db.from('telegram_updates').delete().lt('created_at', new Date(Date.now() - 3 * 86400000).toISOString())
+  return true
+}
+
 export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   const date = homeClock(deps.now).date
+  if (!(await firstTime(deps.db, update?.update_id))) return
   if (update?.callback_query) return onCallback(deps, update.callback_query, date)
   const msg = update?.message
   if (!msg?.chat || typeof msg.text !== 'string') return
@@ -192,14 +234,20 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   const chatId = Number(msg.chat.id)
   const text = msg.text.trim()
   const [head] = text.split(/\s+/)
-  const cmd = head.toLowerCase().replace(/@[\w_]+$/, '')
-  const arg = text.slice(head.length).trim()
+  const fromMenu = menuCommand(text)
+  const cmd = fromMenu ?? head.toLowerCase().replace(/@[\w_]+$/, '')
+  const arg = fromMenu ? '' : text.slice(head.length).trim()
 
   if (cmd === '/start') { await start(deps, chatId, arg); return }
   const link = await linkOf(deps.db, chatId)
   if (!link) { await send(deps, chatId, 'Esta conversa ainda não está ligada ao Ninho. No app: Ajustes › Telegram › Conectar.'); return }
 
+  // Resposta à pergunta do "Adicionar à lista"
+  if (!cmd.startsWith('/') && String(msg.reply_to_message?.text || '').startsWith(ADD_PROMPT.slice(0, 20))) { await shoppingAdd(deps, link, text); return }
+
   if (cmd === '/hoje') await sendToday(deps, link, date)
+  else if (cmd === '/adicionar') await send(deps, chatId, ADD_PROMPT, { reply_markup: { force_reply: true, input_field_placeholder: 'leite, pão, café' } })
+  else if (cmd === '/menu') await send(deps, chatId, 'Menu aberto aqui embaixo. 👇', { reply_markup: MENU })
   else if (cmd === '/compras' || cmd === '/lista') await (arg ? shoppingAdd(deps, link, arg) : shoppingList(deps, link))
   else if (cmd === '/feito') await doneByName(deps, link, arg, date)
   else if (cmd === '/dicas') {
@@ -210,9 +258,9 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   } else if (cmd === '/sair') {
     must(await deps.db.from('telegram_links').delete().eq('id', link.id).select('id'), 'desligar')
     await send(deps, chatId, 'Pronto, esta conversa foi desligada do Ninho. Para voltar, gere um código no app.')
-  } else if (cmd === '/ajuda' || cmd === '/help') await send(deps, chatId, HELP)
+  } else if (cmd === '/ajuda' || cmd === '/help') await send(deps, chatId, HELP, { reply_markup: MENU })
   else if (text.startsWith('+')) await shoppingAdd(deps, link, text.slice(1))
-  else await send(deps, chatId, `Não entendi. ${HELP}`)
+  else await send(deps, chatId, `Não entendi. ${HELP}`, { reply_markup: MENU })
 }
 
 async function onCallback(deps: BotDeps, cq: any, date: string) {
@@ -227,16 +275,29 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
   }
   const m = data.match(/^([tdm]):([0-9a-f-]{36})$/)
   if (!m) { await deps.tg('answerCallbackQuery', { callback_query_id: cq.id }); return }
+  const msgId = cq.message?.message_id
+  // Resposta imediata: o botão para de "carregar" e some da lista antes do registro
+  const kb = cq.message?.reply_markup?.inline_keyboard as Array<Array<{ callback_data?: string }>> | undefined
+  await Promise.all([
+    deps.tg('answerCallbackQuery', { callback_query_id: cq.id, text: '⏳ Registrando…' }),
+    kb && msgId ? deps.tg('editMessageReplyMarkup', { chat_id: chatId, message_id: msgId, reply_markup: { inline_keyboard: kb.filter(row => !row.some(b => b.callback_data === data)) } }) : null,
+  ])
+  // Dois toques seguidos no mesmo botão: o segundo espera o primeiro (mesma instância)
+  const key = `${chatId}:${data}`
+  if (inflight.has(key)) return
+  inflight.add(key)
   let msg: string
   try { msg = await completeItem(deps.db, link, m[1] as 't' | 'd' | 'm', m[2], date) }
-  catch { msg = 'Não consegui registrar agora. Tente de novo.' }
-  await deps.tg('answerCallbackQuery', { callback_query_id: cq.id, text: msg.slice(0, 190) })
-  // Atualiza a mesma mensagem com a lista nova
-  if (cq.message?.message_id) {
+  catch { msg = '⚠️ Não consegui registrar agora. Tente de novo.' }
+  finally { inflight.delete(key) }
+  // A mesma mensagem mostra o resultado no topo e a lista atualizada
+  if (msgId) {
     const v = await todayView(deps.db, link, date)
-    await deps.tg('editMessageText', { chat_id: chatId, message_id: cq.message.message_id, text: v.text, reply_markup: { inline_keyboard: v.buttons } })
-  }
+    await deps.tg('editMessageText', { chat_id: chatId, message_id: msgId, text: `${msg}\n\n${v.text}`, reply_markup: { inline_keyboard: v.buttons } })
+  } else await send(deps, chatId, msg)
 }
+
+const inflight = new Set<string>()
 
 // ── Bom dia e resumo no Telegram ────────────────────────────────────────
 

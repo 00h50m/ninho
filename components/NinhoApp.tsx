@@ -1773,6 +1773,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <details><summary>💬 Telegram e ✦ IA</summary><div className="gb">
               <ul>
                 <li><b>Telegram:</b> em Ajustes › Telegram: <b>Conectar</b> liga o seu; <b>Gerar convite</b> cria um link para mandar à outra pelo WhatsApp. O bom dia e o resumo de domingo chegam lá também.</li>
+                <li><b>Menu fixo</b> no Telegram: 📋 Hoje, 🛒 Compras, ➕ Adicionar à lista, ✦ Dicas e ❓ Ajuda. Ao tocar no ✓ de uma tarefa, o botão some na hora e o resultado aparece no topo da lista.</li>
                 <li>Comandos: <b>/hoje</b> (o que é seu, com botões ✓ para concluir), <b>/feito louça</b>, <b>/compras</b> (ver a lista), <b>/compras leite, 2 kg arroz</b> ou <b>+leite</b> (adicionar), <b>/dicas</b> e <b>/sair</b>.</li>
                 <li><b>✦ IA:</b> na Reunião semanal (e no /dicas), a IA lê a semana (placar, quem fez o quê, puladas, o que pesou na reunião passada) e sugere de 3 a 5 ajustes. São sugestões, não regras. Limite de 6 pedidos por dia. O resumo da semana é enviado à Anthropic para gerar as sugestões.</li>
               </ul>

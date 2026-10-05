@@ -17,6 +17,7 @@ As migrations ficam em `supabase/migrations/` e são a fonte da verdade do schem
 | `20261011120000_login_membros.sql` | **Fase 6 (etapa A).** `household_members` (conta de login → casa e pessoa g/s), `ninho_link_member(e-mail, 'g'\|'s')` (só pelo SQL Editor) e `ninho_is_member`. Não muda o acesso: o app antigo continua funcionando. |
 | `20261011120100_rls_por_casa.sql` | **Fase 6 (etapa B) — rodar só depois que as duas entrarem com e-mail e senha.** Troca a regra “qualquer usuário autenticado acessa tudo” por “só quem é da casa acessa”. O servidor (service_role) continua com acesso. Para desfazer: `supabase/scripts/rollback-rls-por-casa.sql`. |
 | `20261011120200_fix_telegram_codigo.sql` | **Correção.** `ninho_telegram_link_code` passa a usar `gen_random_uuid()` (nativa). No Supabase, `uuid_generate_v4()` fica no schema `extensions` e não é vista por funções com `search_path = public`. Os testes locais agora imitam isso. |
+| `20261012120000_telegram_updates.sql` | **Telegram sem duplicar.** `telegram_updates` guarda o `update_id` já processado: quando o Telegram reenvia uma mensagem ou um toque, o bot ignora. Só o servidor usa. |
 
 ## Regras seguidas
 
