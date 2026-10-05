@@ -54,6 +54,25 @@ begin
     return;
   end if;
 
+  -- Versões atuais das migrations (schema real: scheduled_time do tipo time, horários em completed_at/earned_at)
+  insert into ninho_check("check", status, detalhe)
+  select 'migration 005 atualizada (horário tipo time)',
+         case when pg_get_functiondef('public.ninho_complete_task(uuid,date,text)'::regprocedure) like '%scheduled_time::text%'
+                and pg_get_functiondef('public.ninho_complete_dog_routines(uuid[],date,text)'::regprocedure) like '%scheduled_time::text%'
+              then 'ok' else 'FALHA' end,
+         case when pg_get_functiondef('public.ninho_complete_task(uuid,date,text)'::regprocedure) like '%scheduled_time::text%' then ''
+              else 'versão antiga: rode de novo a versão atual de 20261006120000_gamification.sql' end;
+  if exists (select 1 from pg_attribute where attrelid = 'public.task_completions'::regclass and attname = 'completed_at' and not attisdropped) then
+    execute 'select count(*) from public.task_completions where completed_at is not null and created_at is distinct from completed_at' into n;
+    insert into ninho_check("check", status, detalhe) values ('horário original das conclusões', case when n = 0 then 'ok' else 'FALHA' end,
+      case when n = 0 then 'created_at = completed_at' else n || ' linha(s) com horário da migração; rode de novo a versão atual da 002' end);
+  end if;
+  if exists (select 1 from pg_attribute where attrelid = 'public.xp_history'::regclass and attname = 'earned_at' and not attisdropped) then
+    execute 'select count(*) from public.xp_history where earned_at is not null and created_at is distinct from earned_at' into n;
+    insert into ninho_check("check", status, detalhe) values ('horário original do XP', case when n = 0 then 'ok' else 'FALHA' end,
+      case when n = 0 then 'created_at = earned_at' else n || ' linha(s) com horário da migração; rode de novo a versão atual da 002' end);
+  end if;
+
   -- Nenhum XP válido duplicado
   select count(*) into n from (select 1 from public.xp_history where reason is not null and voided_at is null group by household_id, reason having count(*) > 1) x;
   insert into ninho_check("check", status, detalhe) values ('XP válido duplicado', case when n = 0 then 'ok' else 'FALHA' end, n || ' caso(s)');
