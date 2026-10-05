@@ -9,6 +9,25 @@
 -- ── Quem concluiu ───────────────────────────────────────────────────────
 -- 'g' = Giovanna, 's' = Sabrina (identificação local do aparelho, sem login).
 -- null = registro anterior a esta migração ("não identificado").
+--
+-- Em produção, task_completions.completed_by foi criada como uuid e nunca foi
+-- usada pelo app. Para guardar 'g'/'s', a coluna antiga é RENOMEADA para
+-- completed_by_legacy (valores e vínculos preservados) e uma nova completed_by
+-- text é criada no lugar.
+do $$
+declare t text;
+begin
+  foreach t in array array['task_completions','dog_completions'] loop
+    if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = t
+               and column_name = 'completed_by' and data_type <> 'text')
+       and not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = t
+               and column_name = 'completed_by_legacy') then
+      execute format('alter table public.%I rename column completed_by to completed_by_legacy', t);
+      execute format('alter table public.%I add column completed_by text', t);
+    end if;
+  end loop;
+end $$;
+
 alter table public.dog_completions add column if not exists completed_by text;
 alter table public.dog_completions add column if not exists household_id uuid;
 
@@ -106,6 +125,23 @@ alter table public.xp_history add column if not exists void_reason text;
 
 comment on column public.xp_history.voided_at is
   'Preenchido quando o lançamento foi anulado (ex.: duplicado encontrado na migração 002). Lançamentos anulados não contam no XP.';
+
+-- Em produção, o horário original está em task_completions.completed_at e
+-- xp_history.earned_at; a 001 criou created_at preenchido com o horário da
+-- migração. Copia o horário original e garante default nas colunas antigas
+-- (as funções novas só preenchem created_at).
+do $$
+declare r record;
+begin
+  for r in select * from (values ('task_completions','completed_at'), ('dog_completions','completed_at'),
+                                 ('xp_history','earned_at')) v(t, c) loop
+    if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = r.t and column_name = r.c)
+       and exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = r.t and column_name = 'created_at') then
+      execute format('update public.%I set created_at = %I where %I is not null and created_at is distinct from %I', r.t, r.c, r.c, r.c);
+      execute format('alter table public.%I alter column %I set default now()', r.t, r.c);
+    end if;
+  end loop;
+end $$;
 
 -- Duplicados antigos (mesma casa + mesma origem): mantém o mais antigo, anula os demais.
 with ranked as (

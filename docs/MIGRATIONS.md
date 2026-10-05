@@ -48,8 +48,10 @@ Aplique as 4 migrations em ordem num projeto Supabase vazio (SQL Editor ou `supa
 ## Testes locais
 
 ```bash
-npm run test:db     # sobe um PostgreSQL temporário, aplica as migrations 2x em banco novo e em banco "legado", e roda os testes
+npm run test:db     # sobe um PostgreSQL temporário, aplica as migrations 2x em banco novo, "legado" e no schema real de produção, e roda os testes
 ```
+
+**Schema real de produção (out/2026):** diferente do `supabase-schema.sql` antigo do repositório. Em `task_completions`, `completed_by` era uuid e o horário ficava em `completed_at`. Em `xp_history`, o horário ficava em `earned_at`. Nas tarefas e rotinas, `scheduled_time` é do tipo `time`. A migration 002 trata essas diferenças sem perder dados: renomeia a coluna uuid para `completed_by_legacy` e copia os horários originais para `created_at`. O cenário C do `test:db` (`supabase/tests/fixtures-prod-2026-10.sql`) reproduz esse schema.
 
 Precisa dos binários do PostgreSQL (`initdb`, `pg_ctl`, `psql`). Não conecta ao Supabase.
 

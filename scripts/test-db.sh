@@ -54,7 +54,7 @@ check_report() { # roda um script de checagem e falha se aparecer FALHA
 MIGRATIONS=("$ROOT"/supabase/migrations/*.sql)
 T="$ROOT/supabase/tests"
 
-for db in fresh legacy; do
+for db in fresh legacy prod; do
   "${RUN[@]}" "$PG_BIN/createdb" -h "$WORK" -p "$PORT" -U postgres "$db"
 done
 
@@ -87,6 +87,16 @@ echo "› rollback opcional + reaplicação das migrations"
 psql_run legacy "$ROOT/supabase/scripts/rollback-fase-0.sql" "${MIGRATIONS[@]}"
 check_report legacy "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 echo "  ok - rollback e reaplicação sem erro"
+
+echo
+echo "══ Cenário C: schema REAL de produção (out/2026), 001 já aplicada ══"
+psql_run prod "$T/00-supabase-stubs.sql" "$T/fixtures-prod-2026-10.sql"
+psql_run prod "${MIGRATIONS[0]}"
+echo "› migrations 002–006 (1ª vez)"; psql_run prod "${MIGRATIONS[@]:1}"
+echo "› migrations 001–006 (2ª vez)"; psql_run prod "${MIGRATIONS[@]}"
+psql_run prod "$T/40-prod-schema.test.sql"
+check_report prod "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
+echo "  ok - pós-checagem sem FALHA no schema real"
 
 if [ "${DUMP_SNAPSHOT:-}" = "1" ]; then
   echo "› Gerando snapshot do schema (banco novo)"

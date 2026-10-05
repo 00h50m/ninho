@@ -101,7 +101,7 @@ begin
 
   v_base := public.ninho_xp_for_weight(v_task.weight);
   -- Pontualidade conta só para a conclusão real (a primeira), pelo relógio do banco
-  v_on_time := v_created and public.ninho_is_on_time(v_task.frequency, v_task.scheduled_time, p_date, now());
+  v_on_time := v_created and public.ninho_is_on_time(v_task.frequency, v_task.scheduled_time::text, p_date, now());
   v_xp := public.ninho_xp_with_bonus(v_base, v_on_time);
 
   insert into public.xp_history (household_id, amount, reason, earned_by, activity_date, on_time)
@@ -153,7 +153,7 @@ begin
 
     select * into v_row from public.dog_completions where routine_id = v_r.id and date = p_date;
 
-    v_on_time := v_new and public.ninho_is_on_time(v_r.frequency, v_r.scheduled_time, p_date, now());
+    v_on_time := v_new and public.ninho_is_on_time(v_r.frequency, v_r.scheduled_time::text, p_date, now());
     v_amount := public.ninho_xp_with_bonus(1, v_on_time);
     insert into public.xp_history (household_id, amount, reason, earned_by, activity_date, on_time)
     values (v_r.household_id, v_amount, public.ninho_xp_reason('dog', v_r.id, p_date), v_row.completed_by, p_date, v_on_time)
