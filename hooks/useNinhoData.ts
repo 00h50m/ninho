@@ -234,7 +234,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
     status, loadError, loadAll, offline,
     game,
     tasks, setTasks, dogs, setDogs, settings, setSettings, xp, setXp, streak, names, setNames, accidents, setAccidents,
-    refreshStats, reloadTasks, reloadDogs, reloadAccidents, meetingTick,
+    refreshStats, reloadTasks, reloadDogs, reloadNames, reloadAccidents, meetingTick,
     /** Registra uma conclusão criada por este aparelho (para reconhecer o DELETE depois). */
     rememberCompletion: (id: string, kind: 'task' | 'dog', itemId: string, date: string) => completionIndex.current.set(id, { kind, itemId, date }),
   }

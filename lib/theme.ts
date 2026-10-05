@@ -1,11 +1,14 @@
 // Tema do Ninho (aparência). Guardado no APARELHO: cada uma escolhe o que é
 // confortável no próprio celular (claro de dia, escuro à noite) sem mudar o da outra.
 // Sem escolha salva, segue o modo claro/escuro do sistema.
-export type ThemeId = 'aconchego' | 'noturno'
+export type ThemeId = 'aconchego' | 'noturno' | 'natureza' | 'aurora' | 'minimal'
 
 export const THEMES: Array<{ id: ThemeId, name: string, desc: string, swatch: [string, string, string] }> = [
   { id: 'aconchego', name: 'Ninho Aconchego', desc: 'Claro: creme, terracota e verde', swatch: ['var(--sw-aconchego-bg)', 'var(--sw-aconchego-pri)', 'var(--sw-aconchego-ok)'] },
   { id: 'noturno', name: 'Ninho Noturno', desc: 'Escuro: o visual original', swatch: ['var(--sw-noturno-bg)', 'var(--sw-noturno-pri)', 'var(--sw-noturno-ok)'] },
+  { id: 'natureza', name: 'Ninho Natureza', desc: 'Claro: sálvia, musgo e verde-água', swatch: ['var(--sw-natureza-bg)', 'var(--sw-natureza-pri)', 'var(--sw-natureza-ok)'] },
+  { id: 'aurora', name: 'Ninho Aurora', desc: 'Escuro: azul da madrugada e lilás', swatch: ['var(--sw-aurora-bg)', 'var(--sw-aurora-pri)', 'var(--sw-aurora-ok)'] },
+  { id: 'minimal', name: 'Ninho Minimal', desc: 'Claro: branco e grafite, pouca cor', swatch: ['var(--sw-minimal-bg)', 'var(--sw-minimal-pri)', 'var(--sw-minimal-ok)'] },
 ]
 
 export const THEME_KEY = 'ninho.theme'
@@ -43,4 +46,4 @@ export function applyTheme(t: ThemeId): void {
 }
 
 /** Script que roda antes da página aparecer (evita piscar o tema errado). */
-export const THEME_BOOT = `try{var t=localStorage.getItem('${THEME_KEY}');if(t!=='aconchego'&&t!=='noturno'){t=matchMedia('(prefers-color-scheme: dark)').matches?'noturno':'aconchego'}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='aconchego'}`
+export const THEME_BOOT = `try{var t=localStorage.getItem('${THEME_KEY}');if(${JSON.stringify(THEMES.map(t => t.id))}.indexOf(t)<0){t=matchMedia('(prefers-color-scheme: dark)').matches?'noturno':'aconchego'}document.documentElement.dataset.theme=t}catch(e){document.documentElement.dataset.theme='aconchego'}`

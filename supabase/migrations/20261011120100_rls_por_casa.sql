@@ -17,7 +17,8 @@ begin
   foreach t in array array[
     'tasks','task_completions','dogs','dog_completions','weekly_settings','weekly_meetings',
     'xp_history','puppy_accidents','push_subscriptions','shopping_items','maintenance_items',
-    'maintenance_log','task_skips','telegram_links'] loop
+    'maintenance_log','task_skips','telegram_links',
+    'household_setup','onboarding_progress','routines','routine_steps'] loop
     if to_regclass('public.' || t) is null then continue; end if;
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "allow_all_auth" on public.%I', t);

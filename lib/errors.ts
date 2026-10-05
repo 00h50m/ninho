@@ -52,3 +52,9 @@ export function logError(context: string, err: unknown): void {
 export function toNinhoError(err: unknown, context: string): NinhoError {
   return err instanceof NinhoError ? err : new NinhoError(err, context)
 }
+
+/** Tabela inexistente (migration não aplicada): Postgres 42P01 ou PostgREST PGRST205. */
+export function isMissingTable(e: unknown): boolean {
+  const x = (e || {}) as { code?: string, message?: string }
+  return x.code === '42P01' || x.code === 'PGRST205' || x.code === 'PGRST202' || /does not exist|could not find the table/i.test(x.message || '')
+}

@@ -4,7 +4,7 @@
    Os componentes usam SÓ estas variáveis (um teste confere que não há cores
    soltas em components/ e styles/app.css).
 
-   Temas: <html data-theme="aconchego|noturno">. O tema é escolhido em Ajustes
+   Temas: <html data-theme="aconchego|noturno|natureza|aurora|minimal">. O tema é escolhido em Ajustes
    e lembrado no aparelho (lib/theme.ts). Novos temas = um bloco a mais aqui.
 
    Significado das cores (não só aparência):
@@ -86,6 +86,87 @@
   --tier3-bg: #3a300c; --tier3-ring: #e2b93b; --tier3-tx: #e9c552;
 }
 
+/* ── Ninho Natureza (claro: sálvia, musgo e madeira) ─────────────────── */
+[data-theme="natureza"] {
+  color-scheme: light;
+  --bg: #eef1e7; --sf: #fbfcf7; --sf2: #e6eadc; --sf3: #dbe1cf;
+  --bd: #d5dcc7; --bd2: #c2cbb1;
+  --tx: #1f2a1e; --mu: #3d4a3a; --sub: #5f6b5a; --faint: #8a9584;
+  --pri: #4a6a2c; --pri-h: #3d5a23; --on-pri: #ffffff; --pri-bg: #e1ead2; --pri-bd: #bccd9f;
+  --green: #1f6f5c; --gbg: #dcefe8; --gbdr: #a9d3c5; --gdk: #2a7f69; --on-green: #ffffff;
+  --amb: #8a5a10; --abg: #f6ead2; --abdr: #e2c690;
+  --cor: #b0482c; --cbg: #f8e2da; --cbdr: #e6b8a8; --cor-tx: #9c3a20;
+  --pur: #5b4f9e; --pbg: #e9e6f5; --pbdr: #c8c0e8;
+  --inset: rgba(31, 42, 30, .05);
+  --top-bg: rgba(238, 241, 231, .9); --nav-bg: rgba(251, 252, 247, .94);
+  --overlay: rgba(31, 42, 30, .42);
+  --shadow-sm: 0 1px 2px rgba(40, 60, 30, .07), 0 1px 1px rgba(40, 60, 30, .04);
+  --shadow-md: 0 6px 20px rgba(40, 60, 30, .09);
+  --shadow-lg: 0 20px 50px rgba(40, 60, 30, .18);
+  --shadow-pri: 0 8px 24px rgba(74, 106, 44, .28);
+  --next-glow: rgba(74, 106, 44, .08);
+  --toast-bg: #1f2a1e; --toast-tx: #eef1e7; --toast-bd: #1f2a1e;
+  --toast-err-bg: #f8e2da; --toast-err-tx: #8a3315; --toast-err-bd: #e6b8a8;
+  --knob: #ffffff;
+  --tier1-bg: #efe2cf; --tier1-ring: #a8733f; --tier1-tx: #85562a;
+  --tier2-bg: #e6eae6; --tier2-ring: #8b968d; --tier2-tx: #5b665d;
+  --tier3-bg: #f4ecc9; --tier3-ring: #b8921e; --tier3-tx: #7f6309;
+}
+
+/* ── Ninho Aurora (escuro: azul da madrugada, lilás e verde-água) ────── */
+[data-theme="aurora"] {
+  color-scheme: dark;
+  --bg: #12142a; --sf: #1a1d38; --sf2: #222645; --sf3: #2c3054;
+  --bd: #2a2e50; --bd2: #393e66;
+  --tx: #eeeefb; --mu: #c3c4e0; --sub: #9093b8; --faint: #62658a;
+  --pri: #a98bff; --pri-h: #bba3ff; --on-pri: #14122a; --pri-bg: #2a2352; --pri-bd: #4d3f8f;
+  --green: #5fd6b4; --gbg: #12302f; --gbdr: #1f5a52; --gdk: #2fae8c; --on-green: #0e1f1c;
+  --amb: #f2b45a; --abg: #2e2312; --abdr: #5e4520;
+  --cor: #ff8a72; --cbg: #34181a; --cbdr: #6a2c2a; --cor-tx: #ff9c86;
+  --pur: #f39ad0; --pbg: #33183a; --pbdr: #6a3070;
+  --inset: rgba(0, 0, 0, .22);
+  --top-bg: rgba(18, 20, 42, .88); --nav-bg: rgba(22, 24, 48, .94);
+  --overlay: rgba(4, 4, 16, .65);
+  --shadow-sm: none;
+  --shadow-md: 0 10px 30px rgba(0, 0, 10, .4);
+  --shadow-lg: 0 20px 60px rgba(0, 0, 10, .5);
+  --shadow-pri: 0 8px 28px rgba(169, 139, 255, .35);
+  --next-glow: rgba(169, 139, 255, .1);
+  --toast-bg: #2a2352; --toast-tx: #e4dcff; --toast-bd: #4d3f8f;
+  --toast-err-bg: #34181a; --toast-err-tx: #ffb5a5; --toast-err-bd: #6a2c2a;
+  --knob: #ffffff;
+  --tier1-bg: #3a2616; --tier1-ring: #c0844c; --tier1-tx: #e0a06a;
+  --tier2-bg: #2a2d3e; --tier2-ring: #aab2c8; --tier2-tx: #c9d0e2;
+  --tier3-bg: #3a3214; --tier3-ring: #e6c04a; --tier3-tx: #f0cd5e;
+}
+
+/* ── Ninho Minimal (claro: branco, grafite, só o necessário de cor) ──── */
+[data-theme="minimal"] {
+  color-scheme: light;
+  --bg: #f7f7f6; --sf: #ffffff; --sf2: #f0f0ee; --sf3: #e6e6e3;
+  --bd: #e3e3e0; --bd2: #cfcfcb;
+  --tx: #1c1c1b; --mu: #3f3f3d; --sub: #6b6b67; --faint: #9a9a95;
+  --pri: #1c1c1b; --pri-h: #000000; --on-pri: #ffffff; --pri-bg: #ececea; --pri-bd: #cfcfcb;
+  --green: #2c7a4b; --gbg: #e5f2ea; --gbdr: #b4d8c1; --gdk: #2c7a4b; --on-green: #ffffff;
+  --amb: #925b06; --abg: #f8edd8; --abdr: #e3c892;
+  --cor: #c2410c; --cbg: #fbe6dc; --cbdr: #efbfa8; --cor-tx: #a8380a;
+  --pur: #4f4a8c; --pbg: #ebeaf4; --pbdr: #c9c6e3;
+  --inset: rgba(0, 0, 0, .04);
+  --top-bg: rgba(247, 247, 246, .9); --nav-bg: rgba(255, 255, 255, .94);
+  --overlay: rgba(20, 20, 20, .4);
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, .06);
+  --shadow-md: 0 6px 20px rgba(0, 0, 0, .07);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, .14);
+  --shadow-pri: 0 8px 24px rgba(0, 0, 0, .18);
+  --next-glow: rgba(0, 0, 0, .04);
+  --toast-bg: #1c1c1b; --toast-tx: #f7f7f6; --toast-bd: #1c1c1b;
+  --toast-err-bg: #fbe6dc; --toast-err-tx: #8a2f08; --toast-err-bd: #efbfa8;
+  --knob: #ffffff;
+  --tier1-bg: #f1e4d6; --tier1-ring: #a87444; --tier1-tx: #82562c;
+  --tier2-bg: #ececec; --tier2-ring: #8f8f8f; --tier2-tx: #5c5c5c;
+  --tier3-bg: #f5ecca; --tier3-ring: #b8921e; --tier3-tx: #7f6309;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
 }
@@ -94,4 +175,7 @@
 :root {
   --sw-aconchego-bg: #f6efe6; --sw-aconchego-pri: #9a3f30; --sw-aconchego-ok: #3a7d52;
   --sw-noturno-bg: #0f0f0e; --sw-noturno-pri: #1D9E75; --sw-noturno-ok: #5dcaa5;
+  --sw-natureza-bg: #eef1e7; --sw-natureza-pri: #4a6a2c; --sw-natureza-ok: #1f6f5c;
+  --sw-aurora-bg: #12142a; --sw-aurora-pri: #a98bff; --sw-aurora-ok: #5fd6b4;
+  --sw-minimal-bg: #f7f7f6; --sw-minimal-pri: #1c1c1b; --sw-minimal-ok: #2c7a4b;
 }
