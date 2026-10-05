@@ -8,6 +8,13 @@ begin
   if not exists (select 1 from pg_roles where rolname = 'service_role') then create role service_role nologin bypassrls; end if;
 end $$;
 
+-- Como no Supabase: extensões (uuid-ossp) ficam no schema "extensions", que está no
+-- search_path das sessões mas NÃO no de funções com "set search_path = public".
+create schema if not exists extensions;
+create extension if not exists "uuid-ossp" with schema extensions;
+do $$ begin execute format('alter database %I set search_path = "$user", public, extensions', current_database()); end $$;
+set search_path = "$user", public, extensions;
+
 create schema if not exists auth;
 create table if not exists auth.users (id uuid primary key, created_at timestamptz default now());
 alter table auth.users add column if not exists email text;
