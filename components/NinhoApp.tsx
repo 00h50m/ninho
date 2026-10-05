@@ -27,6 +27,7 @@ import { Ring } from '@/components/ui/Ring'
 import { Sheet } from '@/components/ui/Sheet'
 import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
 import { NotificationsCard } from '@/components/NotificationsCard'
+import { TelegramCard, fetchAiTips } from '@/components/TelegramCard'
 import { useHomeClock } from '@/hooks/useHomeClock'
 import { useDeviceIdentity } from '@/hooks/useDeviceIdentity'
 import { useNinhoData } from '@/hooks/useNinhoData'
@@ -407,6 +408,16 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .paused-r .lnk{background:none;border:none;color:var(--green);font-size:12.5px;font-weight:500;flex-shrink:0}
 .menu-s{display:block;margin-left:auto;font-size:11px;color:var(--faint);font-weight:400}
 
+/* ── Fase 5: Telegram e IA ── */
+.tg-code{font-size:12.5px;color:var(--sub);background:var(--sf2);border-radius:var(--rs);padding:10px 12px;margin:4px 0 8px;line-height:1.5}
+.tg-code code{font-family:'DM Mono',monospace;color:var(--tx)}
+.tg-code .lnk{background:none;border:none;color:var(--green);font-size:12.5px;font-weight:500;margin-left:6px}
+.aibox{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--bd)}
+.ai-wait{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub);padding:10px 0}
+.ai-tip{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.45;padding:8px 0;border-top:1px solid var(--bd)}
+.ai-tip span{flex:1;min-width:0}
+.ai-tip .lnk{background:none;border:none;color:var(--pur);font-size:12px;font-weight:500;flex-shrink:0;white-space:nowrap}
+
 /* ── responsivo ── */
 @media(max-width:1100px){
   .today{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
@@ -672,8 +683,11 @@ function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>void,onP
   )
 }
 
-function MeetingModal({names,weekStart,saving,onClose,onSave}:{names:Names,weekStart:string,saving:boolean,onClose:()=>void,onSave:(m:Meeting)=>void}){
+function MeetingModal({householdId,names,weekStart,saving,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,onClose:()=>void,onSave:(m:Meeting)=>void}){
   const[form,setForm]=useState<Meeting>({what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''})
+  const[ai,setAi]=useState<{state:'idle'|'busy'|'ok'|'err',tips?:string[],error?:string}>({state:'idle'})
+  async function askAi(){setAi({state:'busy'});const r=await fetchAiTips(householdId);setAi(r.tips?{state:'ok',tips:r.tips}:{state:'err',error:r.error})}
+  const useTip=(t:string)=>setForm(p=>({...p,adjustments:p.adjustments?`${p.adjustments}\n${t}`:t}))
   const set=(k:keyof Meeting,v:string)=>setForm(p=>({...p,[k]:v}))
   const moods=[['😌 Bem','ok'],['😐 Ok','mid'],['😔 Difícil','hard']]
   const modes=[['🌿 Normal','normal'],['⚡ Boss Mode','boss'],['🛡 Sobrevivência','survival']]
@@ -682,7 +696,17 @@ function MeetingModal({names,weekStart,saving,onClose,onSave}:{names:Names,weekS
   )
   return(
     <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" disabled={saving} onClick={()=>onSave(form)}>{saving?'Salvando…':'Salvar reunião'}</button>}>
-      <div style={{fontSize:13,color:'var(--sub)',marginBottom:18}}>Semana de {fmtDate(weekStart)} · 15 minutos · sem cobranças</div>
+      <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>Semana de {fmtDate(weekStart)} · 15 minutos · sem cobranças</div>
+      <div className="aibox">
+        {ai.state==='idle'&&<button className="btn btn-pur btn-w" onClick={askAi}>✦ Sugestões da IA para a semana</button>}
+        {ai.state==='busy'&&<div className="ai-wait" role="status"><span className="spin" aria-hidden="true"/>A IA está lendo a semana de vocês…</div>}
+        {ai.state==='err'&&<div className="inline-err">{ai.error} <button className="lnk" onClick={askAi}>Tentar de novo</button></div>}
+        {ai.state==='ok'&&<>
+          <div className="slbl">✦ Sugestões da IA</div>
+          {ai.tips!.map((t,i)=><div key={i} className="ai-tip"><span>{t}</span><button className="lnk" onClick={()=>useTip(t)} title="Copiar para o ajuste da semana">+ usar</button></div>)}
+          <div className="row-s" style={{marginTop:6}}>Sugestões, não regras. “+ usar” copia para o item 03.</div>
+        </>}
+      </div>
       {area('01','what_worked','O que funcionou essa semana?','Tarefas que rolaram bem, hábitos que mantiveram...')}
       {area('02','what_overloaded','O que sobrecarregou?','O que pesou demais, o que ficou acumulando...')}
       {area('03','adjustments','Ajuste para próxima semana','Uma mudança pequena e concreta...')}
@@ -1633,6 +1657,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
           <NotificationsCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
             onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
             onNeedIdentity={()=>openModal('device')}/>
+          <TelegramCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
+            onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
+            onNeedIdentity={()=>openModal('device')}/>
           <div className="card" style={{marginBottom:14}}>
             <div className="slbl">Integrantes</div>
             {(['g','s'] as Who[]).map(w=>(
@@ -1730,6 +1757,13 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 <li>Cada aparelho ativa as próprias notificações em Ajustes, e elas seguem “Este aparelho”. No iPhone, só com o app instalado (iOS 16.4+).</li>
               </ul>
             </div></details>
+            <details><summary>💬 Telegram e ✦ IA</summary><div className="gb">
+              <ul>
+                <li><b>Telegram:</b> em Ajustes › Telegram › <b>Conectar</b> (cada uma no próprio celular). O bom dia e o resumo de domingo chegam lá também.</li>
+                <li>Comandos: <b>/hoje</b> (o que é seu, com botões ✓ para concluir), <b>/feito louça</b>, <b>/compras</b> (ver a lista), <b>/compras leite, 2 kg arroz</b> ou <b>+leite</b> (adicionar), <b>/dicas</b> e <b>/sair</b>.</li>
+                <li><b>✦ IA:</b> na Reunião semanal (e no /dicas), a IA lê a semana (placar, quem fez o quê, puladas, o que pesou na reunião passada) e sugere de 3 a 5 ajustes. São sugestões, não regras. Limite de 6 pedidos por dia. O resumo da semana é enviado à Anthropic para gerar as sugestões.</li>
+              </ul>
+            </div></details>
             <details><summary>🌤 Energia e modo sobrevivência</summary><div className="gb">
               <p>Escolham a <b>energia da semana</b> (alta, média ou baixa). Em energia baixa ou no <b>🛡 modo sobrevivência</b>, Hoje mostra só as essenciais e as rotinas dos cães, com o botão “Mostrar todas”. Vale para a semana atual.</p>
             </div></details>
@@ -1799,7 +1833,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
       {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
       {modal==='maint'&&<MaintenanceForm item={modalData} today={today} names={names} saving={saving} onClose={closeModal} onSave={saveMaint} onDelete={removeMaint}/>}
       {modal==='mainttpl'&&<MaintTemplatesSheet existing={casa.maint} today={today} saving={saving} onClose={closeModal} onAdd={addMaintTemplates}/>}
-      {modal==='meeting'&&<MeetingModal names={names} weekStart={weekStart} saving={saving} onClose={closeModal} onSave={saveMeeting}/>}
+      {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} onClose={closeModal} onSave={saveMeeting}/>}
     </>
   )
 }

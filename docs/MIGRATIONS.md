@@ -13,6 +13,7 @@ As migrations ficam em `supabase/migrations/` e são a fonte da verdade do schem
 | `20261007120000_push_notifications.sql` | **Fase 2.** `push_subscriptions` (aparelhos com notificação, ligados à pessoa do aparelho) e `push_log` (no máximo um bom dia/resumo por aparelho por dia), `ninho_save_push_subscription`, e permissão do servidor para ler placar e sequências. |
 | `20261008120000_casa.sql` | **Fase 3.** `households.split_mode` (divisão inteligente ou rodízio fixo; padrão inteligente), `shopping_items` (lista de compras; item repetido não duplica, via `ninho_add_shopping_item`), `maintenance_items` + `maintenance_log` (manutenção recorrente, `ninho_complete_maintenance` com +3 XP e `ninho_undo_maintenance`), Realtime das tabelas novas. |
 | `20261009120000_rotina_flexivel.sql` | **Fase 4.** `tasks.weekdays` (dias da semana), `tasks.due_date` (pontual com data), `task_skips` (pular / deixar para amanhã) e `ninho_day_on_track` passa a ignorar tarefas fora do dia e puladas (não quebram a sequência "casa em dia"). |
+| `20261010120000_telegram_ia.sql` | **Fase 5.** `telegram_links` (conversa do Telegram ligada a uma pessoa, por código de uso único), `telegram_log` (no máximo um bom dia/resumo por conversa por dia), `ai_log` (limite diário da IA), `ninho_telegram_link_code` e permissão do servidor para concluir e adicionar à lista pelo bot. |
 
 ## Regras seguidas
 
