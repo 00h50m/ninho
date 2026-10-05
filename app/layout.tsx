@@ -4,6 +4,8 @@ export const metadata: Metadata = {
   title: 'Ninho',
   description: 'Sistema operacional da sua casa',
   manifest: '/manifest.json',
+  appleWebApp: { capable: true, title: 'Ninho', statusBarStyle: 'black-translucent' },
+  icons: { icon: '/icon-192.png', apple: '/icon-192.png' },
 }
 
 export const viewport: Viewport = {

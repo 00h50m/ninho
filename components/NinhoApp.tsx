@@ -1,131 +1,34 @@
 'use client'
-import { useEffect, useState, useCallback, useRef, ReactNode } from 'react'
-import { supabase } from '@/lib/supabase'
+import { useEffect, useState, useRef } from 'react'
+import type { Accident, Dog, DogItem, DogRoutine, Energy, HistoryWeek, HItem, Meeting, Names, Task, Who } from '@/lib/types'
+import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, TABS, WPT } from '@/lib/constants'
+import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '@/lib/dates'
+import { doneInPeriod, dueToday, lastDone, lastLabel } from '@/lib/frequency'
+import { dogKey, isFixed, ownerOf, turnBy, turnOf } from '@/lib/rotation'
+import { byTime, groupToday, isLate, planToday } from '@/lib/today'
+import { LEVELS, XPW, getChaosInfo, getLevel, levelProgress, weekDots } from '@/lib/xp'
+import { completedByLabel } from '@/lib/completions'
+import { logError, toNinhoError, type NinhoError } from '@/lib/errors'
+import * as api from '@/lib/services/ninho'
+import { createPendingGuard } from '@/lib/pending'
+import { canEarnOnTime, evaluate, newlyUnlocked, xpWithBonus, TIER_NAMES, type AchievementState } from '@/lib/gamification'
+import { Scoreboard } from '@/components/gamification/Scoreboard'
+import { StreaksCard } from '@/components/gamification/StreaksCard'
+import { Achievements } from '@/components/gamification/Achievements'
+import { BetModal } from '@/components/gamification/BetModal'
+import { Ring } from '@/components/ui/Ring'
+import { Sheet } from '@/components/ui/Sheet'
+import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
+import { NotificationsCard } from '@/components/NotificationsCard'
+import { useHomeClock } from '@/hooks/useHomeClock'
+import { useDeviceIdentity } from '@/hooks/useDeviceIdentity'
+import { useNinhoData } from '@/hooks/useNinhoData'
 
-// prev_done = última conclusão antes de hoje (para saber se a tarefa já foi feita no período)
-interface Task { id:string;title:string;category:string;weight:'light'|'medium'|'heavy';frequency:string;assigned_to:string|null;scheduled_time:string|null;essential:boolean;active:boolean;completed_today?:boolean;prev_done?:string|null }
-interface Dog { id:string;name:string;breed:string|null;is_puppy:boolean;routines:DogRoutine[] }
-interface DogRoutine { id:string;title:string;frequency:string;scheduled_time:string|null;active?:boolean;completed_today?:boolean;prev_done?:string|null }
-type Doable={frequency:string;completed_today?:boolean;prev_done?:string|null}
-interface Settings { energy:'high'|'medium'|'low';survival:boolean }
-interface Meeting { what_worked:string;what_overloaded:string;adjustments:string;priorities:string;mood_g:string;mood_s:string;wins:string;next_mode:string;reward:string }
-type Who='g'|'s'
-type Names=Record<Who,string>
-
-const CAT:Record<string,string>={kitchen:'🍳 Cozinha',bathroom:'🚿 Banheiro',bedroom:'🛏 Quarto',laundry:'👕 Lavanderia',general:'🏠 Geral',dogs:'🐾 Cães',shopping:'🛒 Compras',finance:'💰 Finanças'}
-const WPT:Record<string,string>={light:'Leve',medium:'Médio',heavy:'Pesado'}
-const FPT:Record<string,string>={daily:'Diária',weekly:'Semanal',biweekly:'Quinzenal',monthly:'Mensal',once:'Pontual'}
-const XPW:Record<string,number>={light:1,medium:2,heavy:3}
-const FEFF:Record<string,number>={daily:7,weekly:2,biweekly:1,monthly:0.5,once:1}
-const ROLE:Record<Who,string>={g:'home office',s:'professora'}
-const ENERGY:Record<string,{ic:string,l:string,short:string,s:string,cls:string}>={
-  high:{ic:'🌿',l:'Alta energia',short:'Alta',s:'Lista completa ativa',cls:'green'},
-  medium:{ic:'🌤',l:'Energia média',short:'Média',s:'Modo padrão',cls:'amber'},
-  low:{ic:'🌧',l:'Baixa energia',short:'Baixa',s:'Foco no essencial',cls:'coral'},
-}
-const TABS:Array<[string,string,string]>=[['today','☀️','Hoje'],['tasks','📋','Tarefas'],['week','📅','Semana'],['pets','🐾','Cães'],['settings','⚙️','Ajustes']]
-const LEVELS=[{l:1,n:'Nest Builders',min:0,max:100},{l:2,n:'Nest Keepers',min:100,max:300},{l:3,n:'Home Runners',min:300,max:600},{l:4,n:'Domestic Legends',min:600,max:1000},{l:5,n:'Ninho Masters',min:1000,max:9999}]
-const SUGG:Record<string,Array<{t:string,w:string,f:string,cat:string,ess:boolean}>>={
-  'Cozinha':[{t:'Louça diária',w:'light',f:'daily',cat:'kitchen',ess:true},{t:'Limpar bancada e fogão',w:'light',f:'daily',cat:'kitchen',ess:true},{t:'Lixo da cozinha',w:'light',f:'daily',cat:'kitchen',ess:true},{t:'Organizar geladeira',w:'medium',f:'weekly',cat:'kitchen',ess:false},{t:'Limpar microondas',w:'light',f:'weekly',cat:'kitchen',ess:false},{t:'Limpar geladeira por dentro',w:'medium',f:'monthly',cat:'kitchen',ess:false}],
-  'Banheiro':[{t:'Limpar pia e espelho',w:'light',f:'weekly',cat:'bathroom',ess:false},{t:'Limpar vaso sanitário',w:'medium',f:'weekly',cat:'bathroom',ess:false},{t:'Limpar box / chuveiro',w:'medium',f:'weekly',cat:'bathroom',ess:false},{t:'Repor papel e sabonete',w:'light',f:'weekly',cat:'bathroom',ess:true}],
-  'Casa geral':[{t:'Varrer / aspirar',w:'medium',f:'weekly',cat:'general',ess:false},{t:'Passar pano no chão',w:'medium',f:'weekly',cat:'general',ess:false},{t:'Reset da sala (noite)',w:'light',f:'daily',cat:'general',ess:true},{t:'Faxina geral',w:'heavy',f:'monthly',cat:'general',ess:false}],
-  'Lavanderia':[{t:'Lavar roupa',w:'medium',f:'weekly',cat:'laundry',ess:false},{t:'Dobrar e guardar',w:'medium',f:'weekly',cat:'laundry',ess:false},{t:'Trocar roupa de cama',w:'medium',f:'weekly',cat:'laundry',ess:false}],
-  'Cães':[{t:'Ração manhã',w:'light',f:'daily',cat:'dogs',ess:true},{t:'Ração noite',w:'light',f:'daily',cat:'dogs',ess:true},{t:'Água fresca',w:'light',f:'daily',cat:'dogs',ess:true},{t:'Passeio manhã',w:'medium',f:'daily',cat:'dogs',ess:true},{t:'Passeio tarde',w:'medium',f:'daily',cat:'dogs',ess:true},{t:'Limpeza área dos cães',w:'light',f:'daily',cat:'dogs',ess:true},{t:'Banho dos cães',w:'heavy',f:'biweekly',cat:'dogs',ess:false},{t:'Escovação',w:'light',f:'weekly',cat:'dogs',ess:false}],
-  'Compras':[{t:'Mercado semanal',w:'medium',f:'weekly',cat:'shopping',ess:false},{t:'Repor ração dos cães',w:'light',f:'monthly',cat:'shopping',ess:true}],
-}
-const DR_DEF=[{t:'Ração manhã',f:'daily',time:'07:00'},{t:'Água fresca',f:'daily',time:null},{t:'Passeio manhã',f:'daily',time:'08:00'},{t:'Ração noite',f:'daily',time:'18:00'},{t:'Passeio tarde',f:'daily',time:'17:30'},{t:'Enriquecimento ambiental',f:'daily',time:null},{t:'Escovação',f:'weekly',time:null},{t:'Banho',f:'weekly',time:null}]
-const DR_PUP=[{t:'Saída xixi manhã',f:'daily',time:'07:30'},{t:'Saída xixi tarde',f:'daily',time:'14:00'},{t:'Saída xixi noite',f:'daily',time:'21:00'},{t:'Treino básico',f:'daily',time:null},{t:'Socialização',f:'daily',time:null}]
-
-function getLevel(xp:number){return[...LEVELS].reverse().find(l=>xp>=l.min)||LEVELS[0]}
-function getChaosInfo(p:number){if(p<35)return{label:'Organizada ✦',color:'var(--green)'};if(p<65)return{label:'Atenção necessária',color:'var(--amb)'};return{label:'Casa em alerta!',color:'var(--cor)'}}
-// Datas no fuso local (toISOString usava UTC e virava o dia às 21h no Brasil)
-function isoDate(d:Date){return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
-function weekStartOf(d:Date){const x=new Date(d);const day=x.getDay();x.setDate(x.getDate()-(day===0?6:day-1));return isoDate(x)}
-function fmtDate(d:string){return new Date(d+'T12:00:00').toLocaleDateString('pt-BR',{day:'2-digit',month:'2-digit'})}
 function firstName(n:string){return (n||'').split(' ')[0]}
 function initials(n:string){return (n||'??').slice(0,2).toUpperCase()}
 function wCls(w:string){return w==='light'?'l':w==='medium'?'m':'h'}
-function hhmm(t:string|null){return t?t.slice(0,5):''}
 function byCat(list:Task[]){const g:Record<string,Task[]>={};list.forEach(t=>{(g[t.category]=g[t.category]||[]).push(t)});return Object.entries(g)}
 function catIc(c:string){return (CAT[c]||'').split(' ')[0]}
-
-// ── Períodos: uma tarefa semanal feita na terça some de Hoje até a próxima segunda ──
-const DAY=86400000
-function dayNum(d:string){return Math.round(new Date(d+'T12:00:00').getTime()/DAY)}
-function addDays(d:string,n:number){const x=new Date(d+'T12:00:00');x.setDate(x.getDate()+n);return isoDate(x)}
-const EPOCH_MON=dayNum('1970-01-05')
-function weekNum(d:string){return Math.floor((dayNum(d)-EPOCH_MON)/7)}
-function periodStart(freq:string,today:string){
-  const ws=weekStartOf(new Date(today+'T12:00:00'))
-  if(freq==='daily')return today
-  if(freq==='weekly')return ws
-  if(freq==='biweekly')return weekNum(today)%2===0?ws:addDays(ws,-7)
-  if(freq==='monthly')return today.slice(0,8)+'01'
-  return '0000-01-01'
-}
-function periodIdx(freq:string,today:string){
-  if(freq==='daily')return dayNum(today)
-  if(freq==='weekly')return weekNum(today)
-  if(freq==='biweekly')return Math.floor(weekNum(today)/2)
-  if(freq==='monthly')return Number(today.slice(0,4))*12+Number(today.slice(5,7))
-  return 0
-}
-function lastDone(x:Doable,today:string){return x.completed_today?today:(x.prev_done||null)}
-function doneInPeriod(x:Doable,today:string){const l=lastDone(x,today);return !!l&&l>=periodStart(x.frequency,today)}
-// Aparece em Hoje: ainda não feita no período, ou feita hoje (para poder desmarcar)
-function dueToday(x:Doable,today:string){return !!x.completed_today||!doneInPeriod(x,today)}
-function lastLabel(d:string|null,today:string){if(!d)return'nunca feita';const n=dayNum(today)-dayNum(d);return n<=0?'hoje':n===1?'ontem':`há ${n} dias`}
-
-// ── Rodízio: alterna a cada período, igual nos dois celulares ──
-function hashStr(s:string){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return Math.abs(h)}
-function isFixed(t:Task){return t.assigned_to==='g'||t.assigned_to==='s'}
-// Cada item em rodízio ganha uma posição (ordenado por horário); posições vizinhas ficam com pessoas diferentes
-// e todas trocam a cada período. Assim a divisão sai equilibrada, e não depende de sorte.
-type Slots=Map<string,number>
-function dogKey(r:{title:string,scheduled_time:string|null,frequency:string}){return `${r.title.trim().toLowerCase()}|${hhmm(r.scheduled_time)}|${r.frequency}`}
-function buildSlots(tasks:Task[],dogs:Dog[]):Slots{
-  const units=new Map<string,{freq:string,time:string,title:string}>()
-  tasks.filter(t=>!isFixed(t)).forEach(t=>units.set(t.id,{freq:t.frequency,time:hhmm(t.scheduled_time),title:t.title.toLowerCase()}))
-  dogs.forEach(d=>d.routines.forEach(r=>units.set('dog:'+dogKey(r),{freq:r.frequency,time:hhmm(r.scheduled_time),title:r.title.toLowerCase()})))
-  const byFreq:Record<string,string[]>={}
-  units.forEach((u,id)=>(byFreq[u.freq]=byFreq[u.freq]||[]).push(id))
-  const slots:Slots=new Map()
-  Object.values(byFreq).forEach(ids=>ids.sort((a,b)=>{const x=units.get(a)!,y=units.get(b)!;return (x.time||'99').localeCompare(y.time||'99')||x.title.localeCompare(y.title)||a.localeCompare(b)}).forEach((id,i)=>slots.set(id,i)))
-  return slots
-}
-function turnBy(id:string,freq:string,today:string,slots:Slots):Who{return ((slots.get(id)??hashStr(id))+periodIdx(freq,today))%2===0?'g':'s'}
-function turnOf(t:Task,today:string,slots:Slots):Who{return turnBy(t.id,t.frequency,today,slots)}
-function ownerOf(t:Task,today:string,slots:Slots):Who{return isFixed(t)?t.assigned_to as Who:turnOf(t,today,slots)}
-
-// ── Hoje por horário ──
-const GROUPS:Array<[string,string]>=[['late','⚠ Atrasadas'],['morning','🌅 Manhã'],['afternoon','☀️ Tarde'],['night','🌙 Noite'],['any','Hoje, a qualquer hora'],['weekly','Até o fim da semana'],['biweekly','Até o fim da quinzena'],['monthly','Até o fim do mês'],['once','Pontuais']]
-function bucketOf(time:string){const h=Number(time.slice(0,2));return h<12?'morning':h<18?'afternoon':'night'}
-function isLate(x:Doable&{scheduled_time:string|null},nowHM:string){return x.frequency==='daily'&&!!x.scheduled_time&&!x.completed_today&&hhmm(x.scheduled_time)<nowHM}
-function byTime(a:{scheduled_time:string|null},b:{scheduled_time:string|null}){return (hhmm(a.scheduled_time)||'99').localeCompare(hhmm(b.scheduled_time)||'99')}
-// Item de Hoje: uma tarefa ou uma rotina de cães (rotinas iguais de cães diferentes viram um item só)
-interface DogItem { key:string;title:string;frequency:string;scheduled_time:string|null;completed_today:boolean;owner:Who;parts:Array<{r:DogRoutine,dog:Dog}> }
-interface HItem { id:string;frequency:string;scheduled_time:string|null;completed_today?:boolean;essential:boolean;category:string;task?:Task;dog?:DogItem }
-function buildDogItems(dogs:Dog[],today:string,slots:Slots):DogItem[]{
-  const m=new Map<string,DogItem>()
-  dogs.forEach(dog=>dog.routines.filter(r=>dueToday(r,today)).forEach(r=>{
-    const key=dogKey(r)
-    let it=m.get(key)
-    if(!it){it={key,title:r.title,frequency:r.frequency,scheduled_time:r.scheduled_time,completed_today:true,owner:turnBy('dog:'+key,r.frequency,today,slots),parts:[]};m.set(key,it)}
-    it.parts.push({r,dog})
-    if(!r.completed_today)it.completed_today=false
-  }))
-  return Array.from(m.values())
-}
-function groupToday(list:HItem[],nowHM:string){
-  const g:Record<string,HItem[]>={}
-  list.forEach(t=>{
-    let k:string
-    if(t.frequency==='daily')k=!t.scheduled_time?'any':isLate(t,nowHM)?'late':bucketOf(hhmm(t.scheduled_time))
-    else k=GROUPS.some(x=>x[0]===t.frequency)?t.frequency:'any'
-    ;(g[k]=g[k]||[]).push(t)
-  })
-  return GROUPS.filter(([k])=>g[k]).map(([k,l])=>({k,label:l,items:g[k].sort((a,b)=>byTime(a,b)||Number(b.essential)-Number(a.essential)||a.category.localeCompare(b.category))}))
-}
 
 const CSS=`
 :root{--bg:#0f0f0e;--sf:#181816;--sf2:#20201e;--sf3:#2a2a27;--bd:#272725;--bd2:#363634;--tx:#f2efe9;--mu:#bdbab3;--sub:#8a8882;--faint:#5e5d59;--green:#5dcaa5;--gbg:#0f2a1e;--gbdr:#1d5a3a;--gdk:#1D9E75;--amb:#ef9f27;--abg:#2a1a08;--abdr:#5a3a10;--cor:#e26a40;--cbg:#2a0e08;--cbdr:#5a2010;--pur:#a898f2;--pbg:#1a1040;--pbdr:#3a2880;--r:14px;--rs:10px;--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px)}
@@ -366,6 +269,68 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .toast{position:fixed;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);background:#132a20;border:1px solid var(--gbdr);border-radius:12px;padding:10px 12px 10px 16px;font-size:13px;color:var(--green);display:flex;align-items:center;gap:12px;z-index:100;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fu .2s ease}
 .toast-m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toast button{background:none;border:none;color:var(--tx);font-weight:500;font-size:13px;padding:2px 6px;text-decoration:underline;text-underline-offset:3px;flex-shrink:0}
+/* ── gamificação ── */
+.xp.bonus{box-shadow:inset 0 0 0 1px currentColor}
+.sb{display:block;width:100%;text-align:left}
+button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
+.sb .slbl .lnk{margin-left:auto}
+.sb-row{display:flex;align-items:flex-end;gap:10px}
+.sb-side{flex:1;min-width:0}
+.sb-s{text-align:right}
+.sb-name{font-size:13px;color:var(--mu);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-xp{line-height:1.1;margin-top:2px}.sb-xp b{font-size:28px;font-weight:400;letter-spacing:-.03em}.sb-xp small{font-size:12px;color:var(--sub);margin-left:4px}
+.sb-g .sb-xp b{color:var(--green)}.sb-s .sb-xp b{color:var(--pur)}
+.sb-side.lead .sb-name{color:var(--tx)}
+.sb-vs{color:var(--faint);font-size:14px;padding-bottom:6px}
+.sb-meta{font-size:11.5px;color:var(--sub);margin-top:2px}
+.sb-bar{margin:10px 0 10px}
+.sb-bet{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--amb)}
+.sb-bet .lnk{margin-left:auto;background:none;border:none;color:var(--green);font-size:12px;font-weight:500}
+.sb-foot,.sb-prev{font-size:12px;color:var(--sub);margin-top:8px;line-height:1.5}
+.sb-prev{padding-top:8px;border-top:1px solid var(--bd)}
+.sb.compact .sb-xp b{font-size:22px}
+.stk{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--bd)}
+.slbl+.stk{border-top:none;padding-top:0}
+.stk-ic{width:34px;height:34px;border-radius:10px;background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;filter:grayscale(.6)}
+.stk-ic.hot{background:var(--abg);filter:none}
+.stk-t{display:block;font-size:14px}.stk-s{display:block;font-size:12px;color:var(--sub)}
+.stk-n{text-align:right;flex-shrink:0;white-space:nowrap}.stk-n b{font-size:22px;font-weight:400}.stk-n small{font-size:11.5px;color:var(--sub);margin-left:3px}
+.stk-best{display:block;font-size:11px;color:var(--amb);font-family:'DM Mono',monospace}
+.stk-note{font-size:12px;color:var(--sub);margin-top:10px;line-height:1.5}
+.ach-who{display:inline-flex;margin-bottom:12px}
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:8px}
+.ach{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--bd);border-radius:var(--rs);min-width:0}
+.ach-ic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--sf2);filter:grayscale(1);opacity:.55}
+.ach.t1 .ach-ic{filter:none;opacity:1;background:#3a2414;box-shadow:inset 0 0 0 2px #b0703c}
+.ach.t2 .ach-ic{filter:none;opacity:1;background:#2a2d31;box-shadow:inset 0 0 0 2px #aeb6bf}
+.ach.t3 .ach-ic{filter:none;opacity:1;background:#3a300c;box-shadow:inset 0 0 0 2px #e2b93b}
+.ach-body{min-width:0;flex:1}
+.ach-n{display:block;font-size:13px;font-weight:500;line-height:1.3}
+.ach-tier{display:block;font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;margin-top:1px}
+.ach.t1 .ach-tier{color:#d08a50}.ach.t2 .ach-tier{color:#c9d1da}.ach.t3 .ach-tier{color:#e9c552}
+.ach-bar{display:block;height:4px;border-radius:99px;background:var(--sf3);overflow:hidden;margin-top:6px}
+.ach-bar span{display:block;height:100%;background:var(--amb);border-radius:99px}
+.ach-s{display:block;font-size:11px;color:var(--sub);margin-top:4px}
+.toast.err{background:#2a120b;border-color:var(--cbdr);color:#ffb59a;width:min(460px,calc(100vw - 32px))}
+.toast-m{white-space:normal;flex:1 1 auto;min-width:0;line-height:1.4}
+.toast .tx{text-decoration:none;color:var(--sub);padding:2px 4px}
+
+/* ── estados: gravando, carregando, erro, autoria ── */
+@keyframes spin{to{transform:rotate(360deg)}}
+.chk.busy{opacity:.55;cursor:progress;animation:none;position:relative}
+.chk.busy::after{content:'';position:absolute;inset:-4px;border-radius:10px;border:2px solid transparent;border-top-color:var(--green);animation:spin .8s linear infinite}
+.chk:disabled{cursor:default}
+.pill:disabled{opacity:.5;cursor:progress}
+.tag-by{color:var(--sub)}
+.you{font-size:10.5px;font-weight:500;color:var(--green);background:var(--gbg);border:1px solid var(--gbdr);border-radius:99px;padding:1px 7px;margin-left:8px;vertical-align:2px;font-family:'DM Mono',monospace}
+.sbtn.who{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;font-size:15px;color:var(--tx)}
+.sbtn.who small{font-size:12px}
+.loadscr{display:flex;align-items:center;justify-content:center;gap:12px;padding:80px 16px;color:var(--sub);font-size:14px}
+.spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--bd2);border-top-color:var(--green);animation:spin .8s linear infinite}
+.loaderr{max-width:440px;margin:60px auto;text-align:center}
+.inline-err{font-size:13px;color:var(--cor);padding:8px 0}
+.inline-err .lnk{background:none;border:none;color:var(--green);font-size:13px;text-decoration:underline;text-underline-offset:3px}
+@media (prefers-reduced-motion:reduce){.chk.busy::after,.spin{animation:none}}
 
 /* ── modais ── */
 .mwrap{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;animation:fu .15s ease}
@@ -419,6 +384,10 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
   .fab{bottom:calc(78px + var(--safe-b));right:16px;height:52px;width:52px;padding:0;justify-content:center}
   .fab b{display:none}
   .lg-only{display:none}
+  .ach-grid{grid-template-columns:1fr 1fr;gap:6px}
+  .ach{flex-direction:column;gap:6px;padding:9px}
+  .ach-ic{width:30px;height:30px;font-size:15px}
+  .ach-s{font-size:10.5px}
   .trt{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .tr .ib.desk{display:none}.tr .ib.mob{display:flex}
   .card{padding:14px}
@@ -455,40 +424,6 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 `
 
 // ── PEÇAS DE UI (fora do componente principal para não remontar a cada render) ──
-function Ring({pct,color,label}:{pct:number,color:string,label:string}){
-  const s=46,r=19,c=2*Math.PI*r
-  return(
-    <div className="ring" aria-label={`${pct}% concluído`}>
-      <svg width={s} height={s} viewBox={`0 0 ${s} ${s}`}>
-        <circle cx={s/2} cy={s/2} r={r} fill="none" stroke="var(--sf3)" strokeWidth="4"/>
-        <circle cx={s/2} cy={s/2} r={r} fill="none" stroke={color} strokeWidth="4" strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c*(1-pct/100)} style={{transition:'stroke-dashoffset .5s ease'}}/>
-      </svg>
-      <span>{label}</span>
-    </div>
-  )
-}
-
-function Sheet({title,onClose,children,footer,size}:{title:ReactNode,onClose:()=>void,children:ReactNode,footer?:ReactNode,size?:'sm'|'lg'}){
-  const closeRef=useRef(onClose)
-  closeRef.current=onClose
-  useEffect(()=>{
-    const h=(e:KeyboardEvent)=>{if(e.key==='Escape')closeRef.current()}
-    window.addEventListener('keydown',h)
-    const prev=document.body.style.overflow;document.body.style.overflow='hidden'
-    return()=>{window.removeEventListener('keydown',h);document.body.style.overflow=prev}
-  },[])
-  return(
-    <div className="mwrap" onClick={onClose}>
-      <div className={`modal ${size?'modal-'+size:''}`} role="dialog" aria-modal="true" onClick={e=>e.stopPropagation()}>
-        <div className="grab"/>
-        <div className="mh"><span className="mht">{title}</span><button className="mclose" onClick={onClose} aria-label="Fechar">✕</button></div>
-        <div className="mbody">{children}</div>
-        {footer&&<div className="mfoot">{footer}</div>}
-      </div>
-    </div>
-  )
-}
-
 // Horário editável direto na lista de Tarefas
 function QuickTime({value,onSave}:{value:string,onSave:(v:string)=>void}){
   const[edit,setEdit]=useState(false)
@@ -504,7 +439,7 @@ function QuickTime({value,onSave}:{value:string,onSave:(v:string)=>void}){
   )
 }
 
-function TaskFormModal({task,names,onClose,onSave,onDelete}:{task:Task|null,names:Names,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void}){
+function TaskFormModal({task,names,saving,onClose,onSave,onDelete}:{task:Task|null,names:Names,saving:boolean,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void}){
   const t=task
   const editing=!!t?.id
   const[title,setTitle]=useState(t?.title||'')
@@ -514,11 +449,11 @@ function TaskFormModal({task,names,onClose,onSave,onDelete}:{task:Task|null,name
   const[assign,setAssign]=useState(t?.assigned_to||'')
   const[time,setTime]=useState(hhmm(t?.scheduled_time||null))
   const[ess,setEss]=useState(t?.essential||false)
-  const handle=()=>{if(!title.trim())return;onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess},editing?t!.id:undefined)}
+  const handle=()=>{if(!title.trim()||saving)return;onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess},editing?t!.id:undefined)}
   return(
     <Sheet title={editing?'Editar tarefa':'Nova tarefa'} onClose={onClose} footer={<>
-      {editing&&<button className="btn btn-danger" onClick={()=>onDelete(t!.id)}>Remover</button>}
-      <button className="btn btn-p" disabled={!title.trim()} onClick={handle}>{editing?'Salvar alterações':'Criar tarefa'}</button>
+      {editing&&<button className="btn btn-danger" disabled={saving} onClick={()=>onDelete(t!.id)}>Remover</button>}
+      <button className="btn btn-p" disabled={!title.trim()||saving} onClick={handle}>{saving?'Salvando…':editing?'Salvar alterações':'Criar tarefa'}</button>
     </>}>
       <label className="fl">Nome</label>
       <input className="fi" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handle()}} placeholder="Ex: Limpar bancada" autoFocus/>
@@ -558,8 +493,8 @@ function SuggModal({tasks,onClose,onAdd,onCustomize}:{tasks:Task[],onClose:()=>v
   function selectAll(){const toAdd=SUGG[curTab].filter(s=>!existing.has(s.t)&&!sel.find(x=>x.key===keyOf(s)));setSel(p=>[...p,...toAdd.map(s=>({...s,key:keyOf(s)}))])}
   return(
     <Sheet size="lg" title="Sugestões de tarefas" onClose={onClose} footer={
-      <button className="btn btn-p" disabled={sel.length===0||busy} onClick={async()=>{setBusy(true);await onAdd(sel)}}>
-        {sel.length===0?'Selecione tarefas':`Adicionar ${sel.length} tarefa${sel.length!==1?'s':''}`}
+      <button className="btn btn-p" disabled={sel.length===0||busy} onClick={async()=>{setBusy(true);try{await onAdd(sel)}finally{setBusy(false)}}}>
+        {busy?'Salvando…':sel.length===0?'Selecione tarefas':`Adicionar ${sel.length} tarefa${sel.length!==1?'s':''}`}
       </button>
     }>
       <div className="stabs">{cats.map(c=>{
@@ -591,7 +526,7 @@ function SuggModal({tasks,onClose,onAdd,onCustomize}:{tasks:Task[],onClose:()=>v
   )
 }
 
-function PetModal({onClose,onSave}:{onClose:()=>void,onSave:(d:any,r:any[])=>void}){
+function PetModal({saving,onClose,onSave}:{saving:boolean,onClose:()=>void,onSave:(d:any,r:any[])=>void}){
   const[pname,setPname]=useState('')
   const[breed,setBreed]=useState('')
   const[isPuppy,setIsPuppy]=useState(false)
@@ -599,9 +534,9 @@ function PetModal({onClose,onSave}:{onClose:()=>void,onSave:(d:any,r:any[])=>voi
   const allR=[...DR_DEF,...(isPuppy?DR_PUP:[])]
   const toggle=(t:string)=>setSel(p=>p.includes(t)?p.filter(x=>x!==t):[...p,t])
   function pickPuppy(v:boolean){setIsPuppy(v);if(v)setSel(p=>Array.from(new Set([...p,...DR_PUP.map(r=>r.t)])))}
-  const handle=()=>{if(!pname.trim())return;onSave({name:pname.trim(),breed:breed.trim()||null,is_puppy:isPuppy},allR.filter(r=>sel.includes(r.t)).map(r=>({title:r.t,frequency:r.f,scheduled_time:r.time})))}
+  const handle=()=>{if(!pname.trim()||saving)return;onSave({name:pname.trim(),breed:breed.trim()||null,is_puppy:isPuppy},allR.filter(r=>sel.includes(r.t)).map(r=>({title:r.t,frequency:r.f,scheduled_time:r.time})))}
   return(
-    <Sheet title="Cadastrar pet" onClose={onClose} footer={<button className="btn btn-p" disabled={!pname.trim()} onClick={handle}>Adicionar pet</button>}>
+    <Sheet title="Cadastrar pet" onClose={onClose} footer={<button className="btn btn-p" disabled={!pname.trim()||saving} onClick={handle}>{saving?'Salvando…':'Adicionar pet'}</button>}>
       <label className="fl">Nome</label><input className="fi" value={pname} onChange={e=>setPname(e.target.value)} placeholder="Ex: Luna, Bob..." autoFocus/>
       <label className="fl">Raça <span className="hint">(opcional)</span></label><input className="fi" value={breed} onChange={e=>setBreed(e.target.value)} placeholder="Ex: Golden Retriever, SRD..."/>
       <label className="fl">Fase</label>
@@ -618,15 +553,15 @@ function PetModal({onClose,onSave}:{onClose:()=>void,onSave:(d:any,r:any[])=>voi
   )
 }
 
-function DogModal({dog,onClose,onSave,onDelete}:{dog:Dog,onClose:()=>void,onSave:(id:string,d:any)=>void,onDelete:(d:Dog)=>void}){
+function DogModal({dog,saving,onClose,onSave,onDelete}:{dog:Dog,saving:boolean,onClose:()=>void,onSave:(id:string,d:any)=>void,onDelete:(d:Dog)=>void}){
   const[pname,setPname]=useState(dog.name)
   const[breed,setBreed]=useState(dog.breed||'')
   const[isPuppy,setIsPuppy]=useState(dog.is_puppy)
-  const handle=()=>{if(!pname.trim())return;onSave(dog.id,{name:pname.trim(),breed:breed.trim()||null,is_puppy:isPuppy})}
+  const handle=()=>{if(!pname.trim()||saving)return;onSave(dog.id,{name:pname.trim(),breed:breed.trim()||null,is_puppy:isPuppy})}
   return(
     <Sheet title={`Editar ${dog.name}`} onClose={onClose} footer={<>
-      <button className="btn btn-danger" onClick={()=>onDelete(dog)}>Remover</button>
-      <button className="btn btn-p" disabled={!pname.trim()} onClick={handle}>Salvar alterações</button>
+      <button className="btn btn-danger" disabled={saving} onClick={()=>onDelete(dog)}>Remover</button>
+      <button className="btn btn-p" disabled={!pname.trim()||saving} onClick={handle}>{saving?'Salvando…':'Salvar alterações'}</button>
     </>}>
       <label className="fl">Nome</label><input className="fi" value={pname} onChange={e=>setPname(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handle()}}/>
       <label className="fl">Raça <span className="hint">(opcional)</span></label><input className="fi" value={breed} onChange={e=>setBreed(e.target.value)} placeholder="Ex: Golden Retriever, SRD..."/>
@@ -636,16 +571,15 @@ function DogModal({dog,onClose,onSave,onDelete}:{dog:Dog,onClose:()=>void,onSave
   )
 }
 
-const RFREQ:Array<[string,string]>=[['daily','Diária'],['weekly','Semanal'],['biweekly','Quinzenal'],['monthly','Mensal']]
-function RoutineModal({routine,dogName,onClose,onSave,onDelete}:{routine:DogRoutine|null,dogName:string,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(r:DogRoutine)=>void}){
+function RoutineModal({routine,dogName,saving,onClose,onSave,onDelete}:{routine:DogRoutine|null,dogName:string,saving:boolean,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(r:DogRoutine)=>void}){
   const[title,setTitle]=useState(routine?.title||'')
   const[freq,setFreq]=useState(routine?.frequency||'daily')
   const[time,setTime]=useState(hhmm(routine?.scheduled_time||null))
-  const handle=()=>{if(!title.trim())return;onSave({title:title.trim(),frequency:freq,scheduled_time:time||null},routine?.id)}
+  const handle=()=>{if(!title.trim()||saving)return;onSave({title:title.trim(),frequency:freq,scheduled_time:time||null},routine?.id)}
   return(
     <Sheet size="sm" title={routine?`Editar rotina · ${dogName}`:`Nova rotina · ${dogName}`} onClose={onClose} footer={<>
-      {routine&&<button className="btn btn-danger" onClick={()=>onDelete(routine)}>Remover</button>}
-      <button className="btn btn-p" disabled={!title.trim()} onClick={handle}>{routine?'Salvar':'Criar rotina'}</button>
+      {routine&&<button className="btn btn-danger" disabled={saving} onClick={()=>onDelete(routine)}>Remover</button>}
+      <button className="btn btn-p" disabled={!title.trim()||saving} onClick={handle}>{saving?'Salvando…':routine?'Salvar':'Criar rotina'}</button>
     </>}>
       <label className="fl">Nome</label>
       <input className="fi" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handle()}} placeholder="Ex: Remédio de verme" autoFocus={!routine}/>
@@ -675,7 +609,7 @@ function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>void,onP
   )
 }
 
-function MeetingModal({names,weekStart,onClose,onSave}:{names:Names,weekStart:string,onClose:()=>void,onSave:(m:Meeting)=>void}){
+function MeetingModal({names,weekStart,saving,onClose,onSave}:{names:Names,weekStart:string,saving:boolean,onClose:()=>void,onSave:(m:Meeting)=>void}){
   const[form,setForm]=useState<Meeting>({what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''})
   const set=(k:keyof Meeting,v:string)=>setForm(p=>({...p,[k]:v}))
   const moods=[['😌 Bem','ok'],['😐 Ok','mid'],['😔 Difícil','hard']]
@@ -684,7 +618,7 @@ function MeetingModal({names,weekStart,onClose,onSave}:{names:Names,weekStart:st
     <div className="meet"><label className="fl">{n} — {label}</label><textarea className="fita" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={ph}/></div>
   )
   return(
-    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" onClick={()=>onSave(form)}>Salvar reunião</button>}>
+    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" disabled={saving} onClick={()=>onSave(form)}>{saving?'Salvando…':'Salvar reunião'}</button>}>
       <div style={{fontSize:13,color:'var(--sub)',marginBottom:18}}>Semana de {fmtDate(weekStart)} · 15 minutos · sem cobranças</div>
       {area('01','what_worked','O que funcionou essa semana?','Tarefas que rolaram bem, hábitos que mantiveram...')}
       {area('02','what_overloaded','O que sobrecarregou?','O que pesou demais, o que ficou acumulando...')}
@@ -713,309 +647,316 @@ function MeetingModal({names,weekStart,onClose,onSave}:{names:Names,weekStart:st
 }
 
 // ── APP ─────────────────────────────────────────────────
+type ToastState={kind:'ok'|'err',msg:string,undo?:()=>void,retry?:()=>void}
+
 export default function NinhoApp({householdId}:{householdId:string}){
   const [tab,setTabState]=useState('today')
-  const [tasks,setTasks]=useState<Task[]>([])
-  const [dogs,setDogs]=useState<Dog[]>([])
-  const [settings,setSettings]=useState<Settings>({energy:'medium',survival:false})
-  const [xp,setXp]=useState(0)
-  const [streak,setStreak]=useState(0)
-  const [names,setNames]=useState<Names>({g:'Giovanna',s:'Sabrina'})
   const [modal,setModal]=useState<string|null>(null)
   const [modalData,setModalData]=useState<any>(null)
-  const [toast,setToast]=useState<{msg:string,undo?:()=>void}|null>(null)
+  const [saving,setSaving]=useState(false)
+  const [toast,setToast]=useState<ToastState|null>(null)
   const [taskFilter,setTaskFilter]=useState('all')
   const [query,setQuery]=useState('')
-  const [historyData,setHistoryData]=useState<any[]>([])
-  const [accidents,setAccidents]=useState<any[]>([])
+  const [historyData,setHistoryData]=useState<HistoryWeek[]|null>(null)
+  const [historyError,setHistoryError]=useState(false)
   const [person,setPerson]=useState<Who>('g')
   const [showDone,setShowDone]=useState<Record<Who,boolean>>({g:false,s:false})
   const [showAllToday,setShowAllToday]=useState(false)
+  // Itens com gravação em andamento (bloqueia clique duplo; o banco também é idempotente)
+  const [pending,setPending]=useState<Set<string>>(new Set())
+  const guard=useRef(createPendingGuard(setPending)).current
   const toastTimer=useRef<any>(null)
-  // Relógio: atualiza "atrasadas" a cada minuto e vira o dia sozinho (celular aberto de um dia pro outro)
-  const [now,setNow]=useState(()=>new Date())
-  useEffect(()=>{
-    const tick=()=>setNow(new Date())
-    const i=setInterval(tick,60000)
-    const vis=()=>{if(document.visibilityState==='visible')tick()}
-    document.addEventListener('visibilitychange',vis)
-    return()=>{clearInterval(i);document.removeEventListener('visibilitychange',vis)}
-  },[])
-  const today=isoDate(now)
-  const weekStart=weekStartOf(now)
-  const nowHM=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
-  const dow=now.getDay()
-  const dowI=dow===0?6:dow-1
+  const toastRef=useRef<ToastState|null>(null)
 
-  // Preferências locais (aba e pessoa no celular)
+  const {now,today,nowHM,hour,weekStart,todayIndex}=useHomeClock()
+  const device=useDeviceIdentity()
+  const me=device.who
+  const data=useNinhoData(householdId,today,weekStart,e=>showError(e))
+  const {tasks,setTasks,dogs,setDogs,settings,setSettings,xp,setXp,streak,names,setNames,accidents,setAccidents,game}=data
+
+  // Nova conquista de quem usa o aparelho: avisa quando sobe de nível nesta sessão
+  const lastAch=useRef<{who:Who,list:AchievementState[]}|null>(null)
   useEffect(()=>{
-    try{
-      const t=localStorage.getItem('ninho.tab');if(t&&TABS.some(x=>x[0]===t))setTabState(t)
-      const p=localStorage.getItem('ninho.person');if(p==='g'||p==='s')setPerson(p)
-    }catch{}
+    if(!me||data.status!=='ready')return
+    const now=evaluate(game.stats[me])
+    if(lastAch.current?.who===me){
+      const up=newlyUnlocked(lastAch.current.list,now)[0]
+      // não cobre o "Desfazer" que acabou de aparecer
+      if(up)setTimeout(()=>showToast(`🏅 Nova conquista: ${up.def.name} (${TIER_NAMES[up.tier-1]})`),toastRef.current?.undo?4600:0)
+    }
+    lastAch.current={who:me,list:now}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[game.stats,me,data.status])
+
+  // Preferências locais: aba e coluna visualizada no celular.
+  // A coluna visualizada NÃO muda quem está usando o aparelho.
+  useEffect(()=>{
+    // O app sempre abre em Hoje (a aba anterior não é mais restaurada)
+    try{localStorage.removeItem('ninho.tab')}catch{}
   },[])
-  function setTab(t:string){setTabState(t);try{localStorage.setItem('ninho.tab',t)}catch{};window.scrollTo({top:0})}
+  useEffect(()=>{
+    if(!device.ready)return
+    let saved:string|null=null
+    try{saved=localStorage.getItem('ninho.person')}catch{}
+    if(saved==='g'||saved==='s')setPerson(saved)
+    else if(me)setPerson(me)
+  },[device.ready,me])
+  function setTab(t:string){setTabState(t);window.scrollTo({top:0})}
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
-  // ── LOAD ──────────────────────────────────────────────
-  const loadAll=useCallback(async()=>{
-    // 62 dias cobre o período mais longo (mensal) e o "feita há X dias"
-    const since=addDays(today,-62)
-    const [tRes,dRes,wsRes,compRes,xpRes,strRes,profRes,accRes]=await Promise.all([
-      supabase.from('tasks').select('*').eq('household_id',householdId).eq('active',true).order('essential',{ascending:false}).order('category'),
-      supabase.from('dogs').select('*,dog_routines(*)').eq('household_id',householdId).eq('active',true),
-      supabase.from('weekly_settings').select('*').eq('household_id',householdId).eq('week_start',weekStart).maybeSingle(),
-      supabase.from('task_completions').select('task_id,date').eq('household_id',householdId).gte('date',since),
-      supabase.rpc('get_household_xp',{hid:householdId}),
-      supabase.rpc('get_streak',{hid:householdId}),
-      supabase.from('profiles').select('display_name,role').eq('household_id',householdId),
-      supabase.from('puppy_accidents').select('*').eq('household_id',householdId).order('occurred_at',{ascending:false}).limit(20),
-    ])
-    const taskRows=tRes.data||[]
-    const dogRows=(dRes.data||[]).map((d:any)=>({...d,dog_routines:(d.dog_routines||[]).filter((r:any)=>r.active!==false)}))
-    // Pontuais valem para sempre: busca conclusões mais antigas só delas
-    const onceIds=taskRows.filter((t:any)=>t.frequency==='once').map((t:any)=>t.id)
-    const routineIds=dogRows.flatMap((d:any)=>d.dog_routines.map((r:any)=>r.id))
-    const [onceRes,dcRes]=await Promise.all([
-      onceIds.length?supabase.from('task_completions').select('task_id,date').in('task_id',onceIds).lt('date',since):Promise.resolve({data:[]}),
-      routineIds.length?supabase.from('dog_completions').select('routine_id,date').in('routine_id',routineIds).gte('date',since):Promise.resolve({data:[]}),
-    ])
-    const summarize=(rows:any[],key:string)=>{
-      const doneToday=new Set<string>(),prev:Record<string,string>={}
-      rows.forEach(c=>{const id=c[key];if(c.date===today)doneToday.add(id);else if(c.date<today&&(!prev[id]||c.date>prev[id]))prev[id]=c.date})
-      return(id:string)=>({completed_today:doneToday.has(id),prev_done:prev[id]||null})
-    }
-    const tInfo=summarize([...(compRes.data||[]),...((onceRes as any).data||[])],'task_id')
-    const dInfo=summarize((dcRes as any).data||[],'routine_id')
-    setTasks(taskRows.map((t:any)=>({...t,...tInfo(t.id)})))
-    setDogs(dogRows.map((d:any)=>({...d,routines:d.dog_routines.map((r:any)=>({...r,...dInfo(r.id)})).sort((a:any,b:any)=>Number(a.frequency!=='daily')-Number(b.frequency!=='daily')||byTime(a,b))})))
-    if(wsRes.data)setSettings({energy:wsRes.data.energy,survival:wsRes.data.survival})
-    setXp(xpRes.data||0)
-    setStreak(strRes.data||0)
-    setAccidents(accRes.data||[])
-    if(profRes.data&&profRes.data.length>0){
-      const ng=profRes.data.find((p:any)=>p.role==='g')
-      const ns=profRes.data.find((p:any)=>p.role==='s')
-      setNames({g:ng?.display_name||'Giovanna',s:ns?.display_name||'Sabrina'})
-    }
-  },[householdId,today,weekStart])
+  // Histórico da semana (só na aba Semana; recarrega quando alguém salva uma reunião)
+  const loadHistory=async()=>{
+    setHistoryError(false)
+    try{setHistoryData(await api.loadHistory(householdId,[0,1,2,3].map(i=>addDays(weekStart,-7*i))))}
+    catch(e){logError('histórico',e);setHistoryError(true)}
+  }
+  useEffect(()=>{if(tab==='week')loadHistory()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[tab,weekStart,data.meetingTick,householdId])
 
-  const loadHistory=useCallback(async()=>{
-    const weeks:string[]=[]
-    for(let i=0;i<4;i++){const d=new Date();d.setDate(d.getDate()-(i*7));weeks.push(weekStartOf(d))}
-    const results=await Promise.all(weeks.map(async ws=>{
-      const end=new Date(ws+'T12:00:00');end.setDate(end.getDate()+6)
-      const endStr=isoDate(end)
-      const{data:comp}=await supabase.from('task_completions').select('task_id,date').eq('household_id',householdId).gte('date',ws).lte('date',endStr)
-      const{data:meet}=await supabase.from('weekly_meetings').select('*').eq('household_id',householdId).eq('week_start',ws).maybeSingle()
-      return{week:ws,completions:(comp||[]).length,meeting:meet}
-    }))
-    setHistoryData(results)
-  },[householdId])
-
-  useEffect(()=>{loadAll()},[loadAll])
-  useEffect(()=>{if(tab==='week')loadHistory()},[tab,loadHistory])
-
-  // Realtime
-  useEffect(()=>{
-    const ch=supabase.channel('ninho-rt')
-      .on('postgres_changes',{event:'*',schema:'public',table:'task_completions'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'dog_completions'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'tasks'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'dogs'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'dog_routines'},loadAll)
-      .on('postgres_changes',{event:'*',schema:'public',table:'xp_history'},loadAll)
-      .subscribe()
-    return()=>{supabase.removeChannel(ch)}
-  },[loadAll])
-
-  function showToast(msg:string,undo?:()=>void){setToast({msg,undo});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),undo?4500:2600)}
+  // ── TOASTS ────────────────────────────────────────────
+  toastRef.current=toast
+  function showToast(msg:string,undo?:()=>void){setToast({kind:'ok',msg,undo});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),undo?4500:2600)}
+  function showError(e:NinhoError,retry?:()=>void){
+    const r=e.retryable?retry:undefined
+    setToast({kind:'err',msg:e.userMessage,retry:r})
+    clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),r?8000:6000)
+  }
   function closeModal(){setModal(null);setModalData(null)}
   function openModal(m:string,d?:any){setModal(m);setModalData(d??null)}
 
-  // ── ACTIONS ───────────────────────────────────────────
+  // ── AUXILIARES ────────────────────────────────────────
+  function requireMe():Who|null{if(!me){openModal('device');return null}return me}
+  async function withPending(keys:string[],fn:()=>Promise<void>){await guard.run(keys,fn)}
+  const isPending=(k:string)=>pending.has(k)
+  function patchTask(id:string,patch:Partial<Task>){setTasks(ts=>ts.map(x=>x.id===id?{...x,...patch}:x))}
+  function patchRoutines(patches:Map<string,Partial<DogRoutine>>){setDogs(ds=>ds.map(d=>({...d,routines:d.routines.map(r=>patches.has(r.id)?{...r,...patches.get(r.id)}:r)})))}
+  const refreshStats=()=>{data.refreshStats().catch(e=>logError('atualizar XP',e))}
+
+  // ── CONCLUSÕES (transacionais no banco) ───────────────
   async function toggleTask(t:Task){
+    const by=requireMe();if(!by)return
     const was=!!t.completed_today
-    // Atualização otimista: o check responde na hora
-    setTasks(p=>p.map(x=>x.id===t.id?{...x,completed_today:!was}:x))
-    setXp(v=>v+(was?-XPW[t.weight]:XPW[t.weight]))
-    if(was){
-      await supabase.from('task_completions').delete().eq('task_id',t.id).eq('date',today)
-      await supabase.from('xp_history').delete().eq('household_id',householdId).eq('reason',`task:${t.id}:${today}`)
-    }else{
-      showToast(`+${XPW[t.weight]} XP · ${t.title}`,()=>{setToast(null);toggleTask({...t,completed_today:true})})
-      await supabase.from('task_completions').upsert({task_id:t.id,household_id:householdId,date:today},{onConflict:'task_id,date'})
-      await supabase.from('xp_history').insert({household_id:householdId,amount:XPW[t.weight],reason:`task:${t.id}:${today}`})
-    }
-    loadAll()
+    const before:Partial<Task>={completed_today:t.completed_today,completed_by_today:t.completed_by_today,completion_id:t.completion_id}
+    const delta=was?-XPW[t.weight]:xpWithBonus(XPW[t.weight],canEarnOnTime(t,nowHM))
+    await withPending(['task:'+t.id],async()=>{
+      // Atualização otimista: o check responde na hora e volta atrás se o banco recusar
+      patchTask(t.id,{completed_today:!was,completed_by_today:was?null:by})
+      setXp(v=>v+delta)
+      try{
+        if(was){
+          await api.uncompleteTask(t.id,today)
+          patchTask(t.id,{completion_id:null})
+          showToast(`Desmarcada · ${t.title}`)
+        }else{
+          const r=await api.completeTask(t.id,today,by)
+          patchTask(t.id,{completed_by_today:r.completed_by??null,completion_id:r.completion_id})
+          data.rememberCompletion(r.completion_id,'task',t.id,today)
+          const done={...t,completed_today:true,completed_by_today:r.completed_by,completion_id:r.completion_id}
+          if(r.created)showToast(`+${r.xp} XP${r.on_time?' ⚡ no horário':''} · ${t.title}`,()=>{setToast(null);toggleTask(done)})
+          else showToast(`Já estava concluída por ${completedByLabel(r.completed_by,names)}`)
+        }
+      }catch(e){
+        patchTask(t.id,before);setXp(v=>v-delta)
+        showError(toNinhoError(e,'concluir tarefa'),()=>toggleTask(t))
+      }finally{refreshStats()}
+    })
   }
 
   // Marca (done=true) ou desmarca várias rotinas de uma vez — ex.: "Ração manhã" de todos os cães
   async function markDogs(rs:DogRoutine[],done:boolean,label?:string){
+    const by=requireMe();if(!by)return
     const list=rs.filter(r=>!!r.completed_today!==done)
     if(!list.length)return
-    const ids=new Set(list.map(r=>r.id))
-    setDogs(p=>p.map(d=>({...d,routines:d.routines.map(x=>ids.has(x.id)?{...x,completed_today:done}:x)})))
-    if(done)showToast(`+${list.length} XP · ${label||list[0].title}`,()=>{setToast(null);markDogs(list.map(r=>({...r,completed_today:true})),false)})
-    await Promise.all(list.map(async r=>{
-      if(done){
-        await supabase.from('dog_completions').upsert({routine_id:r.id,date:today},{onConflict:'routine_id,date'})
-        await supabase.from('xp_history').insert({household_id:householdId,amount:1,reason:`dog:${r.id}:${today}`})
-      }else{
-        await supabase.from('dog_completions').delete().eq('routine_id',r.id).eq('date',today)
-        await supabase.from('xp_history').delete().eq('household_id',householdId).eq('reason',`dog:${r.id}:${today}`)
-      }
-    }))
-    loadAll()
+    const ids=list.map(r=>r.id)
+    const before=new Map(list.map(r=>[r.id,{completed_today:r.completed_today,completed_by_today:r.completed_by_today,completion_id:r.completion_id}]))
+    await withPending(ids.map(id=>'dog:'+id),async()=>{
+      patchRoutines(new Map(ids.map(id=>[id,{completed_today:done,completed_by_today:done?by:null}])))
+      setXp(v=>v+(done?ids.length:-ids.length))
+      try{
+        if(done){
+          const r=await api.completeDogRoutines(ids,today,by)
+          patchRoutines(new Map(r.completions.map(c=>[c.routine_id,{completed_by_today:c.completed_by??null,completion_id:c.completion_id}])))
+          r.completions.forEach(c=>data.rememberCompletion(c.completion_id,'dog',c.routine_id,today))
+          const doneList=list.map(x=>({...x,completed_today:true}))
+          if(r.created>0)showToast(`+${r.xp_added} XP${r.on_time?' ⚡ no horário':''} · ${label||list[0].title}`,()=>{setToast(null);markDogs(doneList,false)})
+          else showToast('Já estava concluída')
+        }else{
+          await api.uncompleteDogRoutines(ids,today)
+          patchRoutines(new Map(ids.map(id=>[id,{completion_id:null}])))
+          showToast(`Desmarcada · ${label||list[0].title}`)
+        }
+      }catch(e){
+        patchRoutines(before);setXp(v=>v-(done?ids.length:-ids.length))
+        showError(toNinhoError(e,'concluir rotina'),()=>markDogs(rs,done,label))
+      }finally{refreshStats()}
+    })
   }
   function completeDog(r:DogRoutine){markDogs([r],!r.completed_today)}
   function toggleDogItem(it:DogItem){markDogs(it.parts.map(p=>p.r),!it.completed_today,it.title)}
 
-  async function quickUpdate(id:string,data:Partial<Task>){
-    setTasks(p=>p.map(x=>x.id===id?{...x,...data}:x))
-    await supabase.from('tasks').update(data).eq('id',id)
+  // ── TAREFAS ───────────────────────────────────────────
+  // Alteração otimista de campos da tarefa, com rollback se o banco recusar
+  async function updateTaskFields(id:string,patch:Partial<Task>):Promise<boolean>{
+    const prev=tasks.find(t=>t.id===id);if(!prev)return false
+    const back:Partial<Task>={};(Object.keys(patch) as Array<keyof Task>).forEach(k=>{(back as any)[k]=prev[k]})
+    let ok=false
+    await withPending(['edit:'+id],async()=>{
+      patchTask(id,patch)
+      try{await api.updateTask(id,patch);ok=true}
+      catch(e){patchTask(id,back);showError(toNinhoError(e,'atualizar tarefa'),()=>updateTaskFields(id,patch))}
+    })
+    return ok
+  }
+  function quickUpdate(id:string,patch:Partial<Task>){updateTaskFields(id,patch)}
+  function assignTask(id:string,to:string|null){updateTaskFields(id,{assigned_to:to})}
+
+  async function swapTask(t:Task){
+    const n:Who=ownerOf(t,today,slots)==='g'?'s':'g'
+    const prev=t.assigned_to
+    if(await updateTaskFields(t.id,{assigned_to:n}))
+      showToast(`Passada para ${firstName(names[n])}${isFixed(t)?'':' (sai do rodízio)'}`,()=>{setToast(null);assignTask(t.id,prev)})
   }
 
   async function archiveTasks(list:Task[]){
     if(!confirm(`Arquivar ${list.length} tarefa${list.length!==1?'s':''} de cães? As rotinas da aba Cães continuam.`))return
     const ids=list.map(t=>t.id)
-    setTasks(p=>p.filter(x=>!ids.includes(x.id)))
-    showToast(`${list.length} tarefas arquivadas`,async()=>{setToast(null);await supabase.from('tasks').update({active:true}).in('id',ids);loadAll()})
-    await supabase.from('tasks').update({active:false}).in('id',ids)
-    loadAll()
+    await withPending(['archive'],async()=>{
+      setTasks(p=>p.filter(x=>!ids.includes(x.id)))
+      try{
+        await api.updateTasks(ids,{active:false})
+        showToast(`${list.length} tarefas arquivadas`,async()=>{
+          setToast(null)
+          try{await api.updateTasks(ids,{active:true});await data.reloadTasks();showToast('Tarefas de volta')}
+          catch(e){showError(toNinhoError(e,'desfazer arquivamento'))}
+        })
+      }catch(e){
+        setTasks(p=>[...p,...list.filter(t=>!p.some(x=>x.id===t.id))])
+        showError(toNinhoError(e,'arquivar tarefas'),()=>archiveTasks(list))
+      }
+    })
   }
 
-  async function swapTask(t:Task){
-    const n:Who=ownerOf(t,today,slots)==='g'?'s':'g'
-    const prev=t.assigned_to
-    setTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:n}:x))
-    showToast(`Passada para ${firstName(names[n])}${isFixed(t)?'':' (sai do rodízio)'}`,()=>{setToast(null);assignTask(t.id,prev)})
-    await supabase.from('tasks').update({assigned_to:n}).eq('id',t.id)
-    loadAll()
+  // Operações de formulário: o modal só fecha se o banco aceitou
+  async function save(context:string,fn:()=>Promise<void>,okMsg:string){
+    if(saving)return
+    setSaving(true)
+    try{await fn();closeModal();showToast(okMsg)}
+    catch(e){showError(toNinhoError(e,context))}
+    finally{setSaving(false)}
   }
 
-  async function assignTask(id:string,to:string|null){
-    setTasks(p=>p.map(x=>x.id===id?{...x,assigned_to:to}:x))
-    await supabase.from('tasks').update({assigned_to:to}).eq('id',id)
-    loadAll()
-  }
-
-  async function deleteTask(id:string){
+  function deleteTask(id:string){
     if(!confirm('Remover essa tarefa?'))return
-    await supabase.from('tasks').update({active:false}).eq('id',id)
-    showToast('Tarefa removida');closeModal();loadAll()
+    save('remover tarefa',async()=>{await api.updateTask(id,{active:false});setTasks(ts=>ts.filter(t=>t.id!==id))},'Tarefa removida')
   }
 
-  async function saveTask(data:any,editId?:string){
-    if(editId){
-      await supabase.from('tasks').update(data).eq('id',editId)
-      showToast('Tarefa atualizada!')
-    }else{
-      await supabase.from('tasks').insert({...data,household_id:householdId,active:true})
-      showToast(`"${data.title}" criada!`)
-    }
-    closeModal();loadAll()
+  function saveTask(d:any,editId?:string){
+    save(editId?'atualizar tarefa':'criar tarefa',async()=>{
+      if(editId){await api.updateTask(editId,d);patchTask(editId,d)}
+      else{await api.insertTasks(householdId,[d]);await data.reloadTasks()}
+    },editId?'Tarefa atualizada!':`"${d.title}" criada!`)
   }
 
   async function addSuggestions(sel:any[]){
     const existing=new Set(tasks.map(t=>t.title))
-    const toAdd=sel.filter(s=>!existing.has(s.t)).map(s=>({household_id:householdId,title:s.t,category:s.cat,weight:s.w,frequency:s.f,assigned_to:null,scheduled_time:null,essential:s.ess,active:true}))
-    if(toAdd.length>0){await supabase.from('tasks').insert(toAdd);showToast(`${toAdd.length} tarefa${toAdd.length!==1?'s':''} adicionada${toAdd.length!==1?'s':''}!`)}
-    closeModal();loadAll()
+    const toAdd=sel.filter(s=>!existing.has(s.t)).map(s=>({title:s.t,category:s.cat,weight:s.w,frequency:s.f,assigned_to:null,scheduled_time:null,essential:s.ess}))
+    if(!toAdd.length){closeModal();return}
+    try{
+      await api.insertTasks(householdId,toAdd as any)
+      await data.reloadTasks()
+      closeModal();showToast(`${toAdd.length} tarefa${toAdd.length!==1?'s':''} adicionada${toAdd.length!==1?'s':''}!`)
+    }catch(e){showError(toNinhoError(e,'adicionar sugestões'))}
   }
 
-  async function savePet(data:any,routines:any[]){
-    const{data:dog}=await supabase.from('dogs').insert({...data,household_id:householdId,active:true}).select().single()
-    if(dog)await supabase.from('dog_routines').insert(routines.map(r=>({...r,dog_id:dog.id,household_id:householdId,active:true})))
-    showToast(`${data.name} cadastrado(a)!`);closeModal();loadAll()
+  // ── CÃES ──────────────────────────────────────────────
+  function savePet(d:any,routines:any[]){
+    save('cadastrar pet',async()=>{
+      try{await api.insertDog(householdId,d,routines)}finally{await data.reloadDogs().catch(()=>{})}
+    },`${d.name} cadastrado(a)!`)
   }
-
-  async function updateDog(id:string,data:any){
-    setDogs(p=>p.map(d=>d.id===id?{...d,...data}:d))
-    closeModal();showToast('Pet atualizado!')
-    await supabase.from('dogs').update(data).eq('id',id)
-    loadAll()
+  function updateDog(id:string,d:any){
+    save('atualizar pet',async()=>{await api.updateDog(id,d);setDogs(p=>p.map(x=>x.id===id?{...x,...d}:x))},'Pet atualizado!')
   }
-
-  async function removeDog(d:Dog){
+  function removeDog(d:Dog){
     if(!confirm(`Remover ${d.name} e as rotinas dele(a)?`))return
-    await supabase.from('dogs').update({active:false}).eq('id',d.id)
-    showToast(`${d.name} removido(a)`);closeModal();loadAll()
+    save('remover pet',async()=>{await api.updateDog(d.id,{active:false});setDogs(p=>p.filter(x=>x.id!==d.id))},`${d.name} removido(a)`)
   }
-
-  async function saveRoutine(dogId:string,data:any,id?:string){
-    if(id)await supabase.from('dog_routines').update(data).eq('id',id)
-    else await supabase.from('dog_routines').insert({...data,dog_id:dogId,household_id:householdId,active:true})
-    showToast(id?'Rotina atualizada!':'Rotina criada!');closeModal();loadAll()
+  function saveRoutine(dogId:string,d:any,id?:string){
+    save(id?'atualizar rotina':'criar rotina',async()=>{await api.upsertRoutine(householdId,dogId,d,id);await data.reloadDogs()},id?'Rotina atualizada!':'Rotina criada!')
   }
-
-  async function removeRoutine(r:DogRoutine){
+  function removeRoutine(r:DogRoutine){
     if(!confirm(`Remover a rotina "${r.title}"?`))return
-    await supabase.from('dog_routines').update({active:false}).eq('id',r.id)
-    showToast('Rotina removida');closeModal();loadAll()
+    save('remover rotina',async()=>{await api.setRoutineActive(r.id,false);await data.reloadDogs()},'Rotina removida')
+  }
+  async function addAccident(dogId:string,location:string){
+    await withPending(['acc:'+dogId],async()=>{
+      try{const row=await api.insertAccident(householdId,dogId,location,today);setAccidents(a=>[row,...a.filter(x=>x.id!==row.id)]);showToast('Acidente registrado')}
+      catch(e){showError(toNinhoError(e,'registrar acidente'),()=>addAccident(dogId,location))}
+    })
   }
 
-  async function toggleSurvival(){
-    const ns=!settings.survival
-    setSettings(p=>({...p,survival:ns}))
-    showToast(ns?'Modo sobrevivência ativado':'Modo normal ativado')
-    await supabase.from('weekly_settings').upsert({household_id:householdId,week_start:weekStart,energy:settings.energy,survival:ns},{onConflict:'household_id,week_start'})
+  // ── SEMANA, NOMES, REUNIÃO ────────────────────────────
+  async function saveSettings(next:{energy:Energy,survival:boolean},okMsg:string){
+    const prev=settings
+    await withPending(['settings'],async()=>{
+      setSettings(next)
+      try{await api.saveWeeklySettings(householdId,weekStart,next);showToast(okMsg)}
+      catch(e){setSettings(prev);showError(toNinhoError(e,'salvar ajustes da semana'),()=>saveSettings(next,okMsg))}
+    })
   }
-
-  async function setEnergy(e:'high'|'medium'|'low'){
-    setSettings(p=>({...p,energy:e}));closeModal();showToast('Energia atualizada!')
-    await supabase.from('weekly_settings').upsert({household_id:householdId,week_start:weekStart,energy:e,survival:settings.survival},{onConflict:'household_id,week_start'})
-  }
+  function toggleSurvival(){const ns=!settings.survival;saveSettings({...settings,survival:ns},ns?'Modo sobrevivência ativado':'Modo normal ativado')}
+  function setEnergy(e:Energy){closeModal();saveSettings({...settings,energy:e},'Energia atualizada!')}
 
   async function updateName(role:Who,val:string){
-    if(!val.trim()||val.trim()===names[role])return
-    setNames(n=>({...n,[role]:val.trim()}))
-    await supabase.from('profiles').update({display_name:val.trim()}).eq('household_id',householdId).eq('role',role)
-    showToast('Nome atualizado!')
+    const v=val.trim()
+    if(!v||v===names[role])return
+    const prev=names[role]
+    setNames(n=>({...n,[role]:v}))
+    try{await api.updateName(householdId,role,v);showToast('Nome atualizado!')}
+    catch(e){setNames(n=>({...n,[role]:prev}));showError(toNinhoError(e,'atualizar nome'),()=>updateName(role,v))}
   }
 
-  async function saveMeeting(data:Meeting){
-    await supabase.from('weekly_meetings').upsert({household_id:householdId,week_start:weekStart,...data},{onConflict:'household_id,week_start'})
-    showToast('Reunião salva!');closeModal()
-    if(tab==='week')loadHistory()
+  function saveBet(bet:string){
+    save('salvar aposta',async()=>{await api.saveBet(householdId,weekStart,bet);setSettings(p=>({...p,bet}))},'Aposta da semana salva!')
   }
 
-  async function addAccident(dogId:string,location:string){
-    await supabase.from('puppy_accidents').insert({dog_id:dogId,household_id:householdId,location,date:today})
-    showToast('Acidente registrado');loadAll()
+  function saveMeeting(m:Meeting){
+    save('salvar reunião',async()=>{await api.saveMeeting(householdId,weekStart,m);if(tab==='week')await loadHistory()},'Reunião salva!')
   }
 
   async function autoDistribute(){
     const active=homeTasks.filter(t=>t.frequency!=='once')
     if(!active.length){showToast('Adicione tarefas primeiro');return}
+    if(!confirm('Distribuir define uma responsável fixa para cada tarefa (e tira todas do rodízio). Continuar?'))return
     let gS=0,sS=0
-    const updates:Array<{id:string,assigned_to:string}>=[]
+    const updates:Array<{id:string,assigned_to:Who}>=[]
     const assign=(t:Task,who:Who)=>{updates.push({id:t.id,assigned_to:who});const w=XPW[t.weight]*(FEFF[t.frequency]||1);if(who==='g')gS+=w;else sS+=w}
     active.filter(t=>t.essential&&t.category==='dogs').sort((a,b)=>(a.scheduled_time||'').localeCompare(b.scheduled_time||'')).forEach((t,i)=>assign(t,i%2===0?'g':'s'))
     active.filter(t=>t.weight==='heavy'&&!(t.essential&&t.category==='dogs')).forEach(t=>assign(t,gS<=sS?'g':'s'))
     active.filter(t=>t.frequency==='daily'&&!t.essential&&t.weight!=='heavy').forEach(t=>assign(t,gS*0.85<=sS?'g':'s'))
     active.filter(t=>!updates.find(u=>u.id===t.id)).forEach(t=>assign(t,gS<=sS?'g':'s'))
-    await Promise.all(updates.map(u=>supabase.from('tasks').update({assigned_to:u.assigned_to}).eq('id',u.id)))
-    showToast(`Distribuído — ${firstName(names.g)}: ${Math.round(gS)}pts · ${firstName(names.s)}: ${Math.round(sS)}pts`)
-    loadAll()
+    await withPending(['distribute'],async()=>{
+      try{
+        await api.updateTasks(updates.filter(u=>u.assigned_to==='g').map(u=>u.id),{assigned_to:'g'})
+        await api.updateTasks(updates.filter(u=>u.assigned_to==='s').map(u=>u.id),{assigned_to:'s'})
+        const m=new Map(updates.map(u=>[u.id,u.assigned_to]))
+        setTasks(ts=>ts.map(t=>m.has(t.id)?{...t,assigned_to:m.get(t.id)!}:t))
+        showToast(`Distribuído — ${firstName(names.g)}: ${Math.round(gS)}pts · ${firstName(names.s)}: ${Math.round(sS)}pts`)
+      }catch(e){
+        showError(toNinhoError(e,'distribuir tarefas'),autoDistribute)
+        data.reloadTasks().catch(()=>{})
+      }
+    })
   }
 
   // ── DERIVED ───────────────────────────────────────────
   const focusMode=settings.survival||settings.energy==='low'
-  // Com cães cadastrados, as tarefas da categoria Cães repetem as rotinas: ficam fora de Hoje
-  const slots=buildSlots(tasks.filter(t=>!(dogs.length&&t.category==='dogs')),dogs)
-  const dogTasks=dogs.length?tasks.filter(t=>t.category==='dogs'):[]
-  const homeTasks=dogs.length?tasks.filter(t=>t.category!=='dogs'):tasks
-  const dueList=homeTasks.filter(t=>dueToday(t,today))
-  const todayTasks=focusMode&&!showAllToday?dueList.filter(t=>t.essential):dueList
+  // Mesma conta usada pela notificação da manhã (lib/today.ts)
+  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday})
+  const {slots,dogTasks,homeTasks,dueList,todayTasks,dogItems,ownerOfItem}=plan
+  const hItems:HItem[]=plan.items
   const hiddenCount=dueList.length-todayTasks.length
-  const dogItems=buildDogItems(dogs,today,slots)
-  // Itens de Hoje: tarefas + rotinas dos cães (rotinas sempre aparecem, até no modo sobrevivência)
-  const hItems:HItem[]=[
-    ...todayTasks.map(t=>({id:t.id,frequency:t.frequency,scheduled_time:t.scheduled_time,completed_today:t.completed_today,essential:t.essential,category:t.category,task:t})),
-    ...dogItems.map(d=>({id:'dog:'+d.key,frequency:d.frequency,scheduled_time:d.scheduled_time,completed_today:d.completed_today,essential:false,category:'dogs',dog:d})),
-  ]
-  const ownerOfItem=(i:HItem):Who=>i.task?ownerOf(i.task,today,slots):i.dog!.owner
   const xpOfItem=(i:HItem)=>i.task?XPW[i.task.weight]:i.dog!.parts.length
   const allToday=[...dueList.map(t=>!!t.completed_today),...dogItems.map(d=>d.completed_today)]
   const doneToday=allToday.filter(Boolean).length
@@ -1024,14 +965,13 @@ export default function NinhoApp({householdId}:{householdId:string}){
   const chaos=dailyTasks.length?Math.max(0,Math.round(100-(dailyTasks.filter(t=>t.completed_today).length/dailyTasks.length)*100)):0
   const ci=getChaosInfo(chaos)
   const lv=getLevel(xp)
-  const xpPct=Math.min(100,Math.round(((xp-lv.min)/(lv.max-lv.min))*100))
+  const xpPct=levelProgress(xp)
   const puppies=dogs.filter(d=>d.is_puppy)
   const dogDaily=dogs.flatMap(d=>d.routines.filter(r=>dueToday(r,today)).map(r=>({r,dog:d})))
   const dogDone=dogDaily.filter(x=>x.r.completed_today).length
   const en=ENERGY[settings.energy]||ENERGY.medium
-  const h=now.getHours()
-  const hello=h<5?'Boa noite':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'
-  const dateLabel=now.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})
+  const hello=greeting(hour)
+  const dateLabel=longDateLabel(now)
   const countFor=(w:Who)=>{const all=hItems.filter(i=>ownerOfItem(i)===w);return{all:all.length,done:all.filter(i=>i.completed_today).length}}
 
   // ── RENDER HELPERS ────────────────────────────────────
@@ -1041,7 +981,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
     const late=isLate(t,nowHM)
     return(
       <div key={t.id} className={`tr ${t.completed_today?'done':''} ${o.next?'next':''}`}>
-        <button className={`chk ${t.essential?'ess':''}`} onClick={()=>toggleTask(t)} aria-label={t.completed_today?`Desmarcar ${t.title}`:`Concluir ${t.title}`}>✓</button>
+        <button className={`chk ${t.essential?'ess':''} ${isPending('task:'+t.id)?'busy':''}`} onClick={()=>toggleTask(t)} disabled={isPending('task:'+t.id)} aria-busy={isPending('task:'+t.id)} aria-label={t.completed_today?`Desmarcar ${t.title}`:`Concluir ${t.title}`}>✓</button>
         <div className="trb" onClick={()=>toggleTask(t)}>
           <div className="trt">{t.title}</div>
           <div className="trm">
@@ -1051,9 +991,12 @@ export default function NinhoApp({householdId}:{householdId:string}){
             {t.scheduled_time&&<span className={`tag-t ${late?'late':''}`}>⏰ {hhmm(t.scheduled_time)}</span>}
             {t.frequency!=='daily'&&<span><span className="lg-only">{FPT[t.frequency]}{!t.completed_today&&t.frequency!=='once'&&' · '}</span>{!t.completed_today&&t.frequency!=='once'&&lastLabel(t.prev_done||null,today)}</span>}
             {!isFixed(t)&&<span className="tag-r" title="Rodízio: alterna entre vocês">↻<span className="lg-only"> rodízio</span></span>}
+            {t.completed_today&&<span className="tag-by" title="Quem concluiu">✓ {completedByLabel(t.completed_by_today,names)}</span>}
           </div>
         </div>
-        <span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>
+        {canEarnOnTime(t,nowHM)
+          ?<span className={`xp xp-${wCls(t.weight)} bonus`} title={`Até ${hhmm(t.scheduled_time)}: XP ×1,5`}>+{xpWithBonus(XPW[t.weight],true)}⚡</span>
+          :<span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>}
         {actions&&<button className="ib desk" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
         {actions&&<button className="ib desk" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
         {actions&&<button className="ib mob" onClick={()=>openModal('taskmenu',t)} aria-label={`Opções de ${t.title}`}>⋯</button>}
@@ -1064,9 +1007,11 @@ export default function NinhoApp({householdId}:{householdId:string}){
   const dogItemRow=(it:DogItem,o:{next?:boolean}={})=>{
     const late=isLate(it,nowHM)
     const multi=it.parts.length>1
+    const busy=it.parts.some(p=>isPending('dog:'+p.r.id))
+    const by=Array.from(new Set(it.parts.filter(p=>p.r.completed_today).map(p=>completedByLabel(p.r.completed_by_today,names)))).join(' e ')
     return(
       <div key={'dog:'+it.key} className={`tr ${it.completed_today?'done':''} ${o.next?'next':''}`}>
-        <button className="chk" onClick={()=>toggleDogItem(it)} aria-label={it.completed_today?`Desmarcar ${it.title}`:`Concluir ${it.title}`}>✓</button>
+        <button className={`chk ${busy?'busy':''}`} disabled={busy} aria-busy={busy} onClick={()=>toggleDogItem(it)} aria-label={it.completed_today?`Desmarcar ${it.title}`:`Concluir ${it.title}`}>✓</button>
         <div className="trb" onClick={()=>toggleDogItem(it)}>
           <div className="trt">{it.title}</div>
           <div className="trm">
@@ -1075,9 +1020,12 @@ export default function NinhoApp({householdId}:{householdId:string}){
             {it.scheduled_time&&<span className={`tag-t ${late?'late':''}`}>⏰ {hhmm(it.scheduled_time)}</span>}
             {it.frequency!=='daily'&&<span className="lg-only">{FPT[it.frequency]||it.frequency}</span>}
             <span className="tag-r" title="Rotinas dos cães alternam entre vocês">↻<span className="lg-only"> rodízio</span></span>
+            {it.completed_today&&<span className="tag-by" title="Quem concluiu">✓ {by}</span>}
           </div>
         </div>
-        <span className="xp xp-l">+{it.parts.length}</span>
+        {canEarnOnTime(it,nowHM)
+          ?<span className="xp xp-l bonus" title={`Até ${hhmm(it.scheduled_time)}: XP ×1,5`}>+{xpWithBonus(1,true)*it.parts.length}⚡</span>
+          :<span className="xp xp-l">+{it.parts.length}</span>}
       </div>
     )
   }
@@ -1095,7 +1043,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
         <div className="ph">
           <div className={`av av-${who}`}>{initials(names[who])}</div>
           <div style={{minWidth:0}}>
-            <div className="pname">{names[who]}</div>
+            <div className="pname">{names[who]}{me===who&&<span className="you" title="Quem está usando este aparelho">você</span>}</div>
             <div className="prole">{ROLE[who]}{essLeft>0&&<> · <span style={{color:'var(--cor)'}}>{essLeft} essencia{essLeft>1?'is':'l'}</span></>}</div>
           </div>
           <Ring pct={pct} color={who==='g'?'var(--green)':'var(--pur)'} label={`${done.length}/${all.length}`}/>
@@ -1134,11 +1082,13 @@ export default function NinhoApp({householdId}:{householdId:string}){
     // "sat" = já feita neste período (ex.: banho semanal feito na segunda)
     const sat=!r.completed_today&&doneInPeriod(r,today)
     const late=isLate(r,nowHM)
+    const busy=isPending('dog:'+r.id)
     return(
       <div key={r.id} className={`dr ${r.completed_today||sat?'done':''} ${sat?'sat':''}`}>
-        <button className={`chk ${r.completed_today||sat?'ok':''}`} disabled={sat} onClick={()=>completeDog(r)} aria-label={r.completed_today?`Desmarcar ${r.title}`:`Concluir ${r.title}`}>✓</button>
+        <button className={`chk ${r.completed_today||sat?'ok':''} ${busy?'busy':''}`} disabled={sat||busy} aria-busy={busy} onClick={()=>completeDog(r)} aria-label={r.completed_today?`Desmarcar ${r.title}`:`Concluir ${r.title}`}>✓</button>
         <span className="dr-t" onClick={()=>!sat&&completeDog(r)}>{r.title}</span>
         {o.dogName&&<span className="dr-m">{o.dogName}</span>}
+        {r.completed_today&&<span className="dr-m" title="Quem concluiu">{completedByLabel(r.completed_by_today,names)}</span>}
         {sat?<span className="dr-m">✓ {lastLabel(r.prev_done||null,today)}</span>
           :r.frequency!=='daily'&&<span className="bdg bdg-n">{FPT[r.frequency]||r.frequency}</span>}
         {r.scheduled_time&&<span className={`dr-m ${late?'late':''}`}>{hhmm(r.scheduled_time)}</span>}
@@ -1180,7 +1130,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
   const gS=loadOf('g'),sS=loadOf('s'),tot=gS+sS
   const gP=tot>0?Math.round((gS/tot)*100):50
   const balanced=Math.abs(gS-sS)<=3
-  const maxHist=Math.max(1,...historyData.map(w=>w.completions))
+  const maxHist=Math.max(1,...(historyData||[]).map(w=>w.completions))
 
   return(
     <>
@@ -1203,6 +1153,15 @@ export default function NinhoApp({householdId}:{householdId:string}){
       </header>
 
       <main className="main">
+        {data.status==='loading'&&<div className="loadscr" role="status" aria-live="polite"><span className="spin" aria-hidden="true"/>Carregando a casa…</div>}
+        {data.status==='error'&&<div className="card loaderr" role="alert">
+          <div style={{fontSize:16,fontWeight:500,marginBottom:6}}>Não foi possível carregar o Ninho</div>
+          <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>{data.loadError?.userMessage}</div>
+          <button className="btn btn-p" onClick={()=>data.loadAll()}>Tentar novamente</button>
+        </div>}
+        {data.status==='ready'&&data.offline&&<div className="banner low" role="status">📴 <span>Sem internet. Mostrando os dados de {timeOfInstant(data.offline.savedAt)}. Marcar e editar voltam quando a conexão voltar.</span>
+          <button className="lnk" onClick={()=>data.loadAll()}>Tentar agora</button></div>}
+        {data.status==='ready'&&<>
         {/* ── HOJE ── */}
         {tab==='today'&&<div className="scr">
           <div className="sh">
@@ -1213,7 +1172,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
           <div className="stats">
             <div className="stat">
               <div className="stat-l">Hoje</div>
-              <div className="stat-v">{dayPct}%<small>{doneToday}/{tasks.length}</small></div>
+              <div className="stat-v">{dayPct}%<small>{doneToday}/{allToday.length}</small></div>
               <div className="bar"><div className="barf" style={{width:dayPct+'%',background:'var(--gdk)'}}/></div>
             </div>
             <div className="stat">
@@ -1227,9 +1186,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <div className="bar"><div className="barf" style={{width:xpPct+'%',background:'var(--pur)'}}/></div>
             </button>
             <div className="stat">
-              <div className="stat-l">Sequência</div>
+              <div className="stat-l">Sequência{game.streaks.house_best>0&&<span className="lg-only"> · recorde {game.streaks.house_best}</span>}</div>
               <div className="stat-v">🔥 {streak}<small>dia{streak!==1?'s':''}</small></div>
-              <div className="week-dots">{[0,1,2,3,4,5,6].map(i=><div key={i} className={`wd ${i===dowI?(doneToday>0?'on':'today'):(i<dowI&&dowI-i<=streak-(doneToday>0?1:0))?'on':''}`}/>)}</div>
+              <div className="week-dots">{weekDots(todayIndex,streak,doneToday>0).map((c,i)=><div key={i} className={`wd ${c}`}/>)}</div>
             </div>
           </div>
 
@@ -1278,6 +1237,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 })}
                 {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
               </div>
+              <Scoreboard compact scores={game.scores} lastWeek={game.lastWeek} lastWeekBet={game.lastWeekBet} bet={settings.bet} names={names} me={me} onOpen={()=>setTab('week')}/>
               <div className="card">
                 <div className="slbl">Atalhos</div>
                 <div className="acts">
@@ -1356,6 +1316,15 @@ export default function NinhoApp({householdId}:{householdId:string}){
             <div><h2>Semana</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
             <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button></div>
           </div>
+          <div className="wgrid" style={{marginBottom:14}}>
+            <div className="col">
+              <Scoreboard scores={game.scores} lastWeek={game.lastWeek} lastWeekBet={game.lastWeekBet} bet={settings.bet} names={names} me={me} onEditBet={()=>openModal('bet')}/>
+              <StreaksCard streaks={game.streaks} names={names} me={me}/>
+            </div>
+            <div className="col">
+              <Achievements stats={game.stats} names={names} me={me}/>
+            </div>
+          </div>
           <div className="wgrid">
             <div className="col">
               <div className="card">
@@ -1400,7 +1369,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
               </div>
               <div className="card">
                 <div className="slbl">Últimas 4 semanas</div>
-                {historyData.length===0?<div style={{fontSize:13,color:'var(--sub)',padding:'8px 0'}}>Carregando...</div>:
+                {historyError?<div className="inline-err">Não foi possível carregar o histórico. <button className="lnk" onClick={loadHistory}>Tentar novamente</button></div>
+                :!historyData?<div style={{fontSize:13,color:'var(--sub)',padding:'8px 0'}}>Carregando...</div>:
                   historyData.map((w,i)=>(
                     <div key={w.week} className="hist">
                       <div className="hist-h">
@@ -1435,15 +1405,15 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 <div className="slbl" style={{color:'var(--amb)'}}>🐶 Modo filhote · {pup.name}</div>
                 <div style={{fontSize:15,fontWeight:500}}>{todayAcc===0?'Nenhum acidente hoje 🎉':`${todayAcc} acidente${todayAcc>1?'s':''} hoje`}</div>
                 <div className="pills">
-                  {['Sala','Quarto','Cozinha','Banheiro','Corredor'].map(loc=>(
-                    <button key={loc} className="pill" onClick={()=>addAccident(pup.id,loc)}>+ {loc}</button>
+                  {ACCIDENT_PLACES.map(loc=>(
+                    <button key={loc} className="pill" disabled={isPending('acc:'+pup.id)} onClick={()=>addAccident(pup.id,loc)}>+ {loc}</button>
                   ))}
                 </div>
-                {accidents.filter(a=>a.dog_id===pup.id).slice(0,5).map((a:any)=>(
+                {accidents.filter(a=>a.dog_id===pup.id).slice(0,5).map((a:Accident)=>(
                   <div key={a.id} className="acc">
                     <span>💧</span><span>{a.location}</span>
                     <span className="mono" style={{marginLeft:'auto',fontSize:11,color:'var(--sub)'}}>
-                      {a.date!==today&&fmtDate(a.date)+' · '}{new Date(a.occurred_at).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'})}
+                      {a.date!==today&&fmtDate(a.date)+' · '}{timeOfInstant(a.occurred_at)}
                     </span>
                   </div>
                 ))}
@@ -1484,6 +1454,21 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {tab==='settings'&&<div className="scr narrow">
           <div className="sh"><div><h2>Ajustes</h2><p>Integrantes e guia de uso</p></div></div>
           <div className="card" style={{marginBottom:14}}>
+            <div className="slbl">Este aparelho</div>
+            <div className="field-row">
+              {me&&<div className={`av av-${me}`}>{initials(names[me])}</div>}
+              <div style={{minWidth:0}}>
+                <div className="row-t">{me?`Usado por ${firstName(names[me])}`:'Ninguém escolhido ainda'}</div>
+                <div className="row-s">Registra quem concluiu cada tarefa. Fica salvo só neste aparelho; não é login.</div>
+                {!device.persisted&&<div className="row-s" style={{color:'var(--amb)'}}>Este navegador não deixou salvar a escolha; ela vale até fechar o app.</div>}
+              </div>
+              <button className="btn btn-g" style={{marginLeft:'auto'}} onClick={()=>openModal('device')}>Trocar</button>
+            </div>
+          </div>
+          <NotificationsCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
+            onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
+            onNeedIdentity={()=>openModal('device')}/>
+          <div className="card" style={{marginBottom:14}}>
             <div className="slbl">Integrantes</div>
             {(['g','s'] as Who[]).map(w=>(
               <div key={w} className="field-row">
@@ -1507,7 +1492,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <ul>
                 <li><b>Grupos por horário:</b> ⚠ Atrasadas (diárias com horário que já passou), 🌅 Manhã, ☀️ Tarde, 🌙 Noite, a qualquer hora e, por fim, as do período (até o fim da semana, quinzena ou mês) e as pontuais.</li>
                 <li><b>▸ próxima</b> destaca a próxima tarefa com horário.</li>
-                <li>Toque na tarefa para concluir. Aparece <b>+XP · Desfazer</b> por alguns segundos. As concluídas ficam recolhidas no fim da coluna.</li>
+                <li>Toque na tarefa para concluir. Aparece <b>+XP · Desfazer</b> por alguns segundos. As concluídas ficam recolhidas no fim da coluna, com <b>quem concluiu</b> (conclusões anteriores a esta versão aparecem como “não identificado”).</li>
+                <li><b>Este aparelho</b> (em Ajustes) diz quem está usando o celular; é isso que fica registrado ao concluir. Ver a coluna da outra pessoa não muda isso. Se o banco recusar uma alteração, o app desfaz na tela e mostra o aviso com “Tentar novamente”.</li>
                 <li>No computador, <b>⇄</b> passa para a outra e <b>✎</b> edita. No celular, tudo isso fica no <b>⋯</b>.</li>
                 <li>Indicadores do topo: % do dia, estado da <b>Casa</b> (quanto das diárias ainda falta: organizada, atenção ou alerta), nível/XP e sequência.</li>
               </ul>
@@ -1544,6 +1530,15 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 <li>Tarefas da categoria Cães repetem as rotinas e por isso não aparecem em Hoje; dá para arquivá-las pelo aviso em Tarefas.</li>
               </ul>
             </div></details>
+            <details><summary>📲 App e notificações</summary><div className="gb">
+              <ul>
+                <li><b>Instalar:</b> no Android, “Instalar” em Ajustes (ou menu ⋮ → Instalar app). No iPhone, Safari → Compartilhar → Adicionar à Tela de Início. O Ninho vira um ícone e abre como app.</li>
+                <li><b>Sem internet:</b> o app abre com os últimos dados que carregou neste aparelho. Marcar e editar voltam quando a conexão voltar.</li>
+                <li><b>☀️ Bom dia</b> (por volta das 7h): o que é seu hoje — fixo ou pela vez do rodízio — e o que vale ⚡ no horário.</li>
+                <li><b>🏆 Resumo de domingo</b> (por volta das 19h): placar, quem paga a aposta, sequência e o que ficou para trás.</li>
+                <li>Cada aparelho ativa as próprias notificações em Ajustes, e elas seguem “Este aparelho”. No iPhone, só com o app instalado (iOS 16.4+).</li>
+              </ul>
+            </div></details>
             <details><summary>🌤 Energia e modo sobrevivência</summary><div className="gb">
               <p>Escolham a <b>energia da semana</b> (alta, média ou baixa). Em energia baixa ou no <b>🛡 modo sobrevivência</b>, Hoje mostra só as essenciais e as rotinas dos cães, com o botão “Mostrar todas”. Vale para a semana atual.</p>
             </div></details>
@@ -1552,9 +1547,12 @@ export default function NinhoApp({householdId}:{householdId:string}){
             </div></details>
             <details><summary>🏆 XP, níveis e sequência</summary><div className="gb">
               <ul>
-                <li>Cada tarefa vale pelo esforço: <span className="xp xp-l">+1</span> leve, <span className="xp xp-m">+2</span> médio, <span className="xp xp-h">+3</span> pesado. Rotina de cão vale +1 por cão. O XP é do casal.</li>
+                <li>Cada tarefa vale pelo esforço: <span className="xp xp-l">+1</span> leve, <span className="xp xp-m">+2</span> médio, <span className="xp xp-h">+3</span> pesado. Rotina de cão vale +1 por cão. O nível é do casal.</li>
+                <li><b>⚡ Bônus no horário:</b> diária com horário feita até o horário vale ×1,5 (leve 2, média 3, pesada 5). Feita atrasada no mesmo dia vale o normal: ninguém perde pontos. O ⚡ aparece no XP enquanto ainda dá tempo.</li>
+                <li><b>🏆 Placar da semana:</b> o XP de cada uma de segunda a domingo, com a aposta simbólica (troque em Semana). Conta pelo aparelho identificado de quem concluiu.</li>
+                <li><b>🔥 Sequências:</b> casa ativa (algo feito no dia), casa em dia (todas as essenciais diárias feitas) e a de cada uma, com recordes. A de hoje só entra depois do primeiro check; ninguém perde a sequência no meio do dia.</li>
+                <li><b>🏅 Conquistas:</b> bronze, prata e ouro por cômodo, cães, pontualidade, madrugada, tarefas pesadas, faxina relâmpago (várias tarefas em 1 hora) e recorde de sequência.</li>
                 <li>Níveis: {LEVELS.map(l=>`${l.n} (${l.min})`).join(' · ')}.</li>
-                <li>🔥 Sequência: dias seguidos com pelo menos uma tarefa concluída.</li>
               </ul>
             </div></details>
             <details><summary>🔣 Símbolos</summary><div className="gb">
@@ -1568,6 +1566,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
             </div></details>
           </div>
         </div>}
+        </>}
       </main>
 
       {/* NAV MOBILE */}
@@ -1575,12 +1574,17 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {TABS.map(([k,ic,l])=><button key={k} className={`bnb ${tab===k?'on':''}`} onClick={()=>setTab(k)} aria-current={tab===k?'page':undefined}><span className="ic">{ic}</span>{l}</button>)}
       </nav>
 
-      {(tab==='today'||tab==='tasks')&&<button className="fab mob-fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>}
+      {data.status==='ready'&&(tab==='today'||tab==='tasks')&&<button className="fab mob-fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>}
 
-      {toast&&<div className="toast" role="status"><span className="toast-m">{toast.msg}</span>{toast.undo&&<button onClick={toast.undo}>Desfazer</button>}</div>}
-      {modal==='task'&&<TaskFormModal task={modalData} names={names} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
+      {toast&&<div className={`toast ${toast.kind==='err'?'err':''}`} role={toast.kind==='err'?'alert':'status'}>
+        <span className="toast-m">{toast.msg}</span>
+        {toast.undo&&<button onClick={toast.undo}>Desfazer</button>}
+        {toast.retry&&<button onClick={()=>{const r=toast.retry!;setToast(null);r()}}>Tentar novamente</button>}
+        {toast.kind==='err'&&<button className="tx" onClick={()=>setToast(null)} aria-label="Fechar aviso">✕</button>}
+      </div>}
+      {modal==='task'&&<TaskFormModal task={modalData} names={names} saving={saving} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
       {modal==='sugg'&&<SuggModal tasks={tasks} onClose={closeModal} onAdd={addSuggestions} onCustomize={s=>openModal('task',{title:s.t,category:s.cat,weight:s.w,frequency:s.f,essential:s.ess,assigned_to:null,scheduled_time:null,active:true,id:null})}/>}
-      {modal==='pet'&&<PetModal onClose={closeModal} onSave={savePet}/>}
+      {modal==='pet'&&<PetModal saving={saving} onClose={closeModal} onSave={savePet}/>}
       {modal==='taskmenu'&&(()=>{const t:Task=modalData;const other:Who=ownerOf(t,today,slots)==='g'?'s':'g';return(
         <Sheet size="sm" title={t.title} onClose={closeModal}>
           <div className="menu">
@@ -1590,10 +1594,14 @@ export default function NinhoApp({householdId}:{householdId:string}){
           </div>
         </Sheet>
       )})()}
-      {modal==='dog'&&<DogModal dog={modalData} onClose={closeModal} onSave={updateDog} onDelete={removeDog}/>}
-      {modal==='routine'&&<RoutineModal routine={modalData.routine} dogName={modalData.dog.name} onClose={closeModal} onSave={(d,id)=>saveRoutine(modalData.dog.id,d,id)} onDelete={removeRoutine}/>}
+      {modal==='dog'&&<DogModal dog={modalData} saving={saving} onClose={closeModal} onSave={updateDog} onDelete={removeDog}/>}
+      {modal==='routine'&&<RoutineModal routine={modalData.routine} dogName={modalData.dog.name} saving={saving} onClose={closeModal} onSave={(d,id)=>saveRoutine(modalData.dog.id,d,id)} onDelete={removeRoutine}/>}
       {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy}/>}
-      {modal==='meeting'&&<MeetingModal names={names} weekStart={weekStart} onClose={closeModal} onSave={saveMeeting}/>}
+      {device.ready&&(!me||modal==='device')&&<DeviceIdentityModal names={names} current={me} required={!me}
+        onPick={w=>{device.setWho(w);if(modal==='device')closeModal();showToast(`Este aparelho agora é da ${firstName(names[w])}`)}}
+        onClose={closeModal}/>}
+      {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
+      {modal==='meeting'&&<MeetingModal names={names} weekStart={weekStart} saving={saving} onClose={closeModal} onSave={saveMeeting}/>}
     </>
   )
 }

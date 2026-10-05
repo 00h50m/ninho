@@ -1,14 +1,18 @@
 {
+  "id": "/",
   "name": "Ninho",
   "short_name": "Ninho",
-  "description": "Sistema operacional da sua casa",
-  "start_url": "/",
+  "description": "A casa da Giovanna e da Sabrina: tarefas, rodízio, cães e placar da semana",
+  "lang": "pt-BR",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
   "background_color": "#111110",
   "theme_color": "#111110",
   "orientation": "any",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
   ]
 }
