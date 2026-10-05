@@ -59,7 +59,7 @@ Branch: `fase-1-gamificacao`, criada a partir de `fase-0-estabilizacao`. **Depen
 ## Como desfazer
 
 - **App:** não fazer o merge, ou promover o deploy anterior na Vercel.
-- **Banco:** as colunas novas são opcionais e o app da Fase 0 funciona com a 005 aplicada. Para voltar o cálculo sem bônus, rode de novo `supabase/migrations/20261005120200_completion_rpcs.sql`: ele recria as duas funções de conclusão sem o bônus. As colunas e os dados continuam.
+- **Banco:** as colunas novas são opcionais e o app da Fase 0 funciona com a 005 aplicada. Para voltar o cálculo sem bônus, rode de novo `supabase/migrations/20261005120200_completion_rpcs.sql`: ele recria as duas funções de conclusão sem o bônus. As colunas e os dados continuam. Nesse modo, o XP das novas conclusões não entra no placar semanal (a 003 não grava quem ganhou nem o dia). Testado.
 
 ## Não implementado (fases seguintes)
 
