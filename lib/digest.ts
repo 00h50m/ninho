@@ -31,7 +31,7 @@ export function morningMessage(who: Who, names: Names, items: HItem[], nowHM = '
   const nextTitle = next.task ? next.task.title : next.dog!.title
   const bonus = pend.filter(i => canEarnOnTime(i, nowHM)).length
   let body = `Hoje: ${parts.join(' e ')}. Primeira: ${nextTitle}${next.scheduled_time ? ` às ${hhmm(next.scheduled_time)}` : ''}.`
-  if (bonus) body += ` ⚡ ${plural(bonus, 'item vale', 'itens valem')} ×1,5 se feito no horário.`
+  if (bonus) body += bonus === 1 ? ' ⚡ 1 item vale ×1,5 se feito no horário.' : ` ⚡ ${bonus} itens valem ×1,5 se feitos no horário.`
   return { title: `Bom dia, ${name}! ☀️`, body, tag: 'morning', url: '/' }
 }
 

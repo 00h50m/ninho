@@ -18,7 +18,11 @@ export function missingConfig(env = process.env): string[] {
 }
 
 export function createDeps(env = process.env): NotifyDeps {
-  const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, { auth: { persistSession: false, autoRefreshToken: false } })
+  // cache: 'no-store' — o Next.js 14 guarda fetch do servidor em cache; aqui os dados precisam ser sempre os de agora
+  const db = createClient(env.NEXT_PUBLIC_SUPABASE_URL!, env.SUPABASE_SERVICE_ROLE_KEY!, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }) },
+  })
   webpush.setVapidDetails(env.VAPID_SUBJECT!, env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!, env.VAPID_PRIVATE_KEY!)
   const send: Sender = async (sub, payload) => {
     try {

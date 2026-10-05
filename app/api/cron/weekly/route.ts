@@ -4,6 +4,7 @@ import { createDeps, cronAuthorized, missingConfig } from '@/lib/server/push'
 import { runWeekly } from '@/lib/server/notify'
 
 export const dynamic = 'force-dynamic'
+export const fetchCache = 'force-no-store'
 export const runtime = 'nodejs'
 
 export async function GET(req: Request) {

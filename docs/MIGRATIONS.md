@@ -10,6 +10,7 @@ As migrations ficam em `supabase/migrations/` e são a fonte da verdade do schem
 | `20261005120200_completion_rpcs.sql` | Funções transacionais e idempotentes: concluir/desfazer tarefa e rotinas (com XP no mesmo passo), XP total e sequência. |
 | `20261005120300_realtime_publication.sql` | Coloca as tabelas que o app escuta na publicação do Realtime. |
 | `20261006120000_gamification.sql` | **Fase 1.** XP com autoria (`earned_by`), dia (`activity_date`) e pontualidade (`on_time`), com backfill; bônus ×1,5 no horário dentro das funções de conclusão; placar semanal, sequências (casa ativa, casa em dia, por pessoa, recordes), estatísticas de conquistas e aposta da semana (`weekly_settings.bet`). |
+| `20261007120000_push_notifications.sql` | **Fase 2.** `push_subscriptions` (aparelhos com notificação, ligados à pessoa do aparelho) e `push_log` (no máximo um bom dia/resumo por aparelho por dia), `ninho_save_push_subscription`, e permissão do servidor para ler placar e sequências. |
 
 ## Regras seguidas
 

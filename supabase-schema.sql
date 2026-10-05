@@ -353,6 +353,32 @@ COMMENT ON FUNCTION public.ninho_local_date(p_ts timestamp with time zone) IS 'C
 
 
 --
+-- Name: ninho_save_push_subscription(uuid, text, text, text, text, text, boolean, boolean); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_save_push_subscription(p_household_id uuid, p_who text, p_endpoint text, p_p256dh text, p_auth text, p_user_agent text, p_morning boolean DEFAULT true, p_weekly boolean DEFAULT true) RETURNS uuid
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+declare v_id uuid;
+begin
+  if p_who is null or p_who not in ('g','s') then
+    raise exception 'NINHO_INVALID_PERSON: quem usa o aparelho deve ser g ou s' using errcode = '22023';
+  end if;
+  if coalesce(p_endpoint, '') !~ '^https://' then
+    raise exception 'NINHO_INVALID_ENDPOINT: endereço de notificação inválido' using errcode = '22023';
+  end if;
+  insert into public.push_subscriptions (household_id, who, endpoint, p256dh, auth, user_agent, morning, weekly, active, failures)
+  values (p_household_id, p_who, p_endpoint, p_p256dh, p_auth, left(p_user_agent, 300), p_morning, p_weekly, true, 0)
+  on conflict (endpoint) do update set
+    household_id = excluded.household_id, who = excluded.who, p256dh = excluded.p256dh, auth = excluded.auth,
+    user_agent = excluded.user_agent, morning = excluded.morning, weekly = excluded.weekly, active = true, failures = 0
+  returning id into v_id;
+  return v_id;
+end $$;
+
+
+--
 -- Name: ninho_set_updated_at(); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -681,6 +707,53 @@ CREATE TABLE public.puppy_accidents (
 
 
 --
+-- Name: push_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.push_log (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    subscription_id uuid NOT NULL,
+    kind text NOT NULL,
+    day date DEFAULT public.ninho_today() NOT NULL,
+    status text DEFAULT 'pending'::text NOT NULL,
+    detail text,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT push_log_kind_check CHECK ((kind = ANY (ARRAY['morning'::text, 'weekly'::text, 'test'::text]))),
+    CONSTRAINT push_log_status_check CHECK ((status = ANY (ARRAY['pending'::text, 'sent'::text, 'failed'::text, 'skipped'::text])))
+);
+
+
+--
+-- Name: push_subscriptions; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.push_subscriptions (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    household_id uuid NOT NULL,
+    who text NOT NULL,
+    endpoint text NOT NULL,
+    p256dh text NOT NULL,
+    auth text NOT NULL,
+    user_agent text,
+    morning boolean DEFAULT true NOT NULL,
+    weekly boolean DEFAULT true NOT NULL,
+    active boolean DEFAULT true NOT NULL,
+    failures integer DEFAULT 0 NOT NULL,
+    last_success_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT push_subscriptions_who_check CHECK ((who = ANY (ARRAY['g'::text, 's'::text])))
+);
+
+
+--
+-- Name: TABLE push_subscriptions; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.push_subscriptions IS 'Aparelhos com notificação ativada. who = pessoa do aparelho (identificação local, sem login).';
+
+
+--
 -- Name: task_completions; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -870,6 +943,30 @@ ALTER TABLE ONLY public.puppy_accidents
 
 
 --
+-- Name: push_log push_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.push_log
+    ADD CONSTRAINT push_log_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: push_subscriptions push_subscriptions_endpoint_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.push_subscriptions
+    ADD CONSTRAINT push_subscriptions_endpoint_key UNIQUE (endpoint);
+
+
+--
+-- Name: push_subscriptions push_subscriptions_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.push_subscriptions
+    ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: task_completions task_completions_completed_by_check; Type: CHECK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1016,6 +1113,27 @@ CREATE INDEX puppy_accidents_household_idx ON public.puppy_accidents USING btree
 
 
 --
+-- Name: push_log_once_per_day; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX push_log_once_per_day ON public.push_log USING btree (subscription_id, kind, day) WHERE (kind <> 'test'::text);
+
+
+--
+-- Name: push_log_subscription_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX push_log_subscription_idx ON public.push_log USING btree (subscription_id, created_at DESC);
+
+
+--
+-- Name: push_subscriptions_household_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX push_subscriptions_household_idx ON public.push_subscriptions USING btree (household_id) WHERE active;
+
+
+--
 -- Name: task_completions_household_date_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1090,6 +1208,13 @@ CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.households FOR EACH 
 --
 
 CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.profiles FOR EACH ROW EXECUTE FUNCTION public.ninho_set_updated_at();
+
+
+--
+-- Name: push_subscriptions ninho_set_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.push_subscriptions FOR EACH ROW EXECUTE FUNCTION public.ninho_set_updated_at();
 
 
 --
@@ -1186,6 +1311,22 @@ ALTER TABLE ONLY public.puppy_accidents
 
 
 --
+-- Name: push_log push_log_subscription_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.push_log
+    ADD CONSTRAINT push_log_subscription_id_fkey FOREIGN KEY (subscription_id) REFERENCES public.push_subscriptions(id) ON DELETE CASCADE;
+
+
+--
+-- Name: push_subscriptions push_subscriptions_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.push_subscriptions
+    ADD CONSTRAINT push_subscriptions_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
+
+
+--
 -- Name: task_completions task_completions_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1276,6 +1417,13 @@ CREATE POLICY allow_all_auth ON public.puppy_accidents TO authenticated USING (t
 
 
 --
+-- Name: push_subscriptions allow_all_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY allow_all_auth ON public.push_subscriptions TO authenticated USING (true) WITH CHECK (true);
+
+
+--
 -- Name: task_completions allow_all_auth; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1345,6 +1493,18 @@ ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.puppy_accidents ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: push_log; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.push_log ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: push_subscriptions; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: task_completions; Type: ROW SECURITY; Schema: public; Owner: -
