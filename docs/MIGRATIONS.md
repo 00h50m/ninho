@@ -9,6 +9,7 @@ As migrations ficam em `supabase/migrations/` e são a fonte da verdade do schem
 | `20261005120100_completions_and_xp_integrity.sql` | `completed_by` e `household_id` nas conclusões de rotina (com backfill), gatilhos que preenchem `household_id`, padrões de data em São Paulo, anulação (sem apagar) de XP duplicado antigo, índice único de XP, índices de leitura, `updated_at`. |
 | `20261005120200_completion_rpcs.sql` | Funções transacionais e idempotentes: concluir/desfazer tarefa e rotinas (com XP no mesmo passo), XP total e sequência. |
 | `20261005120300_realtime_publication.sql` | Coloca as tabelas que o app escuta na publicação do Realtime. |
+| `20261006120000_gamification.sql` | **Fase 1.** XP com autoria (`earned_by`), dia (`activity_date`) e pontualidade (`on_time`), com backfill; bônus ×1,5 no horário dentro das funções de conclusão; placar semanal, sequências (casa ativa, casa em dia, por pessoa, recordes), estatísticas de conquistas e aposta da semana (`weekly_settings.bet`). |
 
 ## Regras seguidas
 
@@ -33,7 +34,7 @@ As migrations ficam em `supabase/migrations/` e são a fonte da verdade do schem
    - **CLI do Supabase**:
      ```bash
      supabase link --project-ref <ref-do-projeto>
-     supabase db push        # aplica as 4 migrations em ordem
+     supabase db push        # aplica as migrations em ordem
      ```
      Como o banco atual não tem histórico de migrations, o `db push` aplica as quatro; elas são idempotentes.
 4. **Validação**: rode `supabase/scripts/post-migration-check.sql`. Tudo deve estar `ok`. Confira se o XP e a sequência de cada casa batem com o que o app mostrava (o XP pode ficar menor se havia duplicados).

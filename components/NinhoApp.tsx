@@ -383,6 +383,10 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
   .fab{bottom:calc(78px + var(--safe-b));right:16px;height:52px;width:52px;padding:0;justify-content:center}
   .fab b{display:none}
   .lg-only{display:none}
+  .ach-grid{grid-template-columns:1fr 1fr;gap:6px}
+  .ach{flex-direction:column;gap:6px;padding:9px}
+  .ach-ic{width:30px;height:30px;font-size:15px}
+  .ach-s{font-size:10.5px}
   .trt{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
   .tr .ib.desk{display:none}.tr .ib.mob{display:flex}
   .card{padding:14px}
