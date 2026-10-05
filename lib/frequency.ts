@@ -1,7 +1,7 @@
 // Regras de frequência atuais: diária, semanal (semana começa na segunda),
 // quinzenal (blocos fixos de 2 semanas), mensal (mês do calendário), pontual.
 import type { Doable } from './types'
-import { dayNum, monthStart, weekStartOf, addDays } from './dates'
+import { dayNum, dowOf, monthStart, weekStartOf, addDays } from './dates'
 
 const EPOCH_MON = dayNum('1970-01-05') // uma segunda-feira
 
@@ -37,9 +37,52 @@ export function doneInPeriod(x: Doable, today: string): boolean {
   return !!l && l >= periodStart(x.frequency, today)
 }
 
-/** Aparece em Hoje: ainda não feita no período, ou feita hoje (para poder desmarcar). */
+/** Segunda = 0 … domingo = 6 (a semana do Ninho começa na segunda). */
+const monIdx = (dow: number) => (dow + 6) % 7
+
+/**
+ * A tarefa vale neste dia?
+ * · diária com dias da semana: só nesses dias;
+ * · semanal/quinzenal com dias: a partir do primeiro desses dias no período;
+ * · pontual com data: a partir da data;
+ * · mensal e sem dias: qualquer dia.
+ */
+export function scheduledOn(x: Doable, date: string): boolean {
+  if (x.frequency === 'once') return !x.due_date || date >= x.due_date
+  const wd = x.weekdays
+  if (!wd || !wd.length || x.frequency === 'monthly') return true
+  if (x.frequency === 'daily') return wd.includes(dowOf(date))
+  const first = Math.min(...wd.map(monIdx))
+  return monIdx(dowOf(date)) >= first || (x.frequency === 'biweekly' && dayNum(date) - dayNum(periodStart(x.frequency, date)) >= 7)
+}
+
+/** Pulada (no período) ou deixada para amanhã (hoje). */
+export function skippedNow(x: Doable, today: string): boolean {
+  const s = x.skip
+  if (!s) return false
+  return s.kind === 'snooze' ? s.date === today : s.date >= periodStart(x.frequency, today) && s.date <= today
+}
+
+/** Aparece em Hoje: feita hoje (para poder desmarcar) ou do dia, não pulada e ainda não feita no período. */
 export function dueToday(x: Doable, today: string): boolean {
-  return !!x.completed_today || !doneInPeriod(x, today)
+  if (x.completed_today) return true
+  return scheduledOn(x, today) && !skippedNow(x, today) && !doneInPeriod(x, today)
+}
+
+/** Ao contrário de dueToday, só pela pausa: estaria em Hoje se não tivesse sido pulada/adiada. */
+export function pausedToday(x: Doable, today: string): boolean {
+  return !x.completed_today && skippedNow(x, today) && scheduledOn(x, today) && !doneInPeriod(x, today)
+}
+
+export const WEEKDAY_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+
+/** "seg, qua, sex" · "dias úteis" · "fim de semana" */
+export function weekdaysLabel(wd: number[] | null | undefined): string {
+  if (!wd || !wd.length || wd.length === 7) return ''
+  const s = [...wd].sort((a, b) => monIdx(a) - monIdx(b))
+  if (s.join() === '1,2,3,4,5') return 'dias úteis'
+  if (s.join() === '6,0') return 'fim de semana'
+  return s.map(d => WEEKDAY_SHORT[d]).join(', ')
 }
 
 export function lastLabel(d: string | null, today: string): string {

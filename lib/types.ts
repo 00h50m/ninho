@@ -18,7 +18,12 @@ export interface CompletionState {
   completion_id?: string | null
   /** Conclusões ANTES de hoje (mais recente primeiro), usadas pela divisão inteligente. */
   hist?: HistEntry[]
+  /** Pulada ou deixada para amanhã, valendo hoje (só tarefas). */
+  skip?: SkipInfo | null
 }
+
+/** snooze = deixar para amanhã (some só no dia); skip = pular (resolve o período, sem XP). */
+export interface SkipInfo { id: string, date: string, kind: 'snooze' | 'skip', by: Who | null }
 
 /** Uma conclusão anterior: data e quem fez (null = registro antigo sem autoria). */
 export interface HistEntry { d: string, by: Who | null }
@@ -35,6 +40,10 @@ export interface Task extends CompletionState {
   scheduled_time: string | null
   essential: boolean
   active: boolean
+  /** Dias da semana (0 = domingo … 6 = sábado). null = qualquer dia. */
+  weekdays?: number[] | null
+  /** Pontual: aparece a partir desta data. */
+  due_date?: string | null
 }
 
 export interface DogRoutine extends CompletionState {
@@ -89,7 +98,7 @@ export interface CompletionRow {
 }
 
 /** Qualquer coisa que pode ser concluída e tem frequência. */
-export type Doable = { frequency: string } & CompletionState
+export type Doable = { frequency: string, weekdays?: number[] | null, due_date?: string | null } & CompletionState
 
 /** Rotinas iguais de cães diferentes viram um item só em Hoje. */
 export interface DogItem {

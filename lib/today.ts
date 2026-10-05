@@ -37,11 +37,12 @@ export function buildDogItems(dogs: Dog[], today: string, slots: Slots): DogItem
   return Array.from(m.values())
 }
 
-export function groupToday(list: HItem[], nowHM: string) {
+export function groupToday(list: HItem[], nowHM: string, today?: string) {
   const g: Record<string, HItem[]> = {}
   list.forEach(t => {
     let k: string
-    if (t.frequency === 'daily') k = !t.scheduled_time ? 'any' : isLate(t, nowHM) ? 'late' : bucketOf(hhmm(t.scheduled_time))
+    if (today && t.task?.frequency === 'once' && t.task.due_date && t.task.due_date < today && !t.completed_today) k = 'late'
+    else if (t.frequency === 'daily') k = !t.scheduled_time ? 'any' : isLate(t, nowHM) ? 'late' : bucketOf(hhmm(t.scheduled_time))
     else k = GROUPS.some(x => x[0] === t.frequency) ? t.frequency : 'any'
     ;(g[k] = g[k] || []).push(t)
   })

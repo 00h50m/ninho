@@ -12,6 +12,7 @@ As migrations ficam em `supabase/migrations/` e são a fonte da verdade do schem
 | `20261006120000_gamification.sql` | **Fase 1.** XP com autoria (`earned_by`), dia (`activity_date`) e pontualidade (`on_time`), com backfill; bônus ×1,5 no horário dentro das funções de conclusão; placar semanal, sequências (casa ativa, casa em dia, por pessoa, recordes), estatísticas de conquistas e aposta da semana (`weekly_settings.bet`). |
 | `20261007120000_push_notifications.sql` | **Fase 2.** `push_subscriptions` (aparelhos com notificação, ligados à pessoa do aparelho) e `push_log` (no máximo um bom dia/resumo por aparelho por dia), `ninho_save_push_subscription`, e permissão do servidor para ler placar e sequências. |
 | `20261008120000_casa.sql` | **Fase 3.** `households.split_mode` (divisão inteligente ou rodízio fixo; padrão inteligente), `shopping_items` (lista de compras; item repetido não duplica, via `ninho_add_shopping_item`), `maintenance_items` + `maintenance_log` (manutenção recorrente, `ninho_complete_maintenance` com +3 XP e `ninho_undo_maintenance`), Realtime das tabelas novas. |
+| `20261009120000_rotina_flexivel.sql` | **Fase 4.** `tasks.weekdays` (dias da semana), `tasks.due_date` (pontual com data), `task_skips` (pular / deixar para amanhã) e `ninho_day_on_track` passa a ignorar tarefas fora do dia e puladas (não quebram a sequência "casa em dia"). |
 
 ## Regras seguidas
 

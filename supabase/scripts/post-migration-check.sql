@@ -25,7 +25,9 @@ begin
     -- Fase 2 (migration 006)
     ('push_subscriptions','endpoint'), ('push_log','kind'),
     -- Fase 3 (migration 007)
-    ('households','split_mode'), ('shopping_items','title'), ('maintenance_items','next_due'), ('maintenance_log','done_on')
+    ('households','split_mode'), ('shopping_items','title'), ('maintenance_items','next_due'), ('maintenance_log','done_on'),
+    -- Fase 4 (migration 008)
+    ('tasks','weekdays'), ('tasks','due_date'), ('task_skips','kind')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -41,7 +43,9 @@ begin
                                -- Fase 2 (migration 006)
                                'ninho_save_push_subscription',
                                -- Fase 3 (migration 007)
-                               'ninho_add_shopping_item','ninho_next_due','ninho_complete_maintenance','ninho_undo_maintenance']) as f loop
+                               'ninho_add_shopping_item','ninho_next_due','ninho_complete_maintenance','ninho_undo_maintenance',
+                               -- Fase 4 (migration 008)
+                               'ninho_task_on_day']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';
@@ -105,7 +109,7 @@ begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime' and not puballtables) then
     for r in select unnest(array['tasks','task_completions','dogs','dog_routines','dog_completions','weekly_settings',
                                  'weekly_meetings','profiles','xp_history','puppy_accidents',
-                                 'shopping_items','maintenance_items','maintenance_log','households']) as t loop
+                                 'shopping_items','maintenance_items','maintenance_log','households','task_skips']) as t loop
       insert into ninho_check("check", status, detalhe)
       select 'realtime ' || r.t,
              case when exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = r.t) then 'ok' else 'FALHA' end, '';

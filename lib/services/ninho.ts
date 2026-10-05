@@ -5,6 +5,7 @@ import { NinhoError, logError } from '@/lib/errors'
 import { addDays } from '@/lib/dates'
 import type { Accident, CompletionRow, Dog, Energy, HistoryWeek, Meeting, Names, Task, Who } from '@/lib/types'
 import { DEFAULT_NAMES } from '@/lib/constants'
+import type { SkipRow } from '@/lib/build'
 import { EMPTY_SCORES, EMPTY_STREAKS, type AchievementStats, type Streaks, type WeeklyScores } from '@/lib/gamification'
 
 type Res<T> = { data: T | null, error: unknown }
@@ -49,7 +50,24 @@ export async function loadTasks(householdId: string, today: string) {
   const old = onceIds.length
     ? await run('carregar conclusões antigas', supabase.from('task_completions').select('id,task_id,date,completed_by').eq('household_id', householdId).in('task_id', onceIds).lt('date', since))
     : []
-  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])] }
+  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])], skips: await loadSkips(householdId, today) }
+}
+
+/** Pular/adiar do último mês (o período mais longo). Sem a migration 008, segue sem pausas. */
+export async function loadSkips(householdId: string, today: string): Promise<SkipRow[]> {
+  const r = await supabase.from('task_skips').select('id,task_id,date,kind,skipped_by').eq('household_id', householdId).gte('date', addDays(today, -31))
+  if (r.error) { logError('carregar tarefas puladas', r.error); return [] }
+  return (r.data || []) as SkipRow[]
+}
+
+/** Pular (skip) ou deixar para amanhã (snooze). Um registro por tarefa por dia. */
+export async function skipTask(householdId: string, taskId: string, date: string, kind: 'snooze' | 'skip', by: Who | null): Promise<SkipRow> {
+  return await run(kind === 'skip' ? 'pular tarefa' : 'adiar tarefa', supabase.from('task_skips')
+    .upsert({ household_id: householdId, task_id: taskId, date, kind, skipped_by: by }, { onConflict: 'task_id,date' }).select('id,task_id,date,kind,skipped_by').single()) as SkipRow
+}
+
+export async function unskipTask(id: string) {
+  await run('desfazer pausa', supabase.from('task_skips').delete().eq('id', id).select('id'))
 }
 
 export async function loadDogs(householdId: string, today: string) {
