@@ -411,7 +411,10 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 /* ── Fase 5: Telegram e IA ── */
 .tg-code{font-size:12.5px;color:var(--sub);background:var(--sf2);border-radius:var(--rs);padding:10px 12px;margin:4px 0 8px;line-height:1.5}
 .tg-code code{font-family:'DM Mono',monospace;color:var(--tx)}
-.tg-code .lnk{background:none;border:none;color:var(--green);font-size:12.5px;font-weight:500;margin-left:6px}
+.tg-code .lnk{background:none;border:none;color:var(--green);font-size:12.5px;font-weight:500}
+.tg-code code{word-break:break-all}
+.tg-act{margin-top:8px;display:flex;gap:8px}
+.tg-person+.tg-person{border-top:1px solid var(--bd);margin-top:4px}
 .aibox{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--bd)}
 .ai-wait{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub);padding:10px 0}
 .ai-tip{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.45;padding:8px 0;border-top:1px solid var(--bd)}
@@ -736,7 +739,9 @@ function MeetingModal({householdId,names,weekStart,saving,onClose,onSave}:{house
 // ── APP ─────────────────────────────────────────────────
 type ToastState={kind:'ok'|'err',msg:string,undo?:()=>void,retry?:()=>void}
 
-export default function NinhoApp({householdId}:{householdId:string}){
+export interface Account { who:Who, email:string, onSignOut:()=>void }
+
+export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const [tab,setTabState]=useState('today')
   const [modal,setModal]=useState<string|null>(null)
   const [modalData,setModalData]=useState<any>(null)
@@ -757,7 +762,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
   const {now,today,nowHM,hour,weekStart,todayIndex}=useHomeClock()
   const device=useDeviceIdentity()
-  const me=device.who
+  // Com login, quem fez = a conta; sem login (versão antiga), a escolha do aparelho
+  const me=account?.who??device.who
   const data=useNinhoData(householdId,today,weekStart,e=>showError(e))
   const {tasks,setTasks,dogs,setDogs,settings,setSettings,xp,setXp,streak,names,setNames,accidents,setAccidents,game}=data
   const casa=useCasa(householdId,today)
@@ -1643,8 +1649,15 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {tab==='settings'&&<div className="scr narrow">
           <div className="sh"><div><h2>Ajustes</h2><p>Integrantes e guia de uso</p></div></div>
           <div className="card" style={{marginBottom:14}}>
-            <div className="slbl">Este aparelho</div>
-            <div className="field-row">
+            <div className="slbl">{account?'Sua conta':'Este aparelho'}</div>
+            {account?<div className="field-row">
+              <div className={`av av-${account.who}`}>{initials(names[account.who])}</div>
+              <div style={{minWidth:0}}>
+                <div className="row-t">{firstName(names[account.who])}</div>
+                <div className="row-s" style={{overflow:'hidden',textOverflow:'ellipsis'}}>{account.email} · registra quem concluiu cada tarefa</div>
+              </div>
+              <button className="btn btn-g" style={{marginLeft:'auto'}} onClick={()=>{if(confirm('Sair da conta neste aparelho?'))account.onSignOut()}}>Sair</button>
+            </div>:<div className="field-row">
               {me&&<div className={`av av-${me}`}>{initials(names[me])}</div>}
               <div style={{minWidth:0}}>
                 <div className="row-t">{me?`Usado por ${firstName(names[me])}`:'Ninguém escolhido ainda'}</div>
@@ -1652,7 +1665,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 {!device.persisted&&<div className="row-s" style={{color:'var(--amb)'}}>Este navegador não deixou salvar a escolha; ela vale até fechar o app.</div>}
               </div>
               <button className="btn btn-g" style={{marginLeft:'auto'}} onClick={()=>openModal('device')}>Trocar</button>
-            </div>
+            </div>}
           </div>
           <NotificationsCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
             onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
@@ -1685,7 +1698,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 <li><b>Grupos por horário:</b> ⚠ Atrasadas (diárias com horário que já passou), 🌅 Manhã, ☀️ Tarde, 🌙 Noite, a qualquer hora e, por fim, as do período (até o fim da semana, quinzena ou mês) e as pontuais.</li>
                 <li><b>▸ próxima</b> destaca a próxima tarefa com horário.</li>
                 <li>Toque na tarefa para concluir. Aparece <b>+XP · Desfazer</b> por alguns segundos. As concluídas ficam recolhidas no fim da coluna, com <b>quem concluiu</b> (conclusões anteriores a esta versão aparecem como “não identificado”).</li>
-                <li><b>Este aparelho</b> (em Ajustes) diz quem está usando o celular; é isso que fica registrado ao concluir. Ver a coluna da outra pessoa não muda isso. Se o banco recusar uma alteração, o app desfaz na tela e mostra o aviso com “Tentar novamente”.</li>
+                <li><b>Sua conta</b> (e-mail e senha) diz quem está usando o celular; é isso que fica registrado ao concluir. Ver a coluna da outra pessoa não muda isso. Se o banco recusar uma alteração, o app desfaz na tela e mostra o aviso com “Tentar novamente”.</li>
                 <li>No computador, <b>⇄</b> passa para a outra e <b>✎</b> edita. No celular, tudo isso fica no <b>⋯</b>.</li>
                 <li>Indicadores do topo: % do dia, estado da <b>Casa</b> (quanto das diárias ainda falta: organizada, atenção ou alerta), nível/XP e sequência.</li>
               </ul>
@@ -1759,7 +1772,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
             </div></details>
             <details><summary>💬 Telegram e ✦ IA</summary><div className="gb">
               <ul>
-                <li><b>Telegram:</b> em Ajustes › Telegram › <b>Conectar</b> (cada uma no próprio celular). O bom dia e o resumo de domingo chegam lá também.</li>
+                <li><b>Telegram:</b> em Ajustes › Telegram: <b>Conectar</b> liga o seu; <b>Gerar convite</b> cria um link para mandar à outra pelo WhatsApp. O bom dia e o resumo de domingo chegam lá também.</li>
                 <li>Comandos: <b>/hoje</b> (o que é seu, com botões ✓ para concluir), <b>/feito louça</b>, <b>/compras</b> (ver a lista), <b>/compras leite, 2 kg arroz</b> ou <b>+leite</b> (adicionar), <b>/dicas</b> e <b>/sair</b>.</li>
                 <li><b>✦ IA:</b> na Reunião semanal (e no /dicas), a IA lê a semana (placar, quem fez o quê, puladas, o que pesou na reunião passada) e sugere de 3 a 5 ajustes. São sugestões, não regras. Limite de 6 pedidos por dia. O resumo da semana é enviado à Anthropic para gerar as sugestões.</li>
               </ul>
@@ -1827,7 +1840,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
       {modal==='dog'&&<DogModal dog={modalData} saving={saving} onClose={closeModal} onSave={updateDog} onDelete={removeDog}/>}
       {modal==='routine'&&<RoutineModal routine={modalData.routine} dogName={modalData.dog.name} saving={saving} onClose={closeModal} onSave={(d,id)=>saveRoutine(modalData.dog.id,d,id)} onDelete={removeRoutine}/>}
       {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy}/>}
-      {device.ready&&(!me||modal==='device')&&<DeviceIdentityModal names={names} current={me} required={!me}
+      {device.ready&&!account&&(!me||modal==='device')&&<DeviceIdentityModal names={names} current={me} required={!me}
         onPick={w=>{device.setWho(w);if(modal==='device')closeModal();showToast(`Este aparelho agora é da ${firstName(names[w])}`)}}
         onClose={closeModal}/>}
       {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
