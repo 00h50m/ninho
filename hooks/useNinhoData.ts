@@ -15,6 +15,7 @@ import { byTime } from '@/lib/today'
 import { DEFAULT_NAMES } from '@/lib/constants'
 import { logError, toNinhoError, type NinhoError } from '@/lib/errors'
 import type { Accident, CompletionRow, Dog, Names, Settings, Task } from '@/lib/types'
+import { EMPTY_SCORES, EMPTY_STREAKS } from '@/lib/gamification'
 
 type Status = 'loading' | 'ready' | 'error'
 type Row = Record<string, any>
@@ -43,6 +44,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   const [streak, setStreak] = useState(0)
   const [names, setNames] = useState<Names>(DEFAULT_NAMES)
   const [accidents, setAccidents] = useState<Accident[]>([])
+  const [game, setGame] = useState<api.Gamification>({ scores: EMPTY_SCORES, lastWeek: EMPTY_SCORES, lastWeekBet: null, streaks: EMPTY_STREAKS, stats: {} })
   const [status, setStatus] = useState<Status>('loading')
   const [loadError, setLoadError] = useState<NinhoError | null>(null)
 
@@ -71,8 +73,11 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   }, [householdId])
 
   const refreshStats = useCallback(async () => {
-    const s = await api.loadStats(householdId, ctx.current.today)
-    setXp(s.xp); setStreak(s.streak)
+    const [s, g] = await Promise.all([
+      api.loadStats(householdId, ctx.current.today),
+      api.loadGamification(householdId, ctx.current.today, ctx.current.weekStart),
+    ])
+    setXp(s.xp); setStreak(s.streak); setGame(g)
   }, [householdId])
 
   const reloadNames = useCallback(async () => {
@@ -86,7 +91,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
 
   const reloadSettings = useCallback(async () => {
     const s = await api.loadSettings(householdId, ctx.current.weekStart)
-    setSettings(s || { energy: 'medium', survival: false })
+    setSettings(s || { energy: 'medium', survival: false, bet: null })
   }, [householdId])
 
   const loadAll = useCallback(async () => {
@@ -154,7 +159,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
     dogs: () => later('dog', reloadDogs),
     settings: (p) => {
       const r = p.new as Row
-      if (r?.week_start === ctx.current.weekStart) setSettings({ energy: r.energy, survival: !!r.survival })
+      if (r?.week_start === ctx.current.weekStart) setSettings({ energy: r.energy, survival: !!r.survival, bet: r.bet ?? null })
     },
     names: () => later('names', reloadNames),
     stats: () => later('stats', refreshStats),
@@ -202,6 +207,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
 
   return {
     status, loadError, loadAll,
+    game,
     tasks, setTasks, dogs, setDogs, settings, setSettings, xp, setXp, streak, names, setNames, accidents, setAccidents,
     refreshStats, reloadTasks, reloadDogs, reloadAccidents, meetingTick,
     /** Registra uma conclusão criada por este aparelho (para reconhecer o DELETE depois). */

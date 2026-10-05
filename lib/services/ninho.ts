@@ -5,6 +5,7 @@ import { NinhoError, logError } from '@/lib/errors'
 import { addDays } from '@/lib/dates'
 import type { Accident, CompletionRow, Dog, Energy, HistoryWeek, Meeting, Names, Task, Who } from '@/lib/types'
 import { DEFAULT_NAMES } from '@/lib/constants'
+import { EMPTY_SCORES, EMPTY_STREAKS, type AchievementStats, type Streaks, type WeeklyScores } from '@/lib/gamification'
 
 type Res<T> = { data: T | null, error: unknown }
 
@@ -62,7 +63,7 @@ export async function loadDogs(householdId: string, today: string) {
 
 export async function loadSettings(householdId: string, weekStart: string) {
   const row = await run('carregar ajustes da semana', supabase.from('weekly_settings').select('*').eq('household_id', householdId).eq('week_start', weekStart).maybeSingle())
-  return row ? { energy: (row as any).energy as Energy, survival: !!(row as any).survival } : null
+  return row ? { energy: (row as any).energy as Energy, survival: !!(row as any).survival, bet: (row as any).bet ?? null } : null
 }
 
 export async function loadNames(householdId: string): Promise<Names | null> {
@@ -99,7 +100,7 @@ export async function loadHistory(householdId: string, weekStarts: string[]): Pr
 
 // ── Conclusões (transacionais, no banco) ───────────────────────────────
 
-export interface CompleteTaskResult { created: boolean, completed_by: Who | null, completion_id: string, xp: number }
+export interface CompleteTaskResult { created: boolean, completed_by: Who | null, completion_id: string, xp: number, base_xp?: number, on_time?: boolean }
 
 export async function completeTask(taskId: string, date: string, by: Who): Promise<CompleteTaskResult> {
   return await run('concluir tarefa', supabase.rpc('ninho_complete_task', { p_task_id: taskId, p_date: date, p_by: by })) as CompleteTaskResult
@@ -110,7 +111,7 @@ export async function uncompleteTask(taskId: string, date: string): Promise<{ re
 }
 
 export interface CompleteRoutinesResult {
-  created: number, xp_added: number
+  created: number, xp_added: number, on_time?: boolean
   completions: Array<{ routine_id: string, completion_id: string, completed_by: Who | null }>
 }
 
@@ -182,4 +183,42 @@ export async function updateName(householdId: string, role: Who, name: string) {
 
 export async function saveMeeting(householdId: string, weekStart: string, m: Meeting) {
   await run('salvar reunião', supabase.from('weekly_meetings').upsert({ household_id: householdId, week_start: weekStart, ...m }, { onConflict: 'household_id,week_start' }))
+}
+
+// ── Gamificação (migration 005) ───────────────────────────────────────
+
+export interface Gamification {
+  scores: WeeklyScores
+  lastWeek: WeeklyScores
+  lastWeekBet: string | null
+  streaks: Streaks
+  stats: AchievementStats
+}
+
+const normScores = (r: any): WeeklyScores => ({
+  g: { ...EMPTY_SCORES.g, ...(r?.g || {}) },
+  s: { ...EMPTY_SCORES.s, ...(r?.s || {}) },
+  unknown: { ...EMPTY_SCORES.unknown, ...(r?.unknown || {}) },
+})
+
+export async function loadGamification(householdId: string, today: string, weekStart: string): Promise<Gamification> {
+  const lastWeekStart = addDays(weekStart, -7)
+  const [scores, lastWeek, streaks, stats, last] = await Promise.all([
+    run('carregar placar', supabase.rpc('ninho_weekly_scores', { p_household_id: householdId, p_week_start: weekStart })),
+    run('carregar placar anterior', supabase.rpc('ninho_weekly_scores', { p_household_id: householdId, p_week_start: lastWeekStart })),
+    run('carregar sequências', supabase.rpc('ninho_streaks', { p_household_id: householdId, p_today: today })),
+    run('carregar conquistas', supabase.rpc('ninho_achievement_stats', { p_household_id: householdId, p_today: today })),
+    run('carregar aposta anterior', supabase.from('weekly_settings').select('bet').eq('household_id', householdId).eq('week_start', lastWeekStart).maybeSingle()),
+  ])
+  return {
+    scores: normScores(scores),
+    lastWeek: normScores(lastWeek),
+    lastWeekBet: (last as any)?.bet ?? null,
+    streaks: { ...EMPTY_STREAKS, ...((streaks as any) || {}) },
+    stats: (stats as AchievementStats) || {},
+  }
+}
+
+export async function saveBet(householdId: string, weekStart: string, bet: string | null) {
+  await run('salvar aposta', supabase.from('weekly_settings').upsert({ household_id: householdId, week_start: weekStart, bet }, { onConflict: 'household_id,week_start' }))
 }

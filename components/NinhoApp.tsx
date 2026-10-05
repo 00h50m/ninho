@@ -11,6 +11,11 @@ import { completedByLabel } from '@/lib/completions'
 import { logError, toNinhoError, type NinhoError } from '@/lib/errors'
 import * as api from '@/lib/services/ninho'
 import { createPendingGuard } from '@/lib/pending'
+import { canEarnOnTime, evaluate, newlyUnlocked, xpWithBonus, TIER_NAMES, type AchievementState } from '@/lib/gamification'
+import { Scoreboard } from '@/components/gamification/Scoreboard'
+import { StreaksCard } from '@/components/gamification/StreaksCard'
+import { Achievements } from '@/components/gamification/Achievements'
+import { BetModal } from '@/components/gamification/BetModal'
 import { Ring } from '@/components/ui/Ring'
 import { Sheet } from '@/components/ui/Sheet'
 import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
@@ -263,6 +268,48 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .toast{position:fixed;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);background:#132a20;border:1px solid var(--gbdr);border-radius:12px;padding:10px 12px 10px 16px;font-size:13px;color:var(--green);display:flex;align-items:center;gap:12px;z-index:100;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fu .2s ease}
 .toast-m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toast button{background:none;border:none;color:var(--tx);font-weight:500;font-size:13px;padding:2px 6px;text-decoration:underline;text-underline-offset:3px;flex-shrink:0}
+/* ── gamificação ── */
+.xp.bonus{box-shadow:inset 0 0 0 1px currentColor}
+.sb{display:block;width:100%;text-align:left}
+button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
+.sb .slbl .lnk{margin-left:auto}
+.sb-row{display:flex;align-items:flex-end;gap:10px}
+.sb-side{flex:1;min-width:0}
+.sb-s{text-align:right}
+.sb-name{font-size:13px;color:var(--mu);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-xp{line-height:1.1;margin-top:2px}.sb-xp b{font-size:28px;font-weight:400;letter-spacing:-.03em}.sb-xp small{font-size:12px;color:var(--sub);margin-left:4px}
+.sb-g .sb-xp b{color:var(--green)}.sb-s .sb-xp b{color:var(--pur)}
+.sb-side.lead .sb-name{color:var(--tx)}
+.sb-vs{color:var(--faint);font-size:14px;padding-bottom:6px}
+.sb-meta{font-size:11.5px;color:var(--sub);margin-top:2px}
+.sb-bar{margin:10px 0 10px}
+.sb-bet{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--amb)}
+.sb-bet .lnk{margin-left:auto;background:none;border:none;color:var(--green);font-size:12px;font-weight:500}
+.sb-foot,.sb-prev{font-size:12px;color:var(--sub);margin-top:8px;line-height:1.5}
+.sb-prev{padding-top:8px;border-top:1px solid var(--bd)}
+.sb.compact .sb-xp b{font-size:22px}
+.stk{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--bd)}
+.slbl+.stk{border-top:none;padding-top:0}
+.stk-ic{width:34px;height:34px;border-radius:10px;background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;filter:grayscale(.6)}
+.stk-ic.hot{background:var(--abg);filter:none}
+.stk-t{display:block;font-size:14px}.stk-s{display:block;font-size:12px;color:var(--sub)}
+.stk-n{text-align:right;flex-shrink:0;white-space:nowrap}.stk-n b{font-size:22px;font-weight:400}.stk-n small{font-size:11.5px;color:var(--sub);margin-left:3px}
+.stk-best{display:block;font-size:11px;color:var(--amb);font-family:'DM Mono',monospace}
+.stk-note{font-size:12px;color:var(--sub);margin-top:10px;line-height:1.5}
+.ach-who{display:inline-flex;margin-bottom:12px}
+.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:8px}
+.ach{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--bd);border-radius:var(--rs);min-width:0}
+.ach-ic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--sf2);filter:grayscale(1);opacity:.55}
+.ach.t1 .ach-ic{filter:none;opacity:1;background:#3a2414;box-shadow:inset 0 0 0 2px #b0703c}
+.ach.t2 .ach-ic{filter:none;opacity:1;background:#2a2d31;box-shadow:inset 0 0 0 2px #aeb6bf}
+.ach.t3 .ach-ic{filter:none;opacity:1;background:#3a300c;box-shadow:inset 0 0 0 2px #e2b93b}
+.ach-body{min-width:0;flex:1}
+.ach-n{display:block;font-size:13px;font-weight:500;line-height:1.3}
+.ach-tier{display:block;font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;margin-top:1px}
+.ach.t1 .ach-tier{color:#d08a50}.ach.t2 .ach-tier{color:#c9d1da}.ach.t3 .ach-tier{color:#e9c552}
+.ach-bar{display:block;height:4px;border-radius:99px;background:var(--sf3);overflow:hidden;margin-top:6px}
+.ach-bar span{display:block;height:100%;background:var(--amb);border-radius:99px}
+.ach-s{display:block;font-size:11px;color:var(--sub);margin-top:4px}
 .toast.err{background:#2a120b;border-color:var(--cbdr);color:#ffb59a;width:min(460px,calc(100vw - 32px))}
 .toast-m{white-space:normal;flex:1 1 auto;min-width:0;line-height:1.4}
 .toast .tx{text-decoration:none;color:var(--sub);padding:2px 4px}
@@ -614,12 +661,27 @@ export default function NinhoApp({householdId}:{householdId:string}){
   const [pending,setPending]=useState<Set<string>>(new Set())
   const guard=useRef(createPendingGuard(setPending)).current
   const toastTimer=useRef<any>(null)
+  const toastRef=useRef<ToastState|null>(null)
 
   const {now,today,nowHM,hour,weekStart,todayIndex}=useHomeClock()
   const device=useDeviceIdentity()
   const me=device.who
   const data=useNinhoData(householdId,today,weekStart,e=>showError(e))
-  const {tasks,setTasks,dogs,setDogs,settings,setSettings,xp,setXp,streak,names,setNames,accidents,setAccidents}=data
+  const {tasks,setTasks,dogs,setDogs,settings,setSettings,xp,setXp,streak,names,setNames,accidents,setAccidents,game}=data
+
+  // Nova conquista de quem usa o aparelho: avisa quando sobe de nível nesta sessão
+  const lastAch=useRef<{who:Who,list:AchievementState[]}|null>(null)
+  useEffect(()=>{
+    if(!me||data.status!=='ready')return
+    const now=evaluate(game.stats[me])
+    if(lastAch.current?.who===me){
+      const up=newlyUnlocked(lastAch.current.list,now)[0]
+      // não cobre o "Desfazer" que acabou de aparecer
+      if(up)setTimeout(()=>showToast(`🏅 Nova conquista: ${up.def.name} (${TIER_NAMES[up.tier-1]})`),toastRef.current?.undo?4600:0)
+    }
+    lastAch.current={who:me,list:now}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[game.stats,me,data.status])
 
   // Preferências locais: aba e coluna visualizada no celular.
   // A coluna visualizada NÃO muda quem está usando o aparelho.
@@ -647,6 +709,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
   },[tab,weekStart,data.meetingTick,householdId])
 
   // ── TOASTS ────────────────────────────────────────────
+  toastRef.current=toast
   function showToast(msg:string,undo?:()=>void){setToast({kind:'ok',msg,undo});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),undo?4500:2600)}
   function showError(e:NinhoError,retry?:()=>void){
     const r=e.retryable?retry:undefined
@@ -669,7 +732,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
     const by=requireMe();if(!by)return
     const was=!!t.completed_today
     const before:Partial<Task>={completed_today:t.completed_today,completed_by_today:t.completed_by_today,completion_id:t.completion_id}
-    const delta=was?-XPW[t.weight]:XPW[t.weight]
+    const delta=was?-XPW[t.weight]:xpWithBonus(XPW[t.weight],canEarnOnTime(t,nowHM))
     await withPending(['task:'+t.id],async()=>{
       // Atualização otimista: o check responde na hora e volta atrás se o banco recusar
       patchTask(t.id,{completed_today:!was,completed_by_today:was?null:by})
@@ -684,7 +747,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
           patchTask(t.id,{completed_by_today:r.completed_by??null,completion_id:r.completion_id})
           data.rememberCompletion(r.completion_id,'task',t.id,today)
           const done={...t,completed_today:true,completed_by_today:r.completed_by,completion_id:r.completion_id}
-          if(r.created)showToast(`+${r.xp} XP · ${t.title}`,()=>{setToast(null);toggleTask(done)})
+          if(r.created)showToast(`+${r.xp} XP${r.on_time?' ⚡ no horário':''} · ${t.title}`,()=>{setToast(null);toggleTask(done)})
           else showToast(`Já estava concluída por ${completedByLabel(r.completed_by,names)}`)
         }
       }catch(e){
@@ -710,7 +773,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
           patchRoutines(new Map(r.completions.map(c=>[c.routine_id,{completed_by_today:c.completed_by??null,completion_id:c.completion_id}])))
           r.completions.forEach(c=>data.rememberCompletion(c.completion_id,'dog',c.routine_id,today))
           const doneList=list.map(x=>({...x,completed_today:true}))
-          if(r.created>0)showToast(`+${r.xp_added} XP · ${label||list[0].title}`,()=>{setToast(null);markDogs(doneList,false)})
+          if(r.created>0)showToast(`+${r.xp_added} XP${r.on_time?' ⚡ no horário':''} · ${label||list[0].title}`,()=>{setToast(null);markDogs(doneList,false)})
           else showToast('Já estava concluída')
         }else{
           await api.uncompleteDogRoutines(ids,today)
@@ -848,6 +911,10 @@ export default function NinhoApp({householdId}:{householdId:string}){
     catch(e){setNames(n=>({...n,[role]:prev}));showError(toNinhoError(e,'atualizar nome'),()=>updateName(role,v))}
   }
 
+  function saveBet(bet:string){
+    save('salvar aposta',async()=>{await api.saveBet(householdId,weekStart,bet);setSettings(p=>({...p,bet}))},'Aposta da semana salva!')
+  }
+
   function saveMeeting(m:Meeting){
     save('salvar reunião',async()=>{await api.saveMeeting(householdId,weekStart,m);if(tab==='week')await loadHistory()},'Reunião salva!')
   }
@@ -930,7 +997,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
             {t.completed_today&&<span className="tag-by" title="Quem concluiu">✓ {completedByLabel(t.completed_by_today,names)}</span>}
           </div>
         </div>
-        <span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>
+        {canEarnOnTime(t,nowHM)
+          ?<span className={`xp xp-${wCls(t.weight)} bonus`} title={`Até ${hhmm(t.scheduled_time)}: XP ×1,5`}>+{xpWithBonus(XPW[t.weight],true)}⚡</span>
+          :<span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>}
         {actions&&<button className="ib desk" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
         {actions&&<button className="ib desk" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
         {actions&&<button className="ib mob" onClick={()=>openModal('taskmenu',t)} aria-label={`Opções de ${t.title}`}>⋯</button>}
@@ -957,7 +1026,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
             {it.completed_today&&<span className="tag-by" title="Quem concluiu">✓ {by}</span>}
           </div>
         </div>
-        <span className="xp xp-l">+{it.parts.length}</span>
+        {canEarnOnTime(it,nowHM)
+          ?<span className="xp xp-l bonus" title={`Até ${hhmm(it.scheduled_time)}: XP ×1,5`}>+{xpWithBonus(1,true)*it.parts.length}⚡</span>
+          :<span className="xp xp-l">+{it.parts.length}</span>}
       </div>
     )
   }
@@ -1116,7 +1187,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <div className="bar"><div className="barf" style={{width:xpPct+'%',background:'var(--pur)'}}/></div>
             </button>
             <div className="stat">
-              <div className="stat-l">Sequência</div>
+              <div className="stat-l">Sequência{game.streaks.house_best>0&&<span className="lg-only"> · recorde {game.streaks.house_best}</span>}</div>
               <div className="stat-v">🔥 {streak}<small>dia{streak!==1?'s':''}</small></div>
               <div className="week-dots">{weekDots(todayIndex,streak,doneToday>0).map((c,i)=><div key={i} className={`wd ${c}`}/>)}</div>
             </div>
@@ -1167,6 +1238,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 })}
                 {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
               </div>
+              <Scoreboard compact scores={game.scores} lastWeek={game.lastWeek} lastWeekBet={game.lastWeekBet} bet={settings.bet} names={names} me={me} onOpen={()=>setTab('week')}/>
               <div className="card">
                 <div className="slbl">Atalhos</div>
                 <div className="acts">
@@ -1244,6 +1316,15 @@ export default function NinhoApp({householdId}:{householdId:string}){
           <div className="sh">
             <div><h2>Semana</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
             <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button></div>
+          </div>
+          <div className="wgrid" style={{marginBottom:14}}>
+            <div className="col">
+              <Scoreboard scores={game.scores} lastWeek={game.lastWeek} lastWeekBet={game.lastWeekBet} bet={settings.bet} names={names} me={me} onEditBet={()=>openModal('bet')}/>
+              <StreaksCard streaks={game.streaks} names={names} me={me}/>
+            </div>
+            <div className="col">
+              <Achievements stats={game.stats} names={names} me={me}/>
+            </div>
           </div>
           <div className="wgrid">
             <div className="col">
@@ -1455,9 +1536,12 @@ export default function NinhoApp({householdId}:{householdId:string}){
             </div></details>
             <details><summary>🏆 XP, níveis e sequência</summary><div className="gb">
               <ul>
-                <li>Cada tarefa vale pelo esforço: <span className="xp xp-l">+1</span> leve, <span className="xp xp-m">+2</span> médio, <span className="xp xp-h">+3</span> pesado. Rotina de cão vale +1 por cão. O XP é do casal.</li>
+                <li>Cada tarefa vale pelo esforço: <span className="xp xp-l">+1</span> leve, <span className="xp xp-m">+2</span> médio, <span className="xp xp-h">+3</span> pesado. Rotina de cão vale +1 por cão. O nível é do casal.</li>
+                <li><b>⚡ Bônus no horário:</b> diária com horário feita até o horário vale ×1,5 (leve 2, média 3, pesada 5). Feita atrasada no mesmo dia vale o normal: ninguém perde pontos. O ⚡ aparece no XP enquanto ainda dá tempo.</li>
+                <li><b>🏆 Placar da semana:</b> o XP de cada uma de segunda a domingo, com a aposta simbólica (troque em Semana). Conta pelo aparelho identificado de quem concluiu.</li>
+                <li><b>🔥 Sequências:</b> casa ativa (algo feito no dia), casa em dia (todas as essenciais diárias feitas) e a de cada uma, com recordes. A de hoje só entra depois do primeiro check; ninguém perde a sequência no meio do dia.</li>
+                <li><b>🏅 Conquistas:</b> bronze, prata e ouro por cômodo, cães, pontualidade, madrugada, tarefas pesadas, faxina relâmpago (várias tarefas em 1 hora) e recorde de sequência.</li>
                 <li>Níveis: {LEVELS.map(l=>`${l.n} (${l.min})`).join(' · ')}.</li>
-                <li>🔥 Sequência: dias seguidos com pelo menos uma tarefa concluída.</li>
               </ul>
             </div></details>
             <details><summary>🔣 Símbolos</summary><div className="gb">
@@ -1505,6 +1589,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
       {device.ready&&(!me||modal==='device')&&<DeviceIdentityModal names={names} current={me} required={!me}
         onPick={w=>{device.setWho(w);if(modal==='device')closeModal();showToast(`Este aparelho agora é da ${firstName(names[w])}`)}}
         onClose={closeModal}/>}
+      {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
       {modal==='meeting'&&<MeetingModal names={names} weekStart={weekStart} saving={saving} onClose={closeModal} onSave={saveMeeting}/>}
     </>
   )

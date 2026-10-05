@@ -52,7 +52,7 @@ export interface Dog {
   routines: DogRoutine[]
 }
 
-export interface Settings { energy: Energy; survival: boolean }
+export interface Settings { energy: Energy; survival: boolean; bet?: string | null }
 
 export interface Meeting {
   what_worked: string; what_overloaded: string; adjustments: string; priorities: string
