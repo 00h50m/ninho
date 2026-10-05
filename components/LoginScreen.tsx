@@ -7,22 +7,22 @@ import { supabase } from '@/lib/supabase'
 import { friendlyAuthError } from '@/lib/authErrors'
 
 const CSS = `
-.lg{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:#0f0f0e;color:#f2efe9;font-family:'DM Sans',system-ui,sans-serif}
+.lg{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px 16px;background:var(--bg);color:var(--tx);font-family:var(--font)}
 .lg *{box-sizing:border-box}
 .lg-box{width:100%;max-width:360px}
-.lg-logo{font-family:'DM Mono',monospace;font-size:30px;letter-spacing:-.02em;margin-bottom:6px}
-.lg-logo span{color:#5dcaa5}
-.lg-sub{color:#8a8882;font-size:14px;margin-bottom:26px}
-.lg-l{display:block;font-size:12px;font-weight:500;color:#bdbab3;margin:14px 0 6px}
-.lg-i{width:100%;padding:13px 14px;border-radius:10px;border:1px solid #363634;background:#181816;color:#f2efe9;font-size:16px;outline:none;font-family:inherit}
-.lg-i:focus{border-color:#1D9E75}
-.lg-b{width:100%;margin-top:20px;padding:13px;border:none;border-radius:10px;background:#1D9E75;color:#fff;font-size:15px;font-weight:500;cursor:pointer;font-family:inherit}
+.lg-logo{font-family:var(--font-mono);font-size:30px;letter-spacing:-.02em;margin-bottom:6px}
+.lg-logo span{color:var(--pri)}
+.lg-sub{color:var(--sub);font-size:14px;margin-bottom:26px}
+.lg-l{display:block;font-size:12px;font-weight:500;color:var(--mu);margin:14px 0 6px}
+.lg-i{width:100%;padding:13px 14px;border-radius:10px;border:1px solid var(--bd2);background:var(--sf);box-shadow:var(--shadow-sm);color:var(--tx);font-size:16px;outline:none;font-family:inherit}
+.lg-i:focus{border-color:var(--pri)}
+.lg-b{width:100%;margin-top:20px;padding:13px;border:none;border-radius:10px;background:var(--pri);color:var(--on-pri);font-size:15px;font-weight:500;cursor:pointer;font-family:inherit}
 .lg-b:disabled{opacity:.5;cursor:progress}
-.lg-lnk{background:none;border:none;color:#5dcaa5;font-size:13px;margin-top:16px;cursor:pointer;padding:6px 0;font-family:inherit}
-.lg-err{margin-top:14px;padding:11px 13px;border-radius:10px;background:#2a0e08;border:1px solid #5a2010;color:#ff8f6b;font-size:13px}
-.lg-ok{margin-top:14px;padding:11px 13px;border-radius:10px;background:#0f2a1e;border:1px solid #1d5a3a;color:#5dcaa5;font-size:13px}
+.lg-lnk{background:none;border:none;color:var(--pri);font-size:13px;margin-top:16px;cursor:pointer;padding:6px 0;font-family:inherit}
+.lg-err{margin-top:14px;padding:11px 13px;border-radius:10px;background:var(--cbg);border:1px solid var(--cbdr);color:var(--cor-tx);font-size:13px}
+.lg-ok{margin-top:14px;padding:11px 13px;border-radius:10px;background:var(--gbg);border:1px solid var(--gbdr);color:var(--green);font-size:13px}
 .lg-pw{position:relative}.lg-pw .lg-i{padding-right:70px}
-.lg-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:#8a8882;font-size:12px;cursor:pointer;padding:6px}
+.lg-eye{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--sub);font-size:12px;cursor:pointer;padding:6px}
 `
 
 export function LoginScreen({ mode = 'login', onDone }: { mode?: 'login' | 'recovery', onDone: () => void }) {
@@ -112,10 +112,10 @@ export function NoHouseScreen({ email, onSignOut, onRetry }: { email: string, on
       <style>{CSS}</style>
       <div className="lg-box">
         <div className="lg-logo">Ni<span>nho</span></div>
-        <div className="lg-sub" style={{ marginBottom: 14 }}>A conta <b style={{ color: '#f2efe9' }}>{email}</b> ainda não está ligada à casa.</div>
-        <div style={{ fontSize: 13.5, color: '#bdbab3', lineHeight: 1.55 }}>
+        <div className="lg-sub" style={{ marginBottom: 14 }}>A conta <b style={{ color: 'var(--tx)' }}>{email}</b> ainda não está ligada à casa.</div>
+        <div style={{ fontSize: 13.5, color: 'var(--mu)', lineHeight: 1.55 }}>
           No Supabase › SQL Editor, rode:<br/>
-          <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: '#5dcaa5', wordBreak: 'break-all' }}>select public.ninho_link_member(&apos;{email}&apos;, &apos;g&apos;);</code><br/>
+          <code style={{ fontFamily: "'DM Mono',monospace", fontSize: 12, color: 'var(--green)', wordBreak: 'break-all' }}>select public.ninho_link_member(&apos;{email}&apos;, &apos;g&apos;);</code><br/>
           (use <b>&apos;g&apos;</b> para Giovanna ou <b>&apos;s&apos;</b> para Sabrina) e toque em “Tentar de novo”.
         </div>
         <button className="lg-b" onClick={onRetry}>Tentar de novo</button>

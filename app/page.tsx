@@ -76,7 +76,7 @@ export default function Home() {
 
   if (phase.k === 'loading') return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-      <div style={{ color: '#666', fontSize: 14, fontFamily: "'DM Mono', monospace" }}>carregando...</div>
+      <div style={{ color: 'var(--sub)', fontSize: 14, fontFamily: "'DM Mono', monospace" }}>carregando...</div>
     </div>
   )
   if (phase.k === 'login' || phase.k === 'recovery') return <LoginScreen key={phase.k} mode={phase.k} onDone={() => { setPhase({ k: 'loading' }); start() }}/>
@@ -84,9 +84,9 @@ export default function Home() {
   if (phase.k === 'error') return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24 }}>
       <div style={{ textAlign: 'center', maxWidth: 360 }}>
-        <div style={{ color: '#f0ede8', fontSize: 14, marginBottom: 8 }}>Não foi possível iniciar</div>
-        <div style={{ color: '#666', fontSize: 12, marginBottom: 16 }}>{phase.msg}</div>
-        <button onClick={() => window.location.reload()} style={{ padding: '8px 20px', background: '#1D9E75', color: '#fff', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
+        <div style={{ color: 'var(--tx)', fontSize: 14, marginBottom: 8 }}>Não foi possível iniciar</div>
+        <div style={{ color: 'var(--sub)', fontSize: 12, marginBottom: 16 }}>{phase.msg}</div>
+        <button onClick={() => window.location.reload()} style={{ padding: '8px 20px', background: 'var(--pri)', color: 'var(--on-pri)', border: 'none', borderRadius: 8, fontSize: 13, cursor: 'pointer' }}>
           Tentar novamente
         </button>
       </div>

@@ -115,7 +115,7 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   }
 
   return (
-    <div className="scr narrow">
+    <div className="narrow">
       <div className="sh">
         <div><h2>Compras</h2><p>{c.open === 0 ? 'Lista vazia' : `${c.toBuy} para comprar${c.checked ? ` · ${c.checked} no carrinho` : ''}`} · ao vivo entre vocês</p></div>
       </div>

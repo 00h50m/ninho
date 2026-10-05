@@ -1,7 +1,10 @@
 'use client'
 import { useEffect, useState, useRef } from 'react'
 import type { Accident, Dog, DogItem, DogRoutine, Energy, HistoryWeek, HItem, Meeting, Names, Task, Who } from '@/lib/types'
-import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, TABS, WPT } from '@/lib/constants'
+import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, WPT } from '@/lib/constants'
+import { BottomNav, Icon, QuickActionsSheet, SideNav, SubTabs, legacyScreen, type CasaView, type QuickAction, type ScreenId } from '@/components/shell/Shell'
+import { THEMES, applyTheme, readTheme, saveTheme, type ThemeId } from '@/lib/theme'
+import { dogKey } from '@/lib/rotation'
 import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '@/lib/dates'
 import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, weekdaysLabel, WEEKDAY_SHORT } from '@/lib/frequency'
 import { isFixed } from '@/lib/rotation'
@@ -38,447 +41,6 @@ function wCls(w:string){return w==='light'?'l':w==='medium'?'m':'h'}
 function byCat(list:Task[]){const g:Record<string,Task[]>={};list.forEach(t=>{(g[t.category]=g[t.category]||[]).push(t)});return Object.entries(g)}
 function catIc(c:string){return (CAT[c]||'').split(' ')[0]}
 
-const CSS=`
-:root{--bg:#0f0f0e;--sf:#181816;--sf2:#20201e;--sf3:#2a2a27;--bd:#272725;--bd2:#363634;--tx:#f2efe9;--mu:#bdbab3;--sub:#8a8882;--faint:#5e5d59;--green:#5dcaa5;--gbg:#0f2a1e;--gbdr:#1d5a3a;--gdk:#1D9E75;--amb:#ef9f27;--abg:#2a1a08;--abdr:#5a3a10;--cor:#e26a40;--cbg:#2a0e08;--cbdr:#5a2010;--pur:#a898f2;--pbg:#1a1040;--pbdr:#3a2880;--r:14px;--rs:10px;--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px)}
-*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
-html{-webkit-text-size-adjust:100%}
-body{background:var(--bg);color:var(--tx);font-family:'DM Sans',system-ui,sans-serif;font-size:14px;line-height:1.45;min-height:100vh;-webkit-font-smoothing:antialiased}
-button,input,textarea{font-family:inherit;font-size:inherit;color:inherit}
-button{cursor:pointer}
-:focus-visible{outline:2px solid var(--green);outline-offset:2px}
-.mono{font-family:'DM Mono',monospace}
-@keyframes fu{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-@keyframes su{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}
-@keyframes pop{0%{transform:scale(1)}40%{transform:scale(1.18)}100%{transform:scale(1)}}
-
-/* ── header & navegação ── */
-.top{position:sticky;top:0;z-index:30;background:rgba(15,15,14,.88);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-bottom:1px solid var(--bd);padding-top:var(--safe-t)}
-.top-in{max-width:1200px;margin:0 auto;padding:10px 20px;display:flex;align-items:center;gap:16px;min-height:58px}
-.logo{font-family:'DM Mono',monospace;font-size:18px;font-weight:500;letter-spacing:-.03em;background:none;border:none;padding:0}
-.logo span{color:var(--green)}
-.tnav{display:flex;gap:2px;margin-left:12px}
-.tnb{padding:8px 14px;border:none;background:transparent;color:var(--sub);border-radius:999px;font-size:13px;font-weight:500;display:flex;gap:7px;align-items:center;transition:all .15s}
-.tnb .ic{filter:grayscale(1);opacity:.6;transition:all .15s}
-.tnb:hover{color:var(--tx);background:var(--sf2)}
-.tnb.on{color:var(--tx);background:var(--sf3)}.tnb.on .ic{filter:none;opacity:1}
-.status{margin-left:auto;display:flex;gap:6px;align-items:center}
-.chip{font-size:12px;padding:5px 11px;border-radius:999px;border:1px solid var(--bd2);background:var(--sf2);color:var(--mu);display:inline-flex;align-items:center;gap:5px;white-space:nowrap;transition:border-color .15s}
-button.chip:hover{border-color:var(--faint)}
-.chip.green{background:var(--gbg);color:var(--green);border-color:var(--gbdr)}.chip.amber{background:var(--abg);color:var(--amb);border-color:var(--abdr)}.chip.coral{background:var(--cbg);color:var(--cor);border-color:var(--cbdr)}
-.bnav{display:none}
-.main{max-width:1200px;margin:0 auto;padding:22px 20px 110px}
-.scr{animation:fu .18s ease}
-
-/* ── títulos ── */
-.sh{display:flex;align-items:flex-end;justify-content:space-between;gap:12px;margin-bottom:18px;flex-wrap:wrap}
-.sh h1,.sh h2{font-size:24px;font-weight:500;letter-spacing:-.025em;line-height:1.2}
-.sh p{color:var(--sub);font-size:13px;margin-top:3px}
-.sh p::first-letter{text-transform:uppercase}
-.sh-a{display:flex;gap:8px;flex-wrap:wrap}
-.slbl{font-size:11px;font-weight:500;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin-bottom:10px;display:flex;align-items:center;gap:6px}
-.slbl a,.slbl .lnk{margin-left:auto;text-transform:none;letter-spacing:0;color:var(--green);background:none;border:none;font-size:12px;font-weight:500}
-
-/* ── botões ── */
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;padding:10px 16px;border-radius:var(--rs);font-size:13px;font-weight:500;border:1px solid transparent;transition:all .15s;white-space:nowrap}
-.btn:disabled{opacity:.35;cursor:not-allowed}
-.btn-p{background:var(--gdk);color:#fff}.btn-p:not(:disabled):hover{background:#22b083}
-.btn-s{background:var(--gbg);color:var(--green);border-color:var(--gbdr)}.btn-s:hover{border-color:var(--green)}
-.btn-g{background:transparent;color:var(--mu);border-color:var(--bd2)}.btn-g:hover{color:var(--tx);border-color:var(--faint)}
-.btn-pur{background:var(--pbg);color:var(--pur);border-color:var(--pbdr)}.btn-pur:hover{border-color:var(--pur)}
-.btn-danger{background:transparent;color:var(--cor);border-color:var(--cbdr)}.btn-danger:hover{background:var(--cbg)}
-.btn-w{width:100%}
-.ib{width:34px;height:34px;border:none;background:transparent;color:var(--faint);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;transition:all .12s}
-.ib:hover{background:var(--sf3);color:var(--tx)}.ib.danger:hover{background:var(--cbg);color:var(--cor)}
-
-/* ── cards ── */
-.card{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:16px}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:16px}
-.stat{background:var(--sf);border:1px solid var(--bd);border-radius:var(--r);padding:14px 16px;min-width:0;text-align:left;overflow:hidden}
-button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd2)}
-.stat-l{font-size:12px;color:var(--sub);font-weight:500;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stat-v{font-size:26px;font-weight:400;letter-spacing:-.03em;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.stat-txt{font-size:19px;white-space:normal;line-height:1.2;padding-top:4px;letter-spacing:-.01em}
-.stat-v small{font-size:13px;color:var(--sub);margin-left:4px;letter-spacing:0}
-.stat-s{font-size:12px;color:var(--sub);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.bar{background:var(--sf3);border-radius:99px;height:5px;overflow:hidden;margin-top:10px}
-.barf{height:100%;border-radius:99px;transition:width .5s ease}
-.week-dots{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;margin-top:10px;width:100%;max-width:100%}
-.wd{display:block;min-width:0;width:auto;height:5px;border-radius:99px;background:var(--bd2)}
-.wd.on{background:var(--amb)}.wd.today{background:var(--abdr)}
-
-.banner{display:flex;align-items:center;gap:10px;padding:11px 14px;border-radius:var(--rs);margin-bottom:16px;font-size:13px;flex-wrap:wrap}
-.banner.surv{background:var(--cbg);border:1px solid var(--cbdr);color:var(--cor)}
-.banner.low{background:var(--abg);border:1px solid var(--abdr);color:var(--amb)}
-.banner .lnk{margin-left:auto;background:none;border:none;color:inherit;font-size:12px;font-weight:500;text-decoration:underline;text-underline-offset:3px}
-
-/* ── hoje ── */
-.today{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 300px;gap:14px;align-items:start}
-.side{display:flex;flex-direction:column;gap:14px}
-.seg{display:none}
-.ph{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-bottom:14px;border-bottom:1px solid var(--bd)}
-.av{width:40px;height:40px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex-shrink:0;font-family:'DM Mono',monospace}
-.av-g{background:var(--gbg);color:var(--green)}.av-s{background:var(--pbg);color:var(--pur)}
-.pname{font-size:16px;font-weight:500;line-height:1.25}.prole{font-size:12px;color:var(--sub)}
-.ring{position:relative;width:46px;height:46px;margin-left:auto;flex-shrink:0}
-.ring svg{transform:rotate(-90deg);display:block}
-.ring span{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'DM Mono',monospace;font-size:10.5px;color:var(--mu)}
-.cdiv{font-size:11px;font-weight:500;color:var(--sub);letter-spacing:.04em;text-transform:uppercase;margin:12px 0 2px;display:flex;align-items:center;gap:8px}
-.cdiv::after{content:'';flex:1;height:1px;background:var(--bd)}
-.cdiv .n{font-family:'DM Mono',monospace;color:var(--faint);order:2}
-.cdiv.late{color:var(--cor)}
-.tag-t.late{color:var(--cor)}
-.tag-next{color:var(--green);font-weight:500}
-.tag-r{color:var(--pur)}
-.tr.next{background:linear-gradient(90deg,rgba(29,158,117,.09),transparent 70%)}
-.tr{display:flex;align-items:center;gap:10px;padding:7px 8px;margin:0 -8px;border-radius:var(--rs);min-height:50px;transition:background .12s}
-.tr:hover{background:var(--sf2)}
-.chk{width:24px;height:24px;flex-shrink:0;border-radius:8px;border:1.5px solid var(--bd2);background:transparent;display:flex;align-items:center;justify-content:center;color:transparent;font-size:13px;font-weight:700;transition:all .15s}
-.chk:hover{border-color:var(--green);color:var(--faint)}
-.chk.ess{border-color:var(--cor)}
-.tr.done .chk,.chk.ok{background:var(--gdk);border-color:var(--gdk);color:#fff;animation:pop .25s ease}
-.trb{flex:1;min-width:0;cursor:pointer;user-select:none}
-.trt{font-size:14.5px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.trm{display:flex;gap:8px;align-items:center;margin-top:2px;font-size:11.5px;color:var(--sub);flex-wrap:wrap}
-.tr.done .trt{text-decoration:line-through;color:var(--sub)}.tr.done .xp{opacity:.5}
-.tag-e{color:var(--cor);font-weight:500}
-.tag-t{color:var(--amb);font-family:'DM Mono',monospace;font-size:11px}
-.xp{font-family:'DM Mono',monospace;font-size:11px;padding:2px 7px;border-radius:6px;flex-shrink:0}
-.xp-l{color:var(--green);background:var(--gbg)}.xp-m{color:var(--amb);background:var(--abg)}.xp-h{color:var(--cor);background:var(--cbg)}
-.tr .ib{opacity:0}.tr:hover .ib,.tr .ib:focus-visible{opacity:1}
-@media(hover:none){.tr .ib{opacity:1}}
-.tr .ib.mob{display:none}
-.sm-only{display:none}
-.mini{width:20px;height:20px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:500;font-family:'DM Mono',monospace;flex-shrink:0}
-.accb{font-size:11px;color:var(--amb);margin-left:6px}
-.menu{display:flex;flex-direction:column;gap:6px}
-.menu .btn{justify-content:flex-start;padding:13px 14px;font-size:14px}
-.guide details{border-top:1px solid var(--bd);padding:2px 0}
-.guide details:first-of-type{border-top:none}
-.guide summary{cursor:pointer;list-style:none;display:flex;align-items:center;gap:10px;padding:12px 0;font-size:14px;font-weight:500}
-.guide summary::-webkit-details-marker{display:none}
-.guide summary::after{content:'▸';margin-left:auto;color:var(--faint);transition:transform .15s}
-.guide details[open] summary::after{transform:rotate(90deg)}
-.guide .gb{font-size:13px;color:var(--mu);line-height:1.6;padding:0 0 14px 30px}
-.guide .gb p+p,.guide .gb p+ul,.guide .gb ul+p{margin-top:8px}
-.guide .gb ul{padding-left:18px}.guide .gb li{margin:3px 0}
-.guide .gb b{color:var(--tx);font-weight:500}
-.dtog{width:100%;display:flex;align-items:center;gap:8px;border:none;background:transparent;color:var(--sub);font-size:13px;padding:12px 0 6px;margin-top:8px;border-top:1px solid var(--bd)}
-.dtog:hover{color:var(--tx)}
-.alldone{text-align:center;padding:18px 8px 10px;color:var(--green);font-size:14px}
-.alldone small{display:block;color:var(--sub);font-size:12px;margin-top:3px}
-.empty{text-align:center;padding:30px 16px;color:var(--sub);font-size:13px}
-.empty-icon{font-size:30px;display:block;margin-bottom:10px}
-.empty .btn{margin-top:14px}
-.dr{display:flex;align-items:center;gap:10px;padding:5px 0;min-height:44px;user-select:none}
-.dr .chk{width:22px;height:22px;border-radius:7px}
-.dr .chk:disabled{cursor:default;animation:none}
-.dr-t{flex:1;min-width:0;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;cursor:pointer}
-.dr.done .dr-t{color:var(--sub);text-decoration:line-through}
-.dr.sat{opacity:.6}.dr.sat .dr-t{text-decoration:none;cursor:default}
-.dr-m{font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;white-space:nowrap}
-.dr-m.late{color:var(--cor)}
-.dr .ib{width:30px;height:30px;font-size:14px}
-.dsum{display:flex;align-items:center;gap:12px;padding:10px;margin:0 -10px;width:calc(100% + 20px);border:none;background:transparent;border-radius:var(--rs);text-align:left;transition:background .12s}
-.dsum:hover{background:var(--sf2)}
-.dsum-h{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}.dsum-h b{font-weight:500}.dsum-h .mono{font-size:11.5px;color:var(--sub)}
-.dsum-s{display:block;font-size:12px;color:var(--sub);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.dsum-s .late{color:var(--cor)}
-.addr{width:100%;margin-top:8px;border:1px dashed var(--bd2);background:transparent;color:var(--sub);border-radius:var(--rs);padding:9px;font-size:13px;transition:all .12s}
-.addr:hover{color:var(--green);border-color:var(--gbdr)}
-.acts{display:flex;flex-direction:column;gap:6px}
-.act{display:flex;align-items:center;gap:12px;width:100%;padding:10px;border:1px solid transparent;background:transparent;border-radius:var(--rs);text-align:left;transition:all .12s}
-.act:hover{background:var(--sf2);border-color:var(--bd)}
-.act-ic{width:36px;height:36px;border-radius:10px;background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:17px;flex-shrink:0}
-.act-t{font-size:14px;font-weight:500}.act-s{font-size:12px;color:var(--sub)}
-.act .chev{margin-left:auto;color:var(--faint)}
-
-/* ── tarefas ── */
-.search{display:flex;align-items:center;gap:8px;background:var(--sf);border:1px solid var(--bd);border-radius:var(--rs);padding:0 12px;margin-bottom:12px;transition:border-color .15s}
-.search:focus-within{border-color:var(--gdk)}
-.search input{flex:1;background:transparent;border:none;outline:none;padding:11px 0;font-size:14px;min-width:0}
-.search .x{background:none;border:none;color:var(--sub);font-size:14px;padding:4px}
-.fchips{display:flex;gap:6px;margin-bottom:18px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
-.fchips::-webkit-scrollbar{display:none}
-.fc{padding:7px 13px;border-radius:999px;font-size:12.5px;border:1px solid var(--bd);background:transparent;color:var(--sub);transition:all .12s;white-space:nowrap;flex-shrink:0}
-.fc:hover{color:var(--tx);border-color:var(--bd2)}
-.fc.on{background:var(--tx);border-color:var(--tx);color:var(--bg);font-weight:500}
-.tgrp{margin-bottom:18px}
-.tlist{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,520px),1fr));gap:8px;margin-top:8px}
-.tc{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rs);padding:10px 8px 10px 14px;display:flex;align-items:center;gap:12px;transition:border-color .12s}
-.tc:hover{border-color:var(--bd2)}
-.wdot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-.w-l{background:var(--green)}.w-m{background:var(--amb)}.w-h{background:var(--cor)}
-.tc-info{flex:1;min-width:0;cursor:pointer}
-.tc-title{font-size:14.5px;margin-bottom:4px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.tc-meta{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
-.bdg{font-family:'DM Mono',monospace;font-size:10.5px;padding:2px 7px;border-radius:5px;white-space:nowrap}
-.bdg-l{background:var(--gbg);color:var(--green)}.bdg-m{background:var(--abg);color:var(--amb)}.bdg-h{background:var(--cbg);color:var(--cor)}.bdg-n{background:var(--sf2);color:var(--sub)}.bdg-e{background:var(--cbg);color:#ff7b6b;border:1px solid var(--cbdr)}.bdg-t{background:var(--abg);color:var(--amb)}
-.qb{border:1px solid transparent;cursor:pointer;transition:all .12s}
-.qb.bdg-n:hover{color:var(--tx);border-color:var(--bd2)}
-.qb.bdg-n{border-style:dashed;border-color:var(--bd2);background:transparent}
-.qtw{display:inline-flex;align-items:center;background:var(--abg);border-radius:5px;padding:0 2px 0 6px;height:20px}
-.qtime{background:transparent;border:none;outline:none;color:var(--amb);font-family:'DM Mono',monospace;font-size:10.5px;width:62px;color-scheme:dark;padding:0}
-.qtime::-webkit-calendar-picker-indicator{display:none}
-.qx{background:none;border:none;color:var(--amb);opacity:.6;font-size:10px;padding:0 3px}.qx:hover{opacity:1}
-.dupe{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:var(--rs);background:var(--pbg);border:1px solid var(--pbdr);color:var(--pur);font-size:13px;margin-bottom:14px}
-.dupe .btn{margin-left:auto;padding:7px 12px}
-.asg{display:flex;background:var(--sf2);border-radius:999px;padding:3px;gap:2px;flex-shrink:0}
-.asg button{border:none;background:transparent;color:var(--sub);font-size:11.5px;padding:4px 10px;border-radius:999px;transition:all .12s;white-space:nowrap}
-.asg button:hover{color:var(--tx)}
-.asg .on-g{background:var(--gbg);color:var(--green)}.asg .on-s{background:var(--pbg);color:var(--pur)}.asg .on-r{background:var(--sf3);color:var(--tx)}
-
-/* ── semana ── */
-.wgrid{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:14px;align-items:start}
-.col{display:flex;flex-direction:column;gap:14px}
-.balance{height:10px;background:var(--sf3);border-radius:99px;overflow:hidden;display:flex;margin:10px 0}
-.opts{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
-.opt{padding:12px 10px;border-radius:var(--rs);border:1px solid var(--bd);background:transparent;text-align:left;transition:all .12s}
-.opt:hover{border-color:var(--bd2)}
-.opt.on{background:var(--gbg);border-color:var(--gbdr)}
-.opt-t{font-size:13px;font-weight:500}.opt-s{font-size:11.5px;color:var(--sub);margin-top:2px}
-.opt.on .opt-t{color:var(--green)}
-.row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--bd)}
-.slbl+.row{border-top:none}
-.row-t{font-size:14px}.row-s{font-size:12px;color:var(--sub)}
-.switch{width:44px;height:26px;border-radius:99px;background:var(--sf3);border:none;position:relative;flex-shrink:0;margin-left:auto;transition:background .2s}
-.switch::after{content:'';position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:var(--mu);transition:all .2s}
-.switch.on{background:var(--cor)}.switch.on::after{left:21px;background:#fff}
-.hist{padding:12px 0;border-top:1px solid var(--bd)}
-.slbl+.hist{border-top:none;padding-top:0}
-.hist-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.hist-note{margin-top:8px;padding:9px 11px;background:var(--sf2);border-radius:8px;font-size:12.5px;color:var(--mu);line-height:1.5}
-
-/* ── cães ── */
-.dgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,340px),1fr));gap:14px}
-.dh{display:flex;align-items:center;gap:12px;margin-bottom:12px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
-.dav{width:46px;height:46px;border-radius:50%;background:var(--gbg);display:flex;align-items:center;justify-content:center;font-size:23px;flex-shrink:0}
-.puppy{background:var(--abg);border:1px solid var(--abdr);border-radius:var(--r);padding:16px;margin-bottom:16px}
-.pills{display:flex;gap:6px;flex-wrap:wrap;margin:10px 0}
-.pill{padding:8px 13px;border-radius:999px;border:1px solid var(--abdr);background:rgba(0,0,0,.2);color:var(--amb);font-size:12.5px;transition:all .12s}
-.pill:hover{border-color:var(--amb)}
-.acc{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(0,0,0,.2);border-radius:8px;margin-bottom:4px;font-size:13px;color:var(--mu)}
-
-/* ── ajustes ── */
-.narrow{max-width:680px}
-.field-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--bd)}
-.slbl+.field-row{border-top:none}
-.field-row .fi{max-width:220px;margin-left:auto}
-.legend{display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--mu);line-height:1.5}
-.legend b{color:var(--tx);font-weight:500}
-.lg{display:flex;gap:12px;align-items:flex-start}
-.lg-k{flex-shrink:0;width:104px;display:flex;gap:4px;align-items:center;flex-wrap:wrap}
-
-/* ── FAB / toast ── */
-.fab{position:fixed;bottom:28px;right:28px;height:52px;padding:0 20px 0 16px;background:var(--gdk);border-radius:99px;display:flex;align-items:center;gap:8px;border:none;color:#fff;font-size:14px;font-weight:500;box-shadow:0 8px 28px rgba(29,158,117,.35);transition:transform .15s;z-index:25}
-.mob-fab{display:none}
-@media(max-width:860px){.mob-fab{display:flex}}
-.fab span{font-size:22px;line-height:1;font-weight:300}
-.fab:hover{transform:translateY(-2px)}
-.toast{position:fixed;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);background:#132a20;border:1px solid var(--gbdr);border-radius:12px;padding:10px 12px 10px 16px;font-size:13px;color:var(--green);display:flex;align-items:center;gap:12px;z-index:100;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fu .2s ease}
-.toast-m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.toast button{background:none;border:none;color:var(--tx);font-weight:500;font-size:13px;padding:2px 6px;text-decoration:underline;text-underline-offset:3px;flex-shrink:0}
-/* ── gamificação ── */
-.xp.bonus{box-shadow:inset 0 0 0 1px currentColor}
-.sb{display:block;width:100%;text-align:left}
-button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
-.sb .slbl .lnk{margin-left:auto}
-.sb-row{display:flex;align-items:flex-end;gap:10px}
-.sb-side{flex:1;min-width:0}
-.sb-s{text-align:right}
-.sb-name{font-size:13px;color:var(--mu);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-xp{line-height:1.1;margin-top:2px}.sb-xp b{font-size:28px;font-weight:400;letter-spacing:-.03em}.sb-xp small{font-size:12px;color:var(--sub);margin-left:4px}
-.sb-g .sb-xp b{color:var(--green)}.sb-s .sb-xp b{color:var(--pur)}
-.sb-side.lead .sb-name{color:var(--tx)}
-.sb-vs{color:var(--faint);font-size:14px;padding-bottom:6px}
-.sb-meta{font-size:11.5px;color:var(--sub);margin-top:2px}
-.sb-bar{margin:10px 0 10px}
-.sb-bet{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--amb)}
-.sb-bet .lnk{margin-left:auto;background:none;border:none;color:var(--green);font-size:12px;font-weight:500}
-.sb-foot,.sb-prev{font-size:12px;color:var(--sub);margin-top:8px;line-height:1.5}
-.sb-prev{padding-top:8px;border-top:1px solid var(--bd)}
-.sb.compact .sb-xp b{font-size:22px}
-.stk{display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--bd)}
-.slbl+.stk{border-top:none;padding-top:0}
-.stk-ic{width:34px;height:34px;border-radius:10px;background:var(--sf2);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;filter:grayscale(.6)}
-.stk-ic.hot{background:var(--abg);filter:none}
-.stk-t{display:block;font-size:14px}.stk-s{display:block;font-size:12px;color:var(--sub)}
-.stk-n{text-align:right;flex-shrink:0;white-space:nowrap}.stk-n b{font-size:22px;font-weight:400}.stk-n small{font-size:11.5px;color:var(--sub);margin-left:3px}
-.stk-best{display:block;font-size:11px;color:var(--amb);font-family:'DM Mono',monospace}
-.stk-note{font-size:12px;color:var(--sub);margin-top:10px;line-height:1.5}
-.ach-who{display:inline-flex;margin-bottom:12px}
-.ach-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,210px),1fr));gap:8px}
-.ach{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--bd);border-radius:var(--rs);min-width:0}
-.ach-ic{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;background:var(--sf2);filter:grayscale(1);opacity:.55}
-.ach.t1 .ach-ic{filter:none;opacity:1;background:#3a2414;box-shadow:inset 0 0 0 2px #b0703c}
-.ach.t2 .ach-ic{filter:none;opacity:1;background:#2a2d31;box-shadow:inset 0 0 0 2px #aeb6bf}
-.ach.t3 .ach-ic{filter:none;opacity:1;background:#3a300c;box-shadow:inset 0 0 0 2px #e2b93b}
-.ach-body{min-width:0;flex:1}
-.ach-n{display:block;font-size:13px;font-weight:500;line-height:1.3}
-.ach-tier{display:block;font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;margin-top:1px}
-.ach.t1 .ach-tier{color:#d08a50}.ach.t2 .ach-tier{color:#c9d1da}.ach.t3 .ach-tier{color:#e9c552}
-.ach-bar{display:block;height:4px;border-radius:99px;background:var(--sf3);overflow:hidden;margin-top:6px}
-.ach-bar span{display:block;height:100%;background:var(--amb);border-radius:99px}
-.ach-s{display:block;font-size:11px;color:var(--sub);margin-top:4px}
-.toast.err{background:#2a120b;border-color:var(--cbdr);color:#ffb59a;width:min(460px,calc(100vw - 32px))}
-.toast-m{white-space:normal;flex:1 1 auto;min-width:0;line-height:1.4}
-.toast .tx{text-decoration:none;color:var(--sub);padding:2px 4px}
-
-/* ── estados: gravando, carregando, erro, autoria ── */
-@keyframes spin{to{transform:rotate(360deg)}}
-.chk.busy{opacity:.55;cursor:progress;animation:none;position:relative}
-.chk.busy::after{content:'';position:absolute;inset:-4px;border-radius:10px;border:2px solid transparent;border-top-color:var(--green);animation:spin .8s linear infinite}
-.chk:disabled{cursor:default}
-.pill:disabled{opacity:.5;cursor:progress}
-.tag-by{color:var(--sub)}
-.you{font-size:10.5px;font-weight:500;color:var(--green);background:var(--gbg);border:1px solid var(--gbdr);border-radius:99px;padding:1px 7px;margin-left:8px;vertical-align:2px;font-family:'DM Mono',monospace}
-.sbtn.who{display:flex;align-items:center;gap:12px;padding:12px 14px;text-align:left;font-size:15px;color:var(--tx)}
-.sbtn.who small{font-size:12px}
-.loadscr{display:flex;align-items:center;justify-content:center;gap:12px;padding:80px 16px;color:var(--sub);font-size:14px}
-.spin{width:18px;height:18px;border-radius:50%;border:2px solid var(--bd2);border-top-color:var(--green);animation:spin .8s linear infinite}
-.loaderr{max-width:440px;margin:60px auto;text-align:center}
-.inline-err{font-size:13px;color:var(--cor);padding:8px 0}
-.inline-err .lnk{background:none;border:none;color:var(--green);font-size:13px;text-decoration:underline;text-underline-offset:3px}
-@media (prefers-reduced-motion:reduce){.chk.busy::after,.spin{animation:none}}
-
-/* ── modais ── */
-.mwrap{position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:50;padding:16px;animation:fu .15s ease}
-.modal{background:var(--sf);border-radius:18px;border:1px solid var(--bd);width:100%;max-width:500px;max-height:90vh;display:flex;flex-direction:column;animation:su .2s ease;box-shadow:0 20px 60px rgba(0,0,0,.5)}
-.modal-lg{max-width:600px}.modal-sm{max-width:400px}
-.grab{display:none}
-.mh{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid var(--bd);flex-shrink:0}
-.mht{font-size:16px;font-weight:500}
-.mclose{background:var(--sf2);border:none;color:var(--mu);font-size:14px;width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center}
-.mclose:hover{color:var(--tx)}
-.mbody{overflow-y:auto;padding:18px 20px;flex:1;overscroll-behavior:contain}
-.mfoot{padding:14px 20px calc(14px + var(--safe-b));border-top:1px solid var(--bd);flex-shrink:0;display:flex;gap:8px}
-.mfoot .btn-p{flex:1}
-.fl{font-size:12px;font-weight:500;color:var(--mu);display:block;margin:18px 0 8px}
-.fl:first-child{margin-top:0}.fl .hint{font-weight:400;color:var(--sub)}
-.fi,.fita{width:100%;background:var(--sf2);border:1px solid var(--bd2);border-radius:var(--rs);padding:11px 13px;font-size:14px;color:var(--tx);outline:none;transition:border-color .12s}
-.fi:focus,.fita:focus{border-color:var(--gdk)}
-.fita{resize:vertical;min-height:76px;line-height:1.5}
-.btng{display:grid;gap:6px}.c2{grid-template-columns:1fr 1fr}.c3{grid-template-columns:1fr 1fr 1fr}
-.sbtn{padding:10px 8px;border-radius:var(--rs);border:1px solid var(--bd);background:transparent;font-size:13px;color:var(--mu);transition:all .12s;text-align:center}
-.sbtn:hover{border-color:var(--bd2);color:var(--tx)}
-.sbtn.on{background:var(--gbg);border-color:var(--gbdr);color:var(--green)}
-.sbtn small{display:block;font-size:11.5px;color:var(--sub);margin-top:2px}
-.stabs{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;margin-bottom:12px}
-.stabs::-webkit-scrollbar{display:none}
-.li{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--rs);border:1px solid var(--bd);margin-bottom:6px;cursor:pointer;transition:all .12s;user-select:none}
-.li:hover{border-color:var(--bd2)}
-.li.on{background:var(--gbg);border-color:var(--gbdr)}
-.li.off{opacity:.45;cursor:default}
-.li .chk{width:20px;height:20px;border-radius:6px;font-size:11px}
-.li-t{flex:1;min-width:0;font-size:13.5px;color:var(--mu)}.li.on .li-t{color:var(--green)}
-.li-m{display:flex;gap:4px;flex-shrink:0;align-items:center}
-.meet{padding-bottom:18px;margin-bottom:18px;border-bottom:1px solid var(--bd)}
-.meet:last-child{border:none;margin:0;padding:0}
-.meet .fl{margin-top:0}
-
-/* ── Fase 3: compras, manutenção, divisão ── */
-.vseg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:4px;margin-bottom:16px;max-width:520px}
-.vseg .segb{border:none;background:transparent;padding:10px 8px;border-radius:9px;color:var(--sub);font-weight:500;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;min-width:0}
-.vseg .segb.on{background:var(--sf3);color:var(--tx)}
-.segb .cnt.late{background:var(--cbg);color:var(--cor);border-radius:99px;padding:1px 7px;font-family:'DM Mono',monospace;font-size:11px}
-.opts.c2{grid-template-columns:1fr 1fr}
-.why{font-size:13px;color:var(--pur);background:var(--pbg);border:1px solid var(--pbdr);border-radius:var(--rs);padding:10px 12px;margin-bottom:12px}
-.shop-add{display:flex;gap:8px;margin-bottom:8px;align-items:stretch}
-.shop-add .fi{flex:1;min-width:0;margin:0}
-.shop-add .shop-cat{flex:0 0 auto;width:auto;max-width:150px;padding-right:6px}
-.shop-add .btn{font-size:20px;padding:0 18px}
-.shop-hint{font-size:12px;color:var(--sub);margin:-2px 0 12px}
-.shop-row .qb{border:none;cursor:pointer;flex-shrink:0}
-.shop-row .ib.danger{display:flex;color:var(--sub)}
-.shop-sum{margin:0;width:100%;padding:14px 16px;border:1px solid var(--bd)}
-.mt-due{font-family:'DM Mono',monospace;font-size:11px;color:var(--sub)}
-.mt-due.late{color:var(--cor)}.mt-due.today{color:var(--amb)}.mt-due.soon{color:var(--amb)}
-.mt-row .mt-done{padding:7px 11px;font-size:12.5px;flex-shrink:0}
-.mt-row .trb{cursor:pointer}
-.mt-ago{width:auto;max-width:130px;margin:0;padding:6px 8px;font-size:12.5px}
-
-/* ── Fase 4: rotina flexível ── */
-.wdays{display:grid;grid-template-columns:repeat(7,1fr);gap:6px}
-.wday{padding:10px 0;border-radius:10px;border:1px solid var(--bd);background:transparent;color:var(--sub);font-size:13px;font-weight:500;text-transform:capitalize}
-.wday.on{background:var(--gbg);border-color:var(--gbdr);color:var(--green)}
-.paused{margin-top:10px;padding-top:10px;border-top:1px dashed var(--bd)}
-.paused-h{font-size:12px;color:var(--sub);margin-bottom:4px}
-.paused-r{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13.5px;min-width:0}
-.paused-t{flex:1;min-width:0;color:var(--mu);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.paused-k{font-size:11.5px;color:var(--faint);font-family:'DM Mono',monospace;flex-shrink:0}
-.paused-r .lnk{background:none;border:none;color:var(--green);font-size:12.5px;font-weight:500;flex-shrink:0}
-.menu-s{display:block;margin-left:auto;font-size:11px;color:var(--faint);font-weight:400}
-
-/* ── Fase 5: Telegram e IA ── */
-.tg-code{font-size:12.5px;color:var(--sub);background:var(--sf2);border-radius:var(--rs);padding:10px 12px;margin:4px 0 8px;line-height:1.5}
-.tg-code code{font-family:'DM Mono',monospace;color:var(--tx)}
-.tg-code .lnk{background:none;border:none;color:var(--green);font-size:12.5px;font-weight:500}
-.tg-code code{word-break:break-all}
-.tg-act{margin-top:8px;display:flex;gap:8px}
-.tg-person+.tg-person{border-top:1px solid var(--bd);margin-top:4px}
-.aibox{margin-bottom:18px;padding-bottom:18px;border-bottom:1px solid var(--bd)}
-.ai-wait{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--sub);padding:10px 0}
-.ai-tip{display:flex;gap:10px;align-items:flex-start;font-size:13.5px;line-height:1.45;padding:8px 0;border-top:1px solid var(--bd)}
-.ai-tip span{flex:1;min-width:0}
-.ai-tip .lnk{background:none;border:none;color:var(--pur);font-size:12px;font-weight:500;flex-shrink:0;white-space:nowrap}
-
-/* ── responsivo ── */
-@media(max-width:1100px){
-  .today{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}
-  .side{grid-column:1/-1;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
-  .tnb{padding:8px 11px}
-}
-@media(max-width:860px){
-  .tnav{display:none}
-  .top-in{padding:10px 16px;min-height:54px}
-  .bnav{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;bottom:0;left:0;right:0;z-index:30;background:rgba(18,18,17,.94);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--bd);padding:6px 6px calc(6px + var(--safe-b))}
-  .bnb{border:none;background:transparent;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 4px;font-size:11px;font-weight:500;border-radius:12px;transition:color .15s}
-  .bnb .ic{font-size:20px;line-height:1;filter:grayscale(1);opacity:.55;transition:all .15s}
-  .bnb.on{color:var(--tx)}.bnb.on .ic{filter:none;opacity:1;transform:translateY(-1px)}
-  .main{padding:16px 16px calc(150px + var(--safe-b))}
-  .fab{bottom:calc(78px + var(--safe-b));right:16px;height:52px;width:52px;padding:0;justify-content:center}
-  .fab b{display:none}
-  .lg-only{display:none}
-  .ach-grid{grid-template-columns:1fr 1fr;gap:6px}
-  .ach{flex-direction:column;gap:6px;padding:9px}
-  .ach-ic{width:30px;height:30px;font-size:15px}
-  .ach-s{font-size:10.5px}
-  .trt{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
-  .tr .ib.desk{display:none}.tr .ib.mob{display:flex}
-  .card{padding:14px}
-  .desk-only{display:none}
-  .chip-hide{display:none}
-  .stats{grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
-  .stat{padding:12px 14px}.stat-v{font-size:22px}.stat-txt{font-size:16px}
-  .today{grid-template-columns:minmax(0,1fr);gap:12px}
-  .side{display:flex}
-  .seg{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:4px}
-  .segb{border:none;background:transparent;padding:10px 8px;border-radius:9px;color:var(--sub);font-weight:500;font-size:14px;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;min-width:0}
-  .segb.on{background:var(--sf3);color:var(--tx)}
-  .segb .cnt{font-family:'DM Mono',monospace;font-size:11px;color:var(--faint)}
-  .segb .d{width:8px;height:8px;border-radius:50%;flex-shrink:0}
-  .pcard[data-hide="1"]{display:none}
-  .wgrid{grid-template-columns:minmax(0,1fr);gap:12px}
-  .col{gap:12px}
-  .sh{margin-bottom:14px}.sh h1,.sh h2{font-size:22px}
-  .tc{padding:10px 10px 10px 12px;gap:10px}
-  .tc .ib.danger{display:none}
-  .asg button{padding:5px 9px}
-  .sm-only{display:inline}
-  .mwrap{align-items:flex-end;padding:0}
-  .modal,.modal-lg,.modal-sm{max-width:none;border-radius:20px 20px 0 0;max-height:92vh;border-bottom:none}
-  .grab{display:block;width:38px;height:4px;border-radius:99px;background:var(--bd2);margin:8px auto 0;flex-shrink:0}
-  .mh{padding:10px 18px 14px}
-  .mbody{padding:16px 18px}
-  .fi,.fita,.search input{font-size:16px}
-}
-@media(max-width:420px){
-  .opts{grid-template-columns:1fr}
-  .opts.c2{grid-template-columns:1fr 1fr}
-  .shop-add .shop-cat{max-width:110px}
-  .bnb{font-size:10.5px}
-  .field-row{flex-wrap:wrap}.field-row .fi{max-width:none}
-}
-`
 
 // ── PEÇAS DE UI (fora do componente principal para não remontar a cada render) ──
 // Horário editável direto na lista de Tarefas
@@ -742,7 +304,12 @@ type ToastState={kind:'ok'|'err',msg:string,undo?:()=>void,retry?:()=>void}
 export interface Account { who:Who, email:string, onSignOut:()=>void }
 
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
-  const [tab,setTabState]=useState('today')
+  const [screen,setScreenState]=useState<ScreenId>('inicio')
+  const [casaView,setCasaView]=useState<CasaView>('tarefas')
+  const [rotView,setRotView]=useState<'rotinas'|'habitos'>('rotinas')
+  const [theme,setThemeState]=useState<ThemeId>('aconchego')
+  useEffect(()=>{setThemeState(readTheme(null,typeof matchMedia!=='undefined'&&matchMedia('(prefers-color-scheme: dark)').matches))},[])
+  function pickTheme(t:ThemeId){saveTheme(t);applyTheme(t);setThemeState(t)}
   const [modal,setModal]=useState<string|null>(null)
   const [modalData,setModalData]=useState<any>(null)
   const [saving,setSaving]=useState(false)
@@ -767,7 +334,6 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const data=useNinhoData(householdId,today,weekStart,e=>showError(e))
   const {tasks,setTasks,dogs,setDogs,settings,setSettings,xp,setXp,streak,names,setNames,accidents,setAccidents,game}=data
   const casa=useCasa(householdId,today)
-  const [taskView,setTaskView]=useState<'tasks'|'maint'>('tasks')
   const maintActions=useMaintActions({today,me,requireMe:()=>requireMe(),setItems:casa.setMaint,reload:casa.reloadMaintenance,onXp:()=>refreshStats(),toast:(m,u)=>showToast(m,u),fail:(e,r)=>showError(e,r)})
 
   // Nova conquista de quem usa o aparelho: avisa quando sobe de nível nesta sessão
@@ -797,7 +363,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     if(saved==='g'||saved==='s')setPerson(saved)
     else if(me)setPerson(me)
   },[device.ready,me])
-  function setTab(t:string){setTabState(t);window.scrollTo({top:0})}
+  /** Vai para uma tela. Aceita também as abas antigas (today, tasks, shop, week, pets, settings). */
+  function setTab(t:string){const r=legacyScreen(t);setScreenState(r.screen);if(r.casa)setCasaView(r.casa);window.scrollTo({top:0})}
+  const go=(sc:ScreenId)=>setTab(sc)
+  const goCasa=(v:CasaView)=>{setTab('casa');setCasaView(v)}
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
   // Histórico da semana (só na aba Semana; recarrega quando alguém salva uma reunião)
@@ -806,9 +375,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     try{setHistoryData(await api.loadHistory(householdId,[0,1,2,3].map(i=>addDays(weekStart,-7*i))))}
     catch(e){logError('histórico',e);setHistoryError(true)}
   }
-  useEffect(()=>{if(tab==='week')loadHistory()
+  useEffect(()=>{if(screen==='nos')loadHistory()
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  },[tab,weekStart,data.meetingTick,householdId])
+  },[screen,weekStart,data.meetingTick,householdId])
 
   // ── TOASTS ────────────────────────────────────────────
   toastRef.current=toast
@@ -1048,7 +617,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   }
 
   function saveMeeting(m:Meeting){
-    save('salvar reunião',async()=>{await api.saveMeeting(householdId,weekStart,m);if(tab==='week')await loadHistory()},'Reunião salva!')
+    save('salvar reunião',async()=>{await api.saveMeeting(householdId,weekStart,m);if(screen==='nos')await loadHistory()},'Reunião salva!')
   }
 
   // ── CASA: divisão, compras, manutenção ───────────────
@@ -1126,6 +695,23 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const hello=greeting(hour)
   const dateLabel=longDateLabel(now)
   const countFor=(w:Who)=>{const all=hItems.filter(i=>ownerOfItem(i)===w);return{all:all.length,done:all.filter(i=>i.completed_today).length}}
+
+  // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
+  const quickActions:QuickAction[]=[
+    {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
+    {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
+    {id:'maint',icon:'ferramenta',label:'Nova manutenção',sub:'Filtro, vacina, revisão…',run:()=>openModal('maint',null)},
+    {id:'meeting',icon:'reuniao',label:'Reunião semanal',sub:'15 minutos, sem cobranças',run:()=>openModal('meeting')},
+    {id:'energy',icon:'energia',label:'Energia da semana',sub:en.l,run:()=>openModal('energy')},
+    {id:'survival',icon:'escudo',label:settings.survival?'Sair do modo sobrevivência':'Modo sobrevivência',sub:settings.survival?'Ativo · só essenciais':'Só o essencial por um tempo',run:toggleSurvival},
+  ]
+
+  // Rotinas que já existem (rotinas dos cães, agrupadas como em Início)
+  const routineGroups=(()=>{
+    const m=new Map<string,{title:string,time:string|null,frequency:string,dogs:string[],r:DogRoutine}>()
+    dogs.forEach(d=>d.routines.forEach(r=>{const k=dogKey(r);const g=m.get(k)||{title:r.title,time:r.scheduled_time,frequency:r.frequency,dogs:[],r};g.dogs.push(d.name);m.set(k,g)}))
+    return Array.from(m.values()).sort((a,b)=>(hhmm(a.time)||'99').localeCompare(hhmm(b.time)||'99'))
+  })()
 
   // ── RENDER HELPERS ────────────────────────────────────
   const taskRow=(t:Task,o:{actions?:boolean,next?:boolean}={})=>{
@@ -1296,20 +882,20 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
   return(
     <>
-      <style>{CSS}</style>
 
-      {/* HEADER */}
+      <SideNav current={screen} onGo={go} onQuick={()=>openModal('quick')}
+        profile={{initials:initials(names[me||'g']),name:me?firstName(names[me]):'Ninho',sub:account?.email||'Perfil e ajustes',cls:`av-${me||'g'}`}}/>
+      <div className="app-main">
+      {/* CABEÇALHO */}
       <header className="top">
         <div className="top-in">
-          <button className="logo" onClick={()=>setTab('today')}>Ni<span>nho</span></button>
-          <nav className="tnav">
-            {TABS.map(([k,ic,l])=><button key={k} className={`tnb ${tab===k?'on':''}`} onClick={()=>setTab(k)}><span className="ic">{ic}</span>{l}</button>)}
-          </nav>
+          <button className="logo mob-only" onClick={()=>go('inicio')} aria-label="Ninho, ir para o Início">Ni<span>nho</span></button>
           <div className="status">
             <button className={`chip ${en.cls}`} onClick={()=>openModal('energy')} title="Energia da semana">{en.ic} <span className="chip-hide">{en.short}</span></button>
             {settings.survival&&<button className="chip coral" onClick={toggleSurvival} title="Modo sobrevivência ativo">🛡</button>}
             <span className="chip chip-hide">Nv{lv.l} · {xp} XP</span>
             <span className="chip amber" title={`${streak} dias seguidos`}>🔥 {streak}</span>
+            <button className={`av av-${me||'g'} top-prof mob-only`} onClick={()=>go('ajustes')} aria-label="Perfil e ajustes">{initials(names[me||'g'])}</button>
           </div>
         </div>
       </header>
@@ -1325,7 +911,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           <button className="lnk" onClick={()=>data.loadAll()}>Tentar agora</button></div>}
         {data.status==='ready'&&<>
         {/* ── HOJE ── */}
-        {tab==='today'&&<div className="scr">
+        {screen==='inicio'&&<div className="scr">
           <div className="sh">
             <div><h1>{hello} 👋</h1><p>{dateLabel}</p></div>
             <div className="sh-a desk-only"><button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button></div>
@@ -1399,7 +985,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                 })}
                 {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
               </div>
-              <MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>{setTaskView('maint');setTab('tasks')}}/>
+              <MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>
               {(()=>{const sc=shoppingCounts(casa.shop);return casa.shopState==='ready'&&sc.toBuy>0&&(
                 <button className="card dsum shop-sum" onClick={()=>setTab('shop')}>
                   <span className="dav" style={{width:36,height:36,fontSize:18}}>🛒</span>
@@ -1421,13 +1007,36 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           </div>
         </div>}
 
-        {/* ── TAREFAS ── */}
-        {tab==='tasks'&&<div className="scr">
-          <div className="seg vseg" role="tablist">
-            <button role="tab" aria-selected={taskView==='tasks'} className={`segb ${taskView==='tasks'?'on':''}`} onClick={()=>setTaskView('tasks')}>📋 Rotina da casa</button>
-            <button role="tab" aria-selected={taskView==='maint'} className={`segb ${taskView==='maint'?'on':''}`} onClick={()=>setTaskView('maint')}>🔧 Manutenção{casa.maint.filter(i=>i.next_due<=today).length>0&&<span className="cnt late">{casa.maint.filter(i=>i.next_due<=today).length}</span>}</button>
-          </div>
-          {taskView==='maint'?<>
+        {/* ── ROTINAS ── */}
+        {screen==='rotinas'&&<div className="scr narrow">
+          <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
+          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routineGroups.length],['habitos','Hábitos']]}/>
+          {rotView==='rotinas'?<>
+            <div className="card intro">
+              <div className="intro-t">Rotina é um conjunto de passos num momento do dia</div>
+              <div className="row-s">Como “fechar a cozinha” ou “rotina noturna dos cães”: tem checklist, horário e pode ser dividida. O construtor de rotinas com passos chega na próxima etapa. Por enquanto, estas são as rotinas que o Ninho já acompanha:</div>
+            </div>
+            <div className="card">
+              <div className="slbl">🐾 Rotinas dos cães <span className="mono" style={{color:'var(--faint)'}}>{routineGroups.length}</span><button className="lnk" onClick={()=>go('caes')}>Editar em Cães →</button></div>
+              {routineGroups.length===0?<div className="row-s">Nenhuma rotina ainda.</div>:routineGroups.map(g=>{const w=ownerOfRoutine(g.r);return(
+                <div key={g.title+g.time+g.frequency} className="row rt-row">
+                  <span className="rt-time mono">{hhmm(g.time)||'—'}</span>
+                  <div style={{minWidth:0,flex:1}}><div className="row-t">{g.title}</div><div className="row-s">{g.dogs.join(' e ')} · {(FPT[g.frequency]||g.frequency).toLowerCase()}</div></div>
+                  <span className={`mini av-${w}`} title={`Hoje: vez de ${firstName(names[w])}`}>{names[w].slice(0,1).toUpperCase()}</span>
+                </div>)})}
+            </div>
+            <div className="row-s" style={{textAlign:'center'}}>As tarefas da casa (louça, lixo, faxina…) continuam em <button className="lnk-inline" onClick={()=>goCasa('tarefas')}>Casa › Tarefas</button>.</div>
+          </>:<div className="card empty"><span className="empty-icon">🌱</span>
+            <b>Hábitos chegam em breve</b><br/>Coisas que vocês querem repetir para ganhar constância, como “preparar o dia seguinte”. Hábito não vira atraso: se um dia não deu, fica só registrado.
+          </div>}
+        </div>}
+
+        {/* ── CASA ── */}
+        {screen==='casa'&&<div className="scr">
+          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length]]}/>
+          {casaView==='compras'?<ShoppingTab householdId={householdId} me={me} names={names} items={casa.shop} history={casa.shopHistory} state={casa.shopState} error={casa.shopError}
+            setItems={casa.setShop} onReload={casa.reloadShopping} requireMe={requireMe} toast={(m,u)=>showToast(m,u)} fail={(e,r)=>showError(e,r)} onFinished={onShoppingFinished}/>
+          :casaView==='manutencao'?<>
             <div className="sh"><div><h2>Manutenção</h2><p>De tempos em tempos: casa, cães, carro e saúde</p></div></div>
             <MaintenanceSection items={casa.maint} log={casa.maintLog} today={today} names={names} state={casa.maintState} error={casa.maintError} actions={maintActions}
               onReload={()=>{casa.reloadMaintenance()}} onNew={()=>openModal('maint',null)} onEdit={it=>openModal('maint',it)} onTemplates={()=>openModal('mainttpl')}/>
@@ -1493,15 +1102,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           </>}
         </div>}
 
-        {/* ── COMPRAS ── */}
-        {tab==='shop'&&<ShoppingTab householdId={householdId} me={me} names={names} items={casa.shop} history={casa.shopHistory} state={casa.shopState} error={casa.shopError}
-          setItems={casa.setShop} onReload={casa.reloadShopping} requireMe={requireMe} toast={(m,u)=>showToast(m,u)} fail={(e,r)=>showError(e,r)} onFinished={onShoppingFinished}/>}
 
         {/* ── SEMANA ── */}
-        {tab==='week'&&<div className="scr">
+        {screen==='nos'&&<div className="scr">
           <div className="sh">
-            <div><h2>Semana</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
-            <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button></div>
+            <div><h2>Nós</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
+            <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button><button className="btn btn-g" onClick={()=>go('ajustes')}>⚙️ Ajustes</button></div>
           </div>
           <div className="wgrid" style={{marginBottom:14}}>
             <div className="col">
@@ -1536,7 +1142,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                 </div>
                 {(rotCount>0||allRoutines.length>0)&&<div style={{fontSize:12,color:'var(--sub)',marginTop:-6,marginBottom:14}}><span className="tag-r">↻ {[rotCount>0&&`${rotCount} tarefa${rotCount!==1?'s':''}`,allRoutines.length>0&&`${allRoutines.length} rotina${allRoutines.length!==1?'s':''} dos cães`].filter(Boolean).join(' + ')} sem dona fixa</span> — {casa.split==='smart'?'divididas pela divisão inteligente':'alternam a cada dia, semana ou mês'}, metade da carga para cada</div>}
                 <button className="btn btn-pur btn-w" onClick={autoDistribute}>✦ Distribuir automaticamente</button>
-                <div style={{fontSize:12,color:'var(--sub)',marginTop:8,textAlign:'center'}}>Ou ajuste uma a uma em <button onClick={()=>setTab('tasks')} style={{background:'none',border:'none',color:'var(--green)',fontSize:12}}>Tarefas →</button></div>
+                <div style={{fontSize:12,color:'var(--sub)',marginTop:8,textAlign:'center'}}>Ou ajuste uma a uma em <button onClick={()=>goCasa('tarefas')} style={{background:'none',border:'none',color:'var(--pri)',fontSize:12}}>Casa › Tarefas →</button></div>
               </div>
               <div className="card">
                 <div className="slbl">Energia da semana</div>
@@ -1588,7 +1194,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         </div>}
 
         {/* ── CÃES ── */}
-        {tab==='pets'&&<div className="scr">
+        {screen==='caes'&&<div className="scr">
           <div className="sh">
             <div><h2>Cães</h2><p>{dogs.length} pet{dogs.length!==1?'s':''}{dogDaily.length>0&&` · ${dogDone}/${dogDaily.length} rotinas hoje`}</p></div>
             <div className="sh-a"><button className="btn btn-s" onClick={()=>openModal('pet')}>+ Adicionar pet</button></div>
@@ -1646,8 +1252,21 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         </div>}
 
         {/* ── AJUSTES ── */}
-        {tab==='settings'&&<div className="scr narrow">
-          <div className="sh"><div><h2>Ajustes</h2><p>Integrantes e guia de uso</p></div></div>
+        {screen==='ajustes'&&<div className="scr narrow">
+          <button className="back" onClick={()=>go('nos')}>← Nós</button>
+          <div className="sh"><div><h2>Ajustes</h2><p>Aparência, conta, integrantes e guia de uso</p></div></div>
+          <div className="card" style={{marginBottom:14}}>
+            <div className="slbl">Aparência</div>
+            <div className="themes" role="radiogroup" aria-label="Tema">
+              {THEMES.map(t=>(
+                <button key={t.id} role="radio" aria-checked={theme===t.id} className={`theme-opt ${theme===t.id?'on':''}`} onClick={()=>pickTheme(t.id)}>
+                  <span className="theme-sw" aria-hidden="true">{t.swatch.map((c,i)=><i key={i} style={{background:c}}/>)}</span>
+                  <span><b>{t.name}</b><small>{t.desc}</small></span>
+                </button>
+              ))}
+            </div>
+            <div className="row-s" style={{marginTop:8}}>Vale só para este aparelho: cada uma escolhe o que é mais confortável.</div>
+          </div>
           <div className="card" style={{marginBottom:14}}>
             <div className="slbl">{account?'Sua conta':'Este aparelho'}</div>
             {account?<div className="field-row">
@@ -1809,13 +1428,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       </main>
 
       {/* NAV MOBILE */}
-      <nav className="bnav">
-        {TABS.map(([k,ic,l])=><button key={k} className={`bnb ${tab===k?'on':''}`} onClick={()=>setTab(k)} aria-current={tab===k?'page':undefined}><span className="ic">{ic}</span>{l}</button>)}
-      </nav>
+      </div>
+      <BottomNav current={screen} onGo={go}/>
 
-      {data.status==='ready'&&(tab==='today'||tab==='tasks')&&(tab==='tasks'&&taskView==='maint'
-        ?<button className="fab mob-fab" onClick={()=>openModal('maint',null)} aria-label="Nova manutenção"><span>+</span><b>Nova manutenção</b></button>
-        :<button className="fab mob-fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>)}
+      {data.status==='ready'&&screen!=='ajustes'&&<button className="fab mob-fab" onClick={()=>openModal('quick')} aria-label="Ação rápida"><Icon name="plus" size={24}/></button>}
+      {modal==='quick'&&<QuickActionsSheet onClose={closeModal} actions={quickActions}/>}
 
       {toast&&<div className={`toast ${toast.kind==='err'?'err':''}`} role={toast.kind==='err'?'alert':'status'}>
         <span className="toast-m">{toast.msg}</span>
