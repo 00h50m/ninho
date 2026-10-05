@@ -1049,7 +1049,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             </div>
           </div>
           <div className="search">
-            <span style={{color:'var(--sub)'}}>⌕</span>
+            <span className="search-ic"><Icon name="busca" size={18}/></span>
             <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar tarefa..." aria-label="Buscar tarefa"/>
             {query&&<button className="x" onClick={()=>setQuery('')} aria-label="Limpar busca">✕</button>}
           </div>
@@ -1057,10 +1057,18 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <span>🐾 {dogTasks.length} tarefa{dogTasks.length!==1?'s':''} de cães repete{dogTasks.length===1?'':'m'} as rotinas da aba Cães — por isso não aparece{dogTasks.length===1?'':'m'} em Hoje.</span>
             <button className="btn btn-pur" onClick={()=>archiveTasks(dogTasks)}>Arquivar</button>
           </div>}
-          <div className="fchips">
-            {[['all',`Todas · ${tasks.length}`],['essential','🔴 Essenciais'],['g',firstName(names.g)],['s',firstName(names.s)],['r','Rodízio'],['notime','⏰ Sem horário'],...usedCats.map(k=>[k,CAT[k]])].map(([k,v])=>(
-              <button key={k} className={`fc ${taskFilter===k?'on':''}`} onClick={()=>setTaskFilter(k)}>{v}</button>
-            ))}
+          <div className="fbar">
+            <div className="fchips" role="group" aria-label="Filtrar por pessoa ou situação">
+              {[['all',`Todas · ${tasks.length}`],['essential','🔴 Essenciais'],['g',firstName(names.g)],['s',firstName(names.s)],['r','Rodízio'],['notime','⏰ Sem horário']].map(([k,v])=>(
+                <button key={k} className={`fc ${taskFilter===k?'on':''}`} aria-pressed={taskFilter===k} onClick={()=>setTaskFilter(k)}>{v}</button>
+              ))}
+            </div>
+            {usedCats.length>1&&<div className="fchips" role="group" aria-label="Filtrar por cômodo">
+              <span className="fchips-l">Cômodo</span>
+              {usedCats.map(k=>(
+                <button key={k} className={`fc ${taskFilter===k?'on':''}`} aria-pressed={taskFilter===k} onClick={()=>setTaskFilter(taskFilter===k?'all':k)}>{CAT[k]}</button>
+              ))}
+            </div>}
           </div>
           {tasks.length===0?(
             <div className="card empty"><span className="empty-icon">📋</span>Nenhuma tarefa cadastrada ainda<div><button className="btn btn-p" onClick={()=>openModal('sugg')}>✦ Começar com sugestões</button></div></div>
