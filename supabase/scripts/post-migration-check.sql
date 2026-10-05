@@ -113,6 +113,13 @@ begin
             ' · conclusões ' || (select count(*) from public.task_completions where household_id = r.id));
   end loop;
 
+  -- Correção 012: código do Telegram não depende do schema "extensions"
+  insert into ninho_check("check", status, detalhe)
+  select 'código do Telegram (012)',
+         case when pg_get_functiondef('public.ninho_telegram_link_code(uuid,text)'::regprocedure) like '%gen_random_uuid%' then 'ok' else 'FALHA' end,
+         case when pg_get_functiondef('public.ninho_telegram_link_code(uuid,text)'::regprocedure) like '%gen_random_uuid%' then ''
+              else 'rode a migration 20261011120200_fix_telegram_codigo.sql' end;
+
   -- Login (010) e segurança por casa (011)
   for r in select h.id, h.name from public.households h order by h.created_at nulls last loop
     insert into ninho_check("check", status, detalhe)
