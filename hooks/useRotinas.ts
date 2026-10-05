@@ -24,10 +24,10 @@ export function useRotinas(householdId: string, today: string) {
     const later = () => { clearTimeout(timer.current); timer.current = setTimeout(() => { reload() }, 300) }
     const f = `household_id=eq.${householdId}`
     const ch = supabase.channel(`ninho-rotinas:${householdId}`)
-    for (const t of ['routines', 'routine_steps', 'routine_runs', 'routine_step_checks', 'ninho_habits', 'ninho_habit_logs'])
+    for (const t of ['routines', 'routine_steps', 'routine_runs', 'routine_step_checks', 'ninho_habits', 'ninho_habit_logs', 'routine_templates'])
       ch.on('postgres_changes', { event: '*', schema: 'public', table: t, filter: f }, later)
     // DELETE não aceita filtro
-    for (const t of ['routine_step_checks', 'ninho_habit_logs']) ch.on('postgres_changes', { event: 'DELETE', schema: 'public', table: t }, later)
+    for (const t of ['routine_step_checks', 'ninho_habit_logs', 'routine_templates']) ch.on('postgres_changes', { event: 'DELETE', schema: 'public', table: t }, later)
     ch.subscribe()
     return () => { clearTimeout(timer.current); supabase.removeChannel(ch) }
   }, [householdId, data.routinesOk, reload])

@@ -761,6 +761,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   async function saveRoutineDraft(d:rotApi.RoutineDraft){setSaving(true)
     try{await rotApi.saveRoutine(householdId,me,d);closeModal();await rot.reload();showToast(d.id?'Rotina salva':'Rotina criada')}
     catch(e){showError(toNinhoError(e,'salvar rotina'))}finally{setSaving(false)}}
+  async function saveRoutineTemplate(d:rotApi.RoutineDraft){setSaving(true)
+    try{await rotApi.saveAsTemplate(householdId,me,d);await rot.reload();showToast(`“${d.title.trim()}” salvo em Modelos`)}
+    catch(e){showError(toNinhoError(e,'salvar modelo'))}finally{setSaving(false)}}
+  async function addHouseTemplate(t:rotApi.HouseTemplate){setTplBusy(t.id)
+    try{await rotApi.saveRoutine(householdId,me,rotApi.draftFromTemplate(t));await rot.reload();showToast(`${t.title} adicionada`)}
+    catch(e){showError(toNinhoError(e,'adicionar modelo'))}finally{setTplBusy(null)}}
+  async function deleteHouseTemplate(t:rotApi.HouseTemplate){
+    try{await rotApi.deleteTemplate(t.id);await rot.reload();showToast(`Modelo “${t.title}” apagado`)}
+    catch(e){showError(toNinhoError(e,'apagar modelo'))}}
   async function archiveRoutine(r:Routine){setSaving(true)
     try{await rotApi.archiveRoutine(r.id);closeModal();await rot.reload();showToast(`${r.title} arquivada (o histórico fica guardado)`)}
     catch(e){showError(toNinhoError(e,'arquivar rotina'))}finally{setSaving(false)}}
@@ -1607,8 +1616,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         onClose={closeModal}/>}
       {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
       {modal==='maint'&&<MaintenanceForm item={modalData} today={today} names={names} saving={saving} onClose={closeModal} onSave={saveMaint} onDelete={removeMaint}/>}
-      {modal==='rtedit'&&<RoutineEditor routine={modalData} names={names} saving={saving} onSave={saveRoutineDraft} onArchive={archiveRoutine} onClose={closeModal}/>}
-      {modal==='rttpl'&&<TemplatesSheet existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)} busy={tplBusy} onAdd={addRoutineTemplate} onClose={closeModal}/>}
+      {modal==='rtedit'&&<RoutineEditor routine={modalData} names={names} saving={saving} onSave={saveRoutineDraft} onArchive={archiveRoutine} onClose={closeModal} onSaveTemplate={rot.templates?saveRoutineTemplate:undefined}/>}
+      {modal==='rttpl'&&<TemplatesSheet existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)} existingTitles={routines.map(r=>r.title)} house={rot.templates} busy={tplBusy} onAdd={addRoutineTemplate} onAddHouse={addHouseTemplate} onDeleteHouse={deleteHouseTemplate} onClose={closeModal}/>}
       {modal==='hbedit'&&<HabitEditor habit={modalData?.habit??null} preset={modalData?.preset} names={names} saving={saving} onSave={saveHabitDraft} onArchive={archiveHabit} onClose={closeModal}/>}
       {modal==='mainttpl'&&<MaintTemplatesSheet existing={casa.maint} today={today} saving={saving} onClose={closeModal} onAdd={addMaintTemplates}/>}
       {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} onClose={closeModal} onSave={saveMeeting}/>}

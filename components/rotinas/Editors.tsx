@@ -5,17 +5,19 @@ import type { Names, Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
 import { ALL_DAYS, TEMPLATES, WEEKDAYS, WEEKDAYS_LONG, daysLabel } from '@/lib/onboarding'
 import type { Habit, Routine } from '@/lib/rotinas'
-import type { HabitDraft, RoutineDraft } from '@/lib/services/rotinas'
+import type { HabitDraft, HouseTemplate, RoutineDraft } from '@/lib/services/rotinas'
 
 const first = (n: string) => (n || '').split(' ')[0]
 const toggle = <T,>(l: T[], v: T) => l.includes(v) ? l.filter(x => x !== v) : [...l, v]
 const CATS: Array<[string, string]> = [['casa', '🏠 Casa'], ['cozinha', '🍳 Cozinha'], ['caes', '🐾 Cães'], ['manha', '🌅 Manhã'], ['noite', '🌙 Noite'], ['semana', '🗓 Semana'], ['outros', 'Outros']]
 
-export function RoutineEditor({ routine, names, saving, onSave, onArchive, onClose }: {
-  routine: Routine | null, names: Names, saving: boolean
+export function RoutineEditor({ routine, draft, names, saving, onSave, onArchive, onClose, onSaveTemplate }: {
+  routine: Routine | null, draft?: RoutineDraft, names: Names, saving: boolean
   onSave: (d: RoutineDraft) => void, onArchive: (r: Routine) => void, onClose: () => void
+  /** Ausente = modelos da casa indisponíveis (migration 017 não aplicada) */
+  onSaveTemplate?: (d: RoutineDraft) => void
 }) {
-  const [d, setD] = useState<RoutineDraft>(() => routine ? {
+  const [d, setD] = useState<RoutineDraft>(() => draft ? { ...draft, steps: draft.steps.map(x => ({ ...x })) } : routine ? {
     id: routine.id, title: routine.title, description: routine.description || '', category: routine.category,
     weekdays: routine.weekdays || [...ALL_DAYS], scheduled_time: routine.scheduled_time, duration_min: routine.duration_min,
     assign_mode: routine.assign_mode, essential: routine.essential, start_date: routine.start_date || null, paused_until: routine.paused_until || null,
@@ -28,6 +30,7 @@ export function RoutineEditor({ routine, names, saving, onSave, onArchive, onClo
   return (
     <Sheet title={routine ? 'Editar rotina' : 'Nova rotina'} onClose={onClose} size="lg" footer={<>
       {routine && <button className="btn btn-danger" disabled={saving} onClick={() => onArchive(routine)}>Arquivar</button>}
+      {onSaveTemplate && <button className="btn btn-g" disabled={!valid || saving} onClick={() => onSaveTemplate(d)} title="Guarda esta rotina na lista de Modelos da casa">Salvar como modelo</button>}
       <button className="btn btn-p" disabled={!valid || saving} onClick={() => onSave(d)}>{saving ? 'Salvando…' : 'Salvar rotina'}</button>
     </>}>
       <label className="onb-f"><span>Nome</span><input className="fi" value={d.title} maxLength={60} autoFocus onChange={e => set({ title: e.target.value })} placeholder="Ex.: Fechar a cozinha"/></label>
@@ -107,10 +110,34 @@ export function HabitEditor({ habit, names, saving, onSave, onArchive, onClose, 
   )
 }
 
-export function TemplatesSheet({ existingKeys, busy, onAdd, onClose }: { existingKeys: string[], busy: string | null, onAdd: (key: string) => void, onClose: () => void }) {
+export function TemplatesSheet({ existingKeys, existingTitles, house, busy, onAdd, onAddHouse, onDeleteHouse, onClose }: {
+  existingKeys: string[], existingTitles: string[], house: HouseTemplate[] | null, busy: string | null
+  onAdd: (key: string) => void, onAddHouse: (t: HouseTemplate) => void, onDeleteHouse: (t: HouseTemplate) => void, onClose: () => void
+}) {
+  const [confirmDel, setConfirmDel] = useState<string | null>(null)
+  const titles = new Set(existingTitles.map(t => t.trim().toLowerCase()))
   return (
     <Sheet title="Modelos de rotina" onClose={onClose} size="lg">
       <p className="row-s" style={{ marginBottom: 12 }}>Cada modelo vira uma rotina com passos. Depois dá para editar tudo. O que já existe não é criado de novo.</p>
+      {house && <>
+        <div className="slbl">Da casa {house.length > 0 && <span className="mono" style={{ color: 'var(--faint)' }}>{house.length}</span>}</div>
+        {house.length === 0 && <p className="row-s" style={{ marginBottom: 14 }}>Nenhum ainda. No editor de qualquer rotina, toque em <b>Salvar como modelo</b>.</p>}
+        <div className="tpl-list" style={{ marginBottom: 16 }}>
+          {house.map(t => {
+            const has = titles.has(t.title.trim().toLowerCase())
+            return (
+              <div key={t.id} className={`tpl ${has ? 'has' : ''}`} data-tpl={t.title}>
+                <div style={{ minWidth: 0, flex: 1 }}><b>{t.title}</b><small>{t.scheduled_time || 'sem horário'} · {daysLabel(t.weekdays || ALL_DAYS)} · {t.steps.length} passos</small></div>
+                {has ? <span className="chip green">✓ Já existe</span> : <button className="btn btn-s" disabled={busy === t.id} onClick={() => onAddHouse(t)}>{busy === t.id ? '…' : 'Adicionar'}</button>}
+                {confirmDel === t.id
+                  ? <button className="btn btn-danger" onClick={() => { setConfirmDel(null); onDeleteHouse(t) }}>Apagar modelo</button>
+                  : <button className="rt-edit" aria-label={`Apagar o modelo ${t.title}`} title="Apagar modelo (as rotinas criadas com ele continuam)" onClick={() => setConfirmDel(t.id)}>🗑</button>}
+              </div>
+            )
+          })}
+        </div>
+        <div className="slbl">Do Ninho</div>
+      </>}
       <div className="tpl-list">
         {TEMPLATES.map(t => {
           const has = existingKeys.includes(t.key)

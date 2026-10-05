@@ -132,3 +132,18 @@ Sem a 016, as rotinas aparecem só para leitura e a aba Hábitos avisa que falta
   drop table if exists public.ninho_habit_logs;
   drop table if exists public.ninho_habits;
   ```
+
+## Complemento: "Salvar como modelo" (migration 017)
+- **No editor de rotina:** o botão **Salvar como modelo** guarda a rotina (dias, horário, quem faz, passos com 🛡) em `routine_templates`.
+  - Salvar de novo com o mesmo nome **atualiza** o modelo e não cria outro.
+- **Em Rotinas › Modelos:**
+  - a seção **Da casa** fica acima dos modelos do Ninho e aparece para as duas;
+  - "Adicionar" cria a rotina;
+  - se já existe uma rotina com o mesmo nome, aparece "já existe";
+  - 🗑 apaga só o modelo, e as rotinas criadas com ele continuam.
+- **Migration** `supabase/migrations/20261016120000_modelos_da_casa.sql`: tabela com segurança por casa e Realtime. Não apaga nada e pode rodar de novo.
+  - Sem ela, o botão não aparece e o resto funciona.
+- **Testes:**
+  - banco: mesmo nome atualiza, e outra casa não vê;
+  - ponta a ponta: salvar, usar, não duplicar, atualizar, a Sabrina vê no celular, apagar mantém a rotina.
+- **Conferência:** `select to_regclass('public.routine_templates') is not null;` deve dar `true`.

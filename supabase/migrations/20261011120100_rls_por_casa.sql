@@ -19,7 +19,7 @@ begin
     'xp_history','puppy_accidents','push_subscriptions','shopping_items','maintenance_items',
     'maintenance_log','task_skips','telegram_links',
     'household_setup','onboarding_progress','routines','routine_steps','daily_checkins','household_days',
-    'routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs'] loop
+    'routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs','routine_templates'] loop
     if to_regclass('public.' || t) is null then continue; end if;
     execute format('alter table public.%I enable row level security', t);
     execute format('drop policy if exists "allow_all_auth" on public.%I', t);

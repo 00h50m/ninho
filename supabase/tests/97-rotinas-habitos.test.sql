@@ -96,3 +96,15 @@ do $$ declare n int; begin
       and not exists (select 1 from pg_policies where tablename = 'habits'),
     'tabela habits de outro app não foi alterada');
 end $$;
+
+-- 017: modelos da casa
+set role authenticated;
+select pg_temp.as_user('7c7c7c7c-eeee-0000-0000-00000000000a');
+insert into public.routine_templates (household_id, title, steps, created_by) values ('7c7c7c7c-0000-0000-0000-000000000001', 'Banho das cães', '[{"title":"Separar toalha","survival":false}]', 'g');
+insert into public.routine_templates (household_id, title, steps) values ('7c7c7c7c-0000-0000-0000-000000000001', ' banho DAS cães ', '[]')
+  on conflict (household_id, title_key) do update set steps = '[{"title":"Separar toalha"},{"title":"Secar"}]';
+select pg_temp.ok((select count(*) from public.routine_templates) = 1 and (select jsonb_array_length(steps) from public.routine_templates) = 2, 'modelo com o mesmo nome atualiza em vez de duplicar');
+select pg_temp.as_user('7c7c7c7c-eeee-0000-0000-00000000000c');
+select pg_temp.ok((select count(*) from public.routine_templates) = 0, 'outra casa não vê os modelos');
+reset role;
+select pg_temp.as_user(null);

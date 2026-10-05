@@ -22,8 +22,14 @@ export interface RotinasData {
   runs: Run[]
   habits: Habit[]
   logs: HabitLog[]
+  /** Modelos salvos pela casa (017); null = migration ainda não aplicada */
+  templates: HouseTemplate[] | null
 }
-export const EMPTY: RotinasData = { routinesOk: false, checklistOk: false, routines: [], runs: [], habits: [], logs: [] }
+export interface HouseTemplate {
+  id: string, title: string, description: string | null, category: string, weekdays: number[] | null, scheduled_time: string | null,
+  duration_min: number | null, assign_mode: Routine['assign_mode'], essential: boolean, steps: Array<{ title: string, survival?: boolean }>
+}
+export const EMPTY: RotinasData = { routinesOk: false, checklistOk: false, routines: [], runs: [], habits: [], logs: [], templates: null }
 
 const R_COLS = 'id,template_key,title,description,category,weekdays,scheduled_time,duration_min,assign_mode,essential'
 const R_COLS_16 = R_COLS + ',start_date,paused_until,reminder_min,routine_steps(id,position,title,survival,active)'
@@ -42,11 +48,13 @@ export async function loadRotinas(householdId: string, runsFrom: string, logsFro
   const routines = ((r.data || []) as any[]).map(x => ({ ...x, routine_steps: (x.routine_steps || []).filter((s: any) => s.active !== false).sort((a: any, b: any) => a.position - b.position) })) as Routine[]
   if (!checklistOk) return { ...EMPTY, routinesOk: true, routines }
 
-  const [runs, habits, logs] = await Promise.all([
+  const [runs, habits, logs, tpls] = await Promise.all([
     supabase.from('routine_runs').select('id,routine_id,date,status,survival,completed_by,routine_step_checks(step_id,done_by)').eq('household_id', householdId).gte('date', runsFrom).limit(500),
     supabase.from('ninho_habits').select('id,title,description,owner,weekdays,weekly_target,paused_until,archived_at').eq('household_id', householdId).is('archived_at', null).order('created_at').limit(50),
     supabase.from('ninho_habit_logs').select('habit_id,date,who').eq('household_id', householdId).gte('date', logsFrom).limit(3000),
+    supabase.from('routine_templates').select('id,title,description,category,weekdays,scheduled_time,duration_min,assign_mode,essential,steps').eq('household_id', householdId).order('title').limit(100),
   ])
+  if (tpls.error && !isMissingTable(tpls.error)) logError('carregar modelos da casa', tpls.error)
   const e = runs.error || habits.error || logs.error
   if (e) {
     if (isMissingTable(e)) return { ...EMPTY, routinesOk: true, routines }
@@ -57,6 +65,7 @@ export async function loadRotinas(householdId: string, runsFrom: string, logsFro
     runs: ((runs.data || []) as any[]).map(x => ({ ...x, checks: x.routine_step_checks || [] })),
     habits: (habits.data || []) as Habit[],
     logs: (logs.data || []) as HabitLog[],
+    templates: tpls.error ? null : (tpls.data || []) as HouseTemplate[],
   }
 }
 
@@ -156,5 +165,30 @@ export async function logHabit(householdId: string, habitId: string, date: strin
     if (r.error && r.error.code !== '23505') must(r, 'registrar hábito')
   } else {
     must(await supabase.from('ninho_habit_logs').delete().eq('habit_id', habitId).eq('date', date).select('habit_id'), 'desfazer registro do hábito')
+  }
+}
+
+// ── Modelos da casa (017) ────────────────────────────────────────────
+/** Salva a rotina como modelo da casa. Mesmo nome = atualiza o modelo existente. */
+export async function saveAsTemplate(householdId: string, who: Who | null, d: RoutineDraft): Promise<void> {
+  must(await supabase.from('routine_templates').upsert({
+    household_id: householdId, title: d.title.trim(), description: d.description.trim() || null, category: d.category,
+    weekdays: d.weekdays.length === 7 ? null : [...d.weekdays].sort((a, b) => a - b), scheduled_time: d.scheduled_time || null,
+    duration_min: d.duration_min, assign_mode: d.assign_mode, essential: d.essential,
+    steps: d.steps.filter(s => s.title.trim()).map(s => ({ title: s.title.trim(), survival: s.survival })),
+    created_by: who, updated_at: new Date().toISOString(),
+  }, { onConflict: 'household_id,title_key' }).select('id'), 'salvar modelo')
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  must(await supabase.from('routine_templates').delete().eq('id', id).select('id'), 'apagar modelo')
+}
+
+/** Rascunho de rotina a partir de um modelo da casa. */
+export function draftFromTemplate(t: HouseTemplate): RoutineDraft {
+  return {
+    title: t.title, description: t.description || '', category: t.category, weekdays: t.weekdays || [0, 1, 2, 3, 4, 5, 6],
+    scheduled_time: t.scheduled_time, duration_min: t.duration_min, assign_mode: t.assign_mode, essential: t.essential,
+    start_date: null, paused_until: null, reminder_min: null, steps: t.steps.map(s => ({ title: s.title, survival: !!s.survival })),
   }
 }

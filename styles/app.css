@@ -774,3 +774,4 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
   .rt-grid{grid-template-columns:1fr}
 }
 .rt-other .row-t,.rt-other .row-s{display:block}
+@media(max-width:860px){.tpl{flex-wrap:wrap}.mfoot{flex-wrap:wrap}}

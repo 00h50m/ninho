@@ -39,7 +39,9 @@ begin
     -- Redesign F3: check-in e dia (migration 015)
     ('daily_checkins','mood'), ('household_days','survival'),
     -- Redesign F4: rotinas com checklist e hábitos (migration 016)
-    ('routines','paused_until'), ('routine_runs','status'), ('routine_step_checks','done_by'), ('ninho_habits','weekly_target'), ('ninho_habit_logs','who')
+    ('routines','paused_until'), ('routine_runs','status'), ('routine_step_checks','done_by'), ('ninho_habits','weekly_target'), ('ninho_habit_logs','who'),
+    -- Modelos da casa (migration 017)
+    ('routine_templates','steps')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
