@@ -53,7 +53,7 @@ Branch: `redesign-fase-4`, criada **a partir da `redesign-fase-3`**, que ainda n
 - **`routine_runs`:** uma ocorrência por rotina por dia.
 - **`routine_step_checks`:** passo marcado, com quem fez.
 - **`habits`:** os hábitos.
-- **`habit_logs`:** um registro por hábito por dia.
+- **`ninho_habit_logs`:** um registro por hábito por dia.
 - **Funções:**
   - `ninho_routine_step`: marca ou desmarca um passo;
   - `ninho_routine_finish`: conclui ou reabre;
@@ -70,9 +70,9 @@ Aplicar **a 015 (Fase 3) antes**, se ainda não foi.
 3. **Conferência:**
    ```sql
    select to_regclass('public.routine_runs') is not null as ocorrencias,
-          to_regclass('public.habits') is not null as habitos,
+          to_regclass('public.ninho_habits') is not null as habitos,
           to_regprocedure('public.ninho_routine_step(uuid,uuid,date,text,boolean,boolean)') is not null as funcao,
-          (select count(*) from pg_policies where tablename in ('routine_runs','routine_step_checks','habits','habit_logs') and policyname = 'household_member') as regras;
+          (select count(*) from pg_policies where tablename in ('routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs') and policyname = 'household_member') as regras;
    ```
    O esperado é `true | true | true | 4`.
 
@@ -129,6 +129,6 @@ Sem a 016, as rotinas aparecem só para leitura e a aba Hábitos avisa que falta
   drop function if exists public.ninho_actor(uuid,text);
   drop table if exists public.routine_step_checks;
   drop table if exists public.routine_runs;
-  drop table if exists public.habit_logs;
-  drop table if exists public.habits;
+  drop table if exists public.ninho_habit_logs;
+  drop table if exists public.ninho_habits;
   ```

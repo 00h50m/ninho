@@ -44,8 +44,8 @@ export async function loadRotinas(householdId: string, runsFrom: string, logsFro
 
   const [runs, habits, logs] = await Promise.all([
     supabase.from('routine_runs').select('id,routine_id,date,status,survival,completed_by,routine_step_checks(step_id,done_by)').eq('household_id', householdId).gte('date', runsFrom).limit(500),
-    supabase.from('habits').select('id,title,description,owner,weekdays,weekly_target,paused_until,archived_at').eq('household_id', householdId).is('archived_at', null).order('created_at').limit(50),
-    supabase.from('habit_logs').select('habit_id,date,who').eq('household_id', householdId).gte('date', logsFrom).limit(3000),
+    supabase.from('ninho_habits').select('id,title,description,owner,weekdays,weekly_target,paused_until,archived_at').eq('household_id', householdId).is('archived_at', null).order('created_at').limit(50),
+    supabase.from('ninho_habit_logs').select('habit_id,date,who').eq('household_id', householdId).gte('date', logsFrom).limit(3000),
   ])
   const e = runs.error || habits.error || logs.error
   if (e) {
@@ -141,20 +141,20 @@ export interface HabitDraft { id?: string, title: string, description: string, o
 
 export async function saveHabit(householdId: string, who: Who | null, d: HabitDraft): Promise<void> {
   const row = { title: d.title.trim(), description: d.description.trim() || null, owner: d.owner, weekdays: d.weekdays?.length ? [...d.weekdays].sort((a, b) => a - b) : null, weekly_target: d.weekdays?.length ? d.weekdays.length : d.weekly_target, paused_until: d.paused_until || null }
-  if (d.id) must(await supabase.from('habits').update(row).eq('id', d.id).select('id'), 'salvar hábito')
-  else must(await supabase.from('habits').insert({ ...row, household_id: householdId, created_by: who }).select('id'), 'criar hábito')
+  if (d.id) must(await supabase.from('ninho_habits').update(row).eq('id', d.id).select('id'), 'salvar hábito')
+  else must(await supabase.from('ninho_habits').insert({ ...row, household_id: householdId, created_by: who }).select('id'), 'criar hábito')
 }
 
 /** Abandonar: sai da lista, o histórico continua guardado. */
 export async function archiveHabit(id: string): Promise<void> {
-  must(await supabase.from('habits').update({ archived_at: new Date().toISOString() }).eq('id', id).select('id'), 'abandonar hábito')
+  must(await supabase.from('ninho_habits').update({ archived_at: new Date().toISOString() }).eq('id', id).select('id'), 'abandonar hábito')
 }
 
 export async function logHabit(householdId: string, habitId: string, date: string, who: Who, done: boolean): Promise<void> {
   if (done) {
-    const r = await supabase.from('habit_logs').insert({ habit_id: habitId, household_id: householdId, date, who }).select('habit_id')
+    const r = await supabase.from('ninho_habit_logs').insert({ habit_id: habitId, household_id: householdId, date, who }).select('habit_id')
     if (r.error && r.error.code !== '23505') must(r, 'registrar hábito')
   } else {
-    must(await supabase.from('habit_logs').delete().eq('habit_id', habitId).eq('date', date).select('habit_id'), 'desfazer registro do hábito')
+    must(await supabase.from('ninho_habit_logs').delete().eq('habit_id', habitId).eq('date', date).select('habit_id'), 'desfazer registro do hábito')
   }
 }

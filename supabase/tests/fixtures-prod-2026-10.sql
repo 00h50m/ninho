@@ -144,3 +144,8 @@ insert into xp_history (household_id, amount, reason, earned_at) values
 insert into weekly_settings (household_id, week_start, energy) values
   ('99999999-0000-0000-0000-000000000001', '2026-05-18', 'low'),
   ('99999999-0000-0000-0000-000000000001', '2026-07-27', 'medium');
+
+-- Produção tem uma tabela "habits" que NÃO é do Ninho (outro app no mesmo projeto).
+-- As migrations do Ninho não podem mexer nela.
+create table if not exists public.habits (id uuid primary key default gen_random_uuid(), name text not null, user_id uuid, created_at timestamptz default now());
+insert into public.habits (name) values ('Beber água'), ('Ler 10 páginas');

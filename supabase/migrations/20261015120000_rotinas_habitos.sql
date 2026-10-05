@@ -8,7 +8,10 @@
 --   Conclusão parcial é permitida; no modo sobrevivência valem só os passos 🛡.
 -- • Hábito (habits): comportamento para ganhar constância. Tem meta de
 --   frequência; dia não feito fica só sem registro — NUNCA vira atraso.
---   Pausar e abandonar não apagam o histórico (habit_logs).
+--   Pausar e abandonar não apagam o histórico (ninho_habit_logs).
+--
+-- As tabelas de hábito usam o prefixo ninho_ porque o projeto do Supabase já tem
+-- uma tabela "habits" de outro app, que não é tocada.
 --
 -- Não destrutiva. Pode ser executada mais de uma vez.
 -- ══════════════════════════════════════════════════════════════════════
@@ -55,7 +58,7 @@ create table if not exists public.routine_step_checks (
 create index if not exists routine_step_checks_run on public.routine_step_checks (run_id);
 
 -- ── Hábitos ──────────────────────────────────────────────────────────
-create table if not exists public.habits (
+create table if not exists public.ninho_habits (
   id            uuid primary key default gen_random_uuid(),
   household_id  uuid not null references public.households(id) on delete cascade,
   title         text not null check (length(btrim(title)) between 1 and 60),
@@ -70,18 +73,18 @@ create table if not exists public.habits (
   created_by    text check (created_by is null or created_by in ('g','s')),
   created_at    timestamptz not null default now()
 );
-create index if not exists habits_household on public.habits (household_id) where archived_at is null;
+create index if not exists ninho_habits_household on public.ninho_habits (household_id) where archived_at is null;
 
-create table if not exists public.habit_logs (
+create table if not exists public.ninho_habit_logs (
   id           uuid primary key default gen_random_uuid(),
-  habit_id     uuid not null references public.habits(id) on delete cascade,
+  habit_id     uuid not null references public.ninho_habits(id) on delete cascade,
   household_id uuid not null references public.households(id) on delete cascade,
   date         date not null,
   who          text check (who is null or who in ('g','s')),
   created_at   timestamptz not null default now(),
   unique (habit_id, date)
 );
-create index if not exists habit_logs_recent on public.habit_logs (household_id, date desc);
+create index if not exists ninho_habit_logs_recent on public.ninho_habit_logs (household_id, date desc);
 
 -- ── Acesso: só quem é da casa (mesma regra da 011) ───────────────────
 do $$
@@ -89,7 +92,7 @@ declare t text; strict_rls boolean;
 begin
   strict_rls := exists (select 1 from pg_policies where schemaname = 'public' and tablename = 'tasks' and policyname = 'household_member')
                 and to_regprocedure('public.ninho_is_member(uuid)') is not null;
-  foreach t in array array['routine_runs','routine_step_checks','habits','habit_logs'] loop
+  foreach t in array array['routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs'] loop
     execute format('alter table public.%I enable row level security', t);
     if strict_rls then
       execute format('drop policy if exists "allow_all_auth" on public.%I', t);
@@ -223,7 +226,7 @@ do $$
 declare t text;
 begin
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime' and not puballtables) then
-    foreach t in array array['routine_runs','routine_step_checks','habits','habit_logs'] loop
+    foreach t in array array['routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs'] loop
       if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = t) then
         execute format('alter publication supabase_realtime add table public.%I', t);
       end if;

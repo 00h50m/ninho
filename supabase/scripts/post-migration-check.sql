@@ -39,7 +39,7 @@ begin
     -- Redesign F3: check-in e dia (migration 015)
     ('daily_checkins','mood'), ('household_days','survival'),
     -- Redesign F4: rotinas com checklist e hábitos (migration 016)
-    ('routines','paused_until'), ('routine_runs','status'), ('routine_step_checks','done_by'), ('habits','weekly_target'), ('habit_logs','who')
+    ('routines','paused_until'), ('routine_runs','status'), ('routine_step_checks','done_by'), ('ninho_habits','weekly_target'), ('ninho_habit_logs','who')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -155,7 +155,7 @@ begin
     for r in select unnest(array['tasks','task_completions','dogs','dog_routines','dog_completions','weekly_settings',
                                  'weekly_meetings','profiles','xp_history','puppy_accidents',
                                  'shopping_items','maintenance_items','maintenance_log','households','task_skips',
-                                 'household_setup','routines','routine_steps','daily_checkins','household_days','routine_runs','routine_step_checks','habits','habit_logs']) as t loop
+                                 'household_setup','routines','routine_steps','daily_checkins','household_days','routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs']) as t loop
       insert into ninho_check("check", status, detalhe)
       select 'realtime ' || r.t,
              case when exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = r.t) then 'ok' else 'FALHA' end, '';

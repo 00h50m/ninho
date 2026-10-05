@@ -58,21 +58,21 @@ select pg_temp.ok((select count(*) from public.routine_step_checks where step_id
 select pg_temp.ok((select count(*) from public.task_completions where task_id = '7c7c7c7c-3333-0000-0000-000000000001') = 0, 'rotina não mexe em tarefas');
 
 -- Hábitos: registro do dia, sem fila de atraso, pausa e abandono sem perder histórico
-insert into public.habits (id, household_id, title, owner, weekly_target) values ('7c7c7c7c-4444-0000-0000-000000000001', '7c7c7c7c-0000-0000-0000-000000000001', 'Preparar o dia seguinte', 'shared', 5);
-insert into public.habit_logs (habit_id, household_id, date, who) values ('7c7c7c7c-4444-0000-0000-000000000001', '7c7c7c7c-0000-0000-0000-000000000001', public.ninho_today(), 'g');
+insert into public.ninho_habits (id, household_id, title, owner, weekly_target) values ('7c7c7c7c-4444-0000-0000-000000000001', '7c7c7c7c-0000-0000-0000-000000000001', 'Preparar o dia seguinte', 'shared', 5);
+insert into public.ninho_habit_logs (habit_id, household_id, date, who) values ('7c7c7c7c-4444-0000-0000-000000000001', '7c7c7c7c-0000-0000-0000-000000000001', public.ninho_today(), 'g');
 do $$ begin
-  begin insert into public.habit_logs (habit_id, household_id, date, who) values ('7c7c7c7c-4444-0000-0000-000000000001', '7c7c7c7c-0000-0000-0000-000000000001', public.ninho_today(), 's');
+  begin insert into public.ninho_habit_logs (habit_id, household_id, date, who) values ('7c7c7c7c-4444-0000-0000-000000000001', '7c7c7c7c-0000-0000-0000-000000000001', public.ninho_today(), 's');
     raise exception 'FALHOU: dois registros no mesmo dia';
   exception when unique_violation then raise notice 'ok - um registro por hábito por dia'; end;
-  begin insert into public.habits (household_id, title, weekly_target) values ('7c7c7c7c-0000-0000-0000-000000000001', 'X', 9); raise exception 'FALHOU: meta 9';
+  begin insert into public.ninho_habits (household_id, title, weekly_target) values ('7c7c7c7c-0000-0000-0000-000000000001', 'X', 9); raise exception 'FALHOU: meta 9';
   exception when check_violation then raise notice 'ok - meta semanal entre 1 e 7'; end;
 end $$;
-update public.habits set archived_at = now() where id = '7c7c7c7c-4444-0000-0000-000000000001';
-select pg_temp.ok((select count(*) from public.habit_logs where habit_id = '7c7c7c7c-4444-0000-0000-000000000001') = 1, 'abandonar o hábito mantém o histórico');
+update public.ninho_habits set archived_at = now() where id = '7c7c7c7c-4444-0000-0000-000000000001';
+select pg_temp.ok((select count(*) from public.ninho_habit_logs where habit_id = '7c7c7c7c-4444-0000-0000-000000000001') = 1, 'abandonar o hábito mantém o histórico');
 
 -- Outra casa
 select pg_temp.as_user('7c7c7c7c-eeee-0000-0000-00000000000c');
-select pg_temp.ok((select count(*) from public.routine_runs) = 0 and (select count(*) from public.habits) = 0 and (select count(*) from public.habit_logs) = 0, 'outra casa não vê ocorrências nem hábitos');
+select pg_temp.ok((select count(*) from public.routine_runs) = 0 and (select count(*) from public.ninho_habits) = 0 and (select count(*) from public.ninho_habit_logs) = 0, 'outra casa não vê ocorrências nem hábitos');
 do $$ begin
   begin perform public.ninho_routine_finish('7c7c7c7c-1111-0000-0000-000000000001', public.ninho_today(), 'g', true); raise exception 'FALHOU: concluiu rotina dos outros';
   exception when others then if sqlerrm like 'FALHOU%' then raise; end if; raise notice 'ok - não conclui rotina de outra casa'; end;
@@ -86,3 +86,13 @@ do $$ begin
   exception when insufficient_privilege then raise notice 'ok - sem login não conclui rotina'; end;
 end $$;
 reset role;
+
+-- A tabela "habits" de outro app (produção) continua intocada
+do $$ declare n int; begin
+  if to_regclass('public.habits') is null then raise notice 'ok - (sem tabela habits de outro app neste cenário)'; return; end if;
+  execute 'select count(*) from public.habits' into n;
+  perform pg_temp.ok(n = 2
+      and not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = 'habits' and column_name = 'archived_at')
+      and not exists (select 1 from pg_policies where tablename = 'habits'),
+    'tabela habits de outro app não foi alterada');
+end $$;
