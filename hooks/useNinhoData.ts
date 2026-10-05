@@ -10,7 +10,7 @@ import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import * as api from '@/lib/services/ninho'
 import { summarizeCompletions } from '@/lib/completions'
-import { isWho } from '@/lib/rotation'
+import { applyCompletionDeleted, applyCompletionToday, applyTaskRow, isForHousehold } from '@/lib/realtime'
 import { byTime } from '@/lib/today'
 import { DEFAULT_NAMES } from '@/lib/constants'
 import { logError, toNinhoError, type NinhoError } from '@/lib/errors'
@@ -126,21 +126,19 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
         if (!info) return // exclusão de outra casa (ou já tratada)
         completionIndex.current.delete(id)
         if (info.date === ctx.current.today) {
-          const off = (x: any) => x.completion_id === id ? { ...x, completed_today: false, completed_by_today: null, completion_id: null } : x
-          if (kind === 'task') setTasks(ts => ts.map(off))
-          else setDogs(ds => ds.map(d => ({ ...d, routines: d.routines.map(off) })))
+          if (kind === 'task') setTasks(ts => applyCompletionDeleted(ts, id))
+          else setDogs(ds => ds.map(d => ({ ...d, routines: applyCompletionDeleted(d.routines, id) })))
         } else later(kind, reload)
         later('stats', refreshStats)
         return
       }
       const r = p.new as Row
-      if (!r?.id) return
+      if (!r?.id || !isForHousehold(r, householdId)) return
       const itemId = kind === 'task' ? r.task_id : r.routine_id
       completionIndex.current.set(r.id, { kind, itemId, date: r.date })
       if (r.date === ctx.current.today) {
-        const on = (x: any) => x.id === itemId ? { ...x, completed_today: true, completed_by_today: isWho(r.completed_by) ? r.completed_by : null, completion_id: r.id } : x
-        if (kind === 'task') setTasks(ts => ts.map(on))
-        else setDogs(ds => ds.map(d => ({ ...d, routines: d.routines.map(on) })))
+        if (kind === 'task') setTasks(ts => applyCompletionToday(ts, itemId, r as any))
+        else setDogs(ds => ds.map(d => ({ ...d, routines: applyCompletionToday(d.routines, itemId, r as any) })))
       } else later(kind, reload)
       later('stats', refreshStats)
     },
@@ -148,10 +146,9 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
       if (p.eventType === 'DELETE') { later('task', reloadTasks); return }
       const r = p.new as Row
       setTasks(ts => {
-        const i = ts.findIndex(t => t.id === r.id)
-        if (r.active === false) return i < 0 ? ts : ts.filter(t => t.id !== r.id)
-        if (i < 0) { later('task', reloadTasks); return ts } // nova ou reativada: precisa das conclusões
-        const n = [...ts]; n[i] = { ...ts[i], ...(r as Task) }; return n
+        const out = applyTaskRow(ts, r as any)
+        if (out.needsReload) later('task', reloadTasks) // nova ou reativada: precisa das conclusões
+        return out.tasks
       })
     },
     dogs: () => later('dog', reloadDogs),

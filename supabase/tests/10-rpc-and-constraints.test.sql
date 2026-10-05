@@ -144,4 +144,8 @@ insert into public.puppy_accidents (dog_id, household_id, location) values ('999
 select pg_temp.ok((select date from public.puppy_accidents where household_id = '99999999-0000-0000-0000-000000000001') = public.ninho_today(), 'acidente sem data usa o dia de São Paulo');
 
 reset role;
+set role anon;
+select pg_temp.raises($$select public.ninho_complete_task('99999999-aaaa-0000-0000-000000000001', public.ninho_today(), 'g')$$, 'permission denied', 'papel anon (sem login) não executa as funções de conclusão');
+select pg_temp.raises($$select public.ninho_household_xp('99999999-0000-0000-0000-000000000001')$$, 'permission denied', 'papel anon não lê o XP');
+reset role;
 select pg_temp.ok(true, 'testes do banco concluídos');

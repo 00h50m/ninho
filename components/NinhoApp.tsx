@@ -263,8 +263,8 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .toast{position:fixed;top:calc(14px + var(--safe-t));left:50%;transform:translateX(-50%);background:#132a20;border:1px solid var(--gbdr);border-radius:12px;padding:10px 12px 10px 16px;font-size:13px;color:var(--green);display:flex;align-items:center;gap:12px;z-index:100;max-width:calc(100vw - 32px);box-shadow:0 10px 30px rgba(0,0,0,.4);animation:fu .2s ease}
 .toast-m{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .toast button{background:none;border:none;color:var(--tx);font-weight:500;font-size:13px;padding:2px 6px;text-decoration:underline;text-underline-offset:3px;flex-shrink:0}
-.toast.err{background:#2a120b;border-color:var(--cbdr);color:#ffb59a}
-.toast-m{white-space:normal}
+.toast.err{background:#2a120b;border-color:var(--cbdr);color:#ffb59a;width:min(460px,calc(100vw - 32px))}
+.toast-m{white-space:normal;flex:1 1 auto;min-width:0;line-height:1.4}
 .toast .tx{text-decoration:none;color:var(--sub);padding:2px 4px}
 
 /* ── estados: gravando, carregando, erro, autoria ── */
@@ -1409,7 +1409,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <ul>
                 <li><b>Grupos por horário:</b> ⚠ Atrasadas (diárias com horário que já passou), 🌅 Manhã, ☀️ Tarde, 🌙 Noite, a qualquer hora e, por fim, as do período (até o fim da semana, quinzena ou mês) e as pontuais.</li>
                 <li><b>▸ próxima</b> destaca a próxima tarefa com horário.</li>
-                <li>Toque na tarefa para concluir. Aparece <b>+XP · Desfazer</b> por alguns segundos. As concluídas ficam recolhidas no fim da coluna.</li>
+                <li>Toque na tarefa para concluir. Aparece <b>+XP · Desfazer</b> por alguns segundos. As concluídas ficam recolhidas no fim da coluna, com <b>quem concluiu</b> (conclusões anteriores a esta versão aparecem como “não identificado”).</li>
+                <li><b>Este aparelho</b> (em Ajustes) diz quem está usando o celular; é isso que fica registrado ao concluir. Ver a coluna da outra pessoa não muda isso. Se o banco recusar uma alteração, o app desfaz na tela e mostra o aviso com “Tentar novamente”.</li>
                 <li>No computador, <b>⇄</b> passa para a outra e <b>✎</b> edita. No celular, tudo isso fica no <b>⋯</b>.</li>
                 <li>Indicadores do topo: % do dia, estado da <b>Casa</b> (quanto das diárias ainda falta: organizada, atenção ou alerta), nível/XP e sequência.</li>
               </ul>
@@ -1478,7 +1479,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {TABS.map(([k,ic,l])=><button key={k} className={`bnb ${tab===k?'on':''}`} onClick={()=>setTab(k)} aria-current={tab===k?'page':undefined}><span className="ic">{ic}</span>{l}</button>)}
       </nav>
 
-      {(tab==='today'||tab==='tasks')&&<button className="fab mob-fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>}
+      {data.status==='ready'&&(tab==='today'||tab==='tasks')&&<button className="fab mob-fab" onClick={()=>openModal('task',null)} aria-label="Nova tarefa"><span>+</span><b>Nova tarefa</b></button>}
 
       {toast&&<div className={`toast ${toast.kind==='err'?'err':''}`} role={toast.kind==='err'?'alert':'status'}>
         <span className="toast-m">{toast.msg}</span>

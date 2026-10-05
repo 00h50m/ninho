@@ -12,13 +12,13 @@ export class NinhoError extends Error {
     super(`${context}: ${e.message || String(raw)}`)
     this.name = 'NinhoError'
     this.code = e.code || ''
-    const f = friendly(e)
+    const f = friendly(e, context)
     this.userMessage = f.message
     this.retryable = f.retryable
   }
 }
 
-function friendly(e: RawError): { message: string, retryable: boolean } {
+function friendly(e: RawError, context = ''): { message: string, retryable: boolean } {
   const msg = e.message || ''
   if (/Failed to fetch|NetworkError|Load failed|network|fetch failed|timeout/i.test(msg))
     return { message: 'Sem conexão com o servidor. Confira a internet e tente de novo.', retryable: true }
@@ -34,6 +34,8 @@ function friendly(e: RawError): { message: string, retryable: boolean } {
     return { message: 'Isso já foi registrado.', retryable: false }
   if (e.code === '42501' || e.code === 'PGRST301' || /permission|JWT/i.test(msg))
     return { message: 'O servidor recusou a alteração (permissão). Recarregue o app.', retryable: true }
+  if (context.startsWith('carregar'))
+    return { message: 'Não foi possível carregar os dados agora. Tente de novo.', retryable: true }
   return { message: 'Não foi possível salvar. Tente de novo.', retryable: true }
 }
 

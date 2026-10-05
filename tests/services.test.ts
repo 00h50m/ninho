@@ -87,6 +87,10 @@ describe('erros do banco nunca viram "feito"', () => {
     nextResult = () => { throw new TypeError('Failed to fetch') }
     await expect(api.updateTask('t1', { essential: true })).rejects.toMatchObject({ retryable: true, userMessage: expect.stringContaining('conexão') })
   })
+  it('falha ao carregar fala em carregar, não em salvar', async () => {
+    nextResult = () => ({ data: null, error: { code: 'XX000', message: 'boom' } })
+    await expect(api.loadAccidents(HH)).rejects.toMatchObject({ userMessage: expect.stringContaining('carregar') })
+  })
   it('logs técnicos não levam o conteúdo gravado', async () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {})
     nextResult = () => ({ data: null, error: { code: '42501', message: 'permission denied' } })

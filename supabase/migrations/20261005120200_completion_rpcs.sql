@@ -225,6 +225,19 @@ revoke all on function public.ninho_uncomplete_dog_routines(uuid[], date) from p
 revoke all on function public.ninho_household_xp(uuid) from public;
 revoke all on function public.ninho_streak(uuid, date) from public;
 
+-- O Supabase concede EXECUTE ao papel anon por padrão; estas funções exigem o login anônimo do app.
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    revoke all on function public.ninho_complete_task(uuid, date, text) from anon;
+    revoke all on function public.ninho_uncomplete_task(uuid, date) from anon;
+    revoke all on function public.ninho_complete_dog_routines(uuid[], date, text) from anon;
+    revoke all on function public.ninho_uncomplete_dog_routines(uuid[], date) from anon;
+    revoke all on function public.ninho_household_xp(uuid) from anon;
+    revoke all on function public.ninho_streak(uuid, date) from anon;
+  end if;
+end $$;
+
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
