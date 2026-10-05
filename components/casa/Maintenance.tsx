@@ -225,7 +225,7 @@ export function MaintTemplatesSheet({ existing, today, saving, onClose, onAdd }:
             const on = sel[t.title] !== undefined, dup = have.has(t.title.toLowerCase())
             return (
               <div key={t.title} className={`li ${on ? 'on' : ''} ${dup ? 'off' : ''}`} onClick={() => !dup && toggle(t)}>
-                <span className="chk" style={on ? { background: 'var(--gdk)', borderColor: 'var(--gdk)', color: '#fff' } : undefined}>✓</span>
+                <span className="chk" style={on ? { background: 'var(--gdk)', borderColor: 'var(--gdk)', color: 'var(--on-green)' } : undefined}>✓</span>
                 <span className="li-t">{t.title}<br/><small style={{ color: 'var(--sub)' }}>{dup ? 'já cadastrada' : everyLabel({ every_months: t.every_months ?? null, every_days: t.every_days ?? null })}</small></span>
                 {on && <select className="fi mt-ago" value={String(sel[t.title])} onClick={e => e.stopPropagation()}
                   onChange={e => setSel(s => ({ ...s, [t.title]: e.target.value === 'null' ? null : Number(e.target.value) }))} aria-label={`Última vez: ${t.title}`}>
