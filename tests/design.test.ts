@@ -22,10 +22,14 @@ describe('design tokens', () => {
       const start = css.indexOf(sel); const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start))
       return new Set(Array.from(body.matchAll(/(--[\w-]+)\s*:/g)).map(m => m[1]))
     }
-    const a = block('[data-theme="aconchego"]'), n = block('[data-theme="noturno"]')
+    const a = block('[data-theme="aconchego"]')
     expect(a.size).toBeGreaterThan(40)
-    expect(Array.from(a).filter(v => !n.has(v))).toEqual([])
-    expect(Array.from(n).filter(v => !a.has(v))).toEqual([])
+    for (const t of THEMES.map(x => x.id).filter(x => x !== 'aconchego')) {
+      const n = block(`[data-theme="${t}"]`)
+      expect({ t, faltam: Array.from(a).filter(v => !n.has(v)), sobram: Array.from(n).filter(v => !a.has(v)) }).toEqual({ t, faltam: [], sobram: [] })
+      // amostra do seletor existe
+      expect(css).toContain(`--sw-${t}-bg`)
+    }
     // Todas as variáveis de cor usadas no app existem nos temas
     const used = new Set(Array.from(readFileSync('styles/app.css', 'utf8').matchAll(/var\((--[\w-]+)/g)).map(m => m[1]))
     const base = block(':root {')
@@ -45,11 +49,19 @@ describe('temas', () => {
     s.setItem('ninho.theme', 'inventado')
     expect(readTheme(s, true)).toBe('noturno')
   })
-  it('Aconchego e Noturno disponíveis; script inicial conhece os dois', () => {
-    expect(THEMES.map(t => t.id)).toEqual(['aconchego', 'noturno'])
-    expect(isTheme('aconchego') && isTheme('noturno') && !isTheme('x')).toBe(true)
-    expect(THEME_BOOT).toContain("'aconchego'")
-    expect(THEME_BOOT).toContain("'noturno'")
+  it('cinco temas; o script inicial conhece todos', () => {
+    expect(THEMES.map(t => t.id)).toEqual(['aconchego', 'noturno', 'natureza', 'aurora', 'minimal'])
+    expect(isTheme('aurora') && isTheme('noturno') && !isTheme('x')).toBe(true)
+    for (const t of THEMES) expect(THEME_BOOT).toContain(`"${t.id}"`)
+    // o script roda de verdade: tema salvo vale; inválido cai no padrão do sistema
+    const run = (saved: string | null, dark: boolean) => {
+      const html = { dataset: {} as Record<string, string> }
+      new Function('localStorage', 'matchMedia', 'document', THEME_BOOT)({ getItem: () => saved }, () => ({ matches: dark }), { documentElement: html })
+      return html.dataset.theme
+    }
+    expect(run('aurora', false)).toBe('aurora')
+    expect(run('inventado', true)).toBe('noturno')
+    expect(run(null, false)).toBe('aconchego')
   })
 })
 

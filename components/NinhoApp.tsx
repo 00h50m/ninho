@@ -34,6 +34,9 @@ import { TelegramCard, fetchAiTips } from '@/components/TelegramCard'
 import { useHomeClock } from '@/hooks/useHomeClock'
 import { useDeviceIdentity } from '@/hooks/useDeviceIdentity'
 import { useNinhoData } from '@/hooks/useNinhoData'
+import { Onboarding } from '@/components/onboarding/Onboarding'
+import * as setupApi from '@/lib/services/onboarding'
+import { LAST_STEP, daysLabel, shouldAutoOpen } from '@/lib/onboarding'
 
 function firstName(n:string){return (n||'').split(' ')[0]}
 function initials(n:string){return (n||'??').slice(0,2).toUpperCase()}
@@ -334,6 +337,21 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const data=useNinhoData(householdId,today,weekStart,e=>showError(e))
   const {tasks,setTasks,dogs,setDogs,settings,setSettings,xp,setXp,streak,names,setNames,accidents,setAccidents,game}=data
   const casa=useCasa(householdId,today)
+  // Configuração inicial (migration 014) e rotinas cadastradas
+  const [setup,setSetup]=useState<setupApi.SetupState|null>(null)
+  const [routines,setRoutines]=useState<setupApi.RoutineRow[]>([])
+  const [onb,setOnb]=useState<null|'open'|'redo'>(null)
+  async function loadSetup(auto:boolean){
+    if(!me)return
+    try{
+      const [st,rs]=await Promise.all([setupApi.loadSetup(householdId,me),setupApi.loadRoutines(householdId)])
+      setSetup(st);setRoutines(rs)
+      if(auto&&shouldAutoOpen(st))setOnb('open')
+    }catch(e){logError('carregar configuração',e)}
+  }
+  useEffect(()=>{if(data.status==='ready'&&me)loadSetup(true)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[data.status==='ready',me,householdId])
   const maintActions=useMaintActions({today,me,requireMe:()=>requireMe(),setItems:casa.setMaint,reload:casa.reloadMaintenance,onXp:()=>refreshStats(),toast:(m,u)=>showToast(m,u),fail:(e,r)=>showError(e,r)})
 
   // Nova conquista de quem usa o aparelho: avisa quando sobe de nível nesta sessão
@@ -916,6 +934,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <div><h1>{hello} 👋</h1><p>{dateLabel}</p></div>
             <div className="sh-a desk-only"><button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button></div>
           </div>
+          {setup?.available&&!setup.completed&&!onb&&<div className="setup-cta">
+            <span aria-hidden="true" style={{fontSize:24}}>🪺</span>
+            <div><b>Configurar o Ninho</b><small>{(setup.progress?.step||1)>1?`Você parou na etapa ${setup.progress!.step} de ${LAST_STEP}. As respostas estão guardadas.`:'Uns 3 minutos para ajustar rotinas, essenciais e a aparência.'}</small></div>
+            <button className="btn btn-p" onClick={()=>setOnb('open')}>{(setup.progress?.step||1)>1?'Continuar':'Começar'}</button>
+          </div>}
 
           <div className="stats">
             <div className="stat">
@@ -1010,12 +1033,22 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── ROTINAS ── */}
         {screen==='rotinas'&&<div className="scr narrow">
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
-          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routineGroups.length],['habitos','Hábitos']]}/>
+          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.length+routineGroups.length],['habitos','Hábitos']]}/>
           {rotView==='rotinas'?<>
             <div className="card intro">
               <div className="intro-t">Rotina é um conjunto de passos num momento do dia</div>
-              <div className="row-s">Como “fechar a cozinha” ou “rotina noturna dos cães”: tem checklist, horário e pode ser dividida. O construtor de rotinas com passos chega na próxima etapa. Por enquanto, estas são as rotinas que o Ninho já acompanha:</div>
+              <div className="row-s">Como “fechar a cozinha” ou “rotina noturna dos cães”: tem passos, horário e pode ser dividida. O checklist do dia a dia chega na próxima atualização.</div>
             </div>
+            {routines.length>0&&<div className="rt-grid">
+              {routines.map(r=>(
+                <div key={r.id} className="rt-card">
+                  <div className="rt-card-h"><div><b>{r.title}</b><div className="rt-card-m">{r.scheduled_time||'Sem horário'} · {daysLabel(r.weekdays||[0,1,2,3,4,5,6])}{r.duration_min?` · ${r.duration_min} min`:''}</div></div>
+                    <span className={`chip ${r.essential?'coral':''}`}>{r.essential?'essencial':r.assign_mode==='rotation'?'rodízio':r.assign_mode==='shared'?'as duas':firstName(names[r.assign_mode as Who])}</span></div>
+                  {r.routine_steps.length>0&&<ol className="rt-steps">{r.routine_steps.map(st=><li key={st.id}>{st.title}{st.survival&&<span title="Continua no modo sobrevivência" aria-label="continua no modo sobrevivência"> 🛡</span>}</li>)}</ol>}
+                </div>
+              ))}
+            </div>}
+            {routines.length===0&&setup?.available&&<div className="card empty"><span className="empty-icon">🔁</span>Nenhuma rotina com passos ainda.<div><button className="btn btn-p" onClick={()=>setOnb(setup.completed?'redo':'open')}>Escolher rotinas</button></div></div>}
             <div className="card">
               <div className="slbl">🐾 Rotinas dos cães <span className="mono" style={{color:'var(--faint)'}}>{routineGroups.length}</span><button className="lnk" onClick={()=>go('caes')}>Editar em Cães →</button></div>
               {routineGroups.length===0?<div className="row-s">Nenhuma rotina ainda.</div>:routineGroups.map(g=>{const w=ownerOfRoutine(g.r);return(
@@ -1275,6 +1308,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             </div>
             <div className="row-s" style={{marginTop:8}}>Vale só para este aparelho: cada uma escolhe o que é mais confortável.</div>
           </div>
+          {setup?.available&&<div className="card" style={{marginBottom:14}}>
+            <div className="slbl">Configuração do Ninho</div>
+            <div className="row-s" style={{marginBottom:10}}>{setup.completed?'Feita. Dá para refazer: rotinas que já existem não são duplicadas e nada é apagado.':'Ainda não feita: rotinas, essenciais, semana e aparência em 9 etapas.'}</div>
+            <button className="btn btn-g" onClick={()=>setOnb(setup.completed?'redo':'open')}>{setup.completed?'Refazer configuração':'Configurar agora'}</button>
+          </div>}
           <div className="card" style={{marginBottom:14}}>
             <div className="slbl">{account?'Sua conta':'Este aparelho'}</div>
             {account?<div className="field-row">
@@ -1466,6 +1504,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {modal==='dog'&&<DogModal dog={modalData} saving={saving} onClose={closeModal} onSave={updateDog} onDelete={removeDog}/>}
       {modal==='routine'&&<RoutineModal routine={modalData.routine} dogName={modalData.dog.name} saving={saving} onClose={closeModal} onSave={(d,id)=>saveRoutine(modalData.dog.id,d,id)} onDelete={removeRoutine}/>}
       {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy}/>}
+      {onb&&me&&setup&&<Onboarding householdId={householdId} me={me} names={names} dogs={dogs.map(d=>({id:d.id,name:d.name}))}
+        dogRoutineTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} tasks={tasks} existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)}
+        setup={setup} redo={onb==='redo'} theme={theme} onTheme={pickTheme}
+        onClose={()=>{setOnb(null);loadSetup(false)}}
+        onDone={(_,to)=>{setOnb(null);loadSetup(false);data.reloadNames();data.reloadDogs();data.reloadTasks();go(to)}}/>}
       {device.ready&&!account&&(!me||modal==='device')&&<DeviceIdentityModal names={names} current={me} required={!me}
         onPick={w=>{device.setWho(w);if(modal==='device')closeModal();showToast(`Este aparelho agora é da ${firstName(names[w])}`)}}
         onClose={closeModal}/>}
