@@ -15,16 +15,23 @@
 -- completed_by_legacy (valores e vínculos preservados) e uma nova completed_by
 -- text é criada no lugar.
 do $$
-declare t text;
+declare t text; v_type text; v_legacy text;
 begin
   foreach t in array array['task_completions','dog_completions'] loop
-    if exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = t
-               and column_name = 'completed_by' and data_type <> 'text')
-       and not exists (select 1 from information_schema.columns where table_schema = 'public' and table_name = t
-               and column_name = 'completed_by_legacy') then
-      execute format('alter table public.%I rename column completed_by to completed_by_legacy', t);
-      execute format('alter table public.%I add column completed_by text', t);
+    -- Lido do catálogo (não do information_schema, que depende de privilégios).
+    select format_type(a.atttypid, a.atttypmod) into v_type
+    from pg_attribute a
+    where a.attrelid = ('public.' || t)::regclass and a.attname = 'completed_by' and a.attnum > 0 and not a.attisdropped;
+    if v_type is null or v_type = 'text' then
+      continue;
     end if;
+    v_legacy := 'completed_by_legacy';
+    if exists (select 1 from pg_attribute where attrelid = ('public.' || t)::regclass and attname = v_legacy and not attisdropped) then
+      v_legacy := 'completed_by_legacy_' || to_char(clock_timestamp(), 'YYYYMMDDHH24MISS');
+    end if;
+    raise notice 'Ninho: %.completed_by é % → renomeada para % (preservada) e recriada como text', t, v_type, v_legacy;
+    execute format('alter table public.%I rename column completed_by to %I', t, v_legacy);
+    execute format('alter table public.%I add column completed_by text', t);
   end loop;
 end $$;
 
