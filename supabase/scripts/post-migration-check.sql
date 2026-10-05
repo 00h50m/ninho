@@ -1,5 +1,5 @@
 -- ══════════════════════════════════════════════════════════════════════
--- Ninho · Validação DEPOIS das migrations da Fase 0 (somente leitura)
+-- Ninho · Validação DEPOIS das migrations 001–006 (somente leitura)
 --
 -- Cole no SQL Editor do Supabase e clique em Run. Não altera nada.
 -- Tudo deve sair "ok". Qualquer "FALHA" → não publique o app novo e me
@@ -46,6 +46,13 @@ begin
   -- Índice que impede XP duplicado
   insert into ninho_check("check", status, detalhe)
   select 'índice único de XP', case when to_regclass('public.xp_history_one_valid_per_reason') is not null then 'ok' else 'FALHA' end, '';
+
+  -- Sem as colunas e funções acima, as conferências abaixo não têm como rodar.
+  if exists (select 1 from ninho_check where status = 'FALHA') then
+    insert into ninho_check("check", status, detalhe) values ('migrations', 'FALHA',
+      'migrations ainda não aplicadas (ou aplicadas pela metade). Rode as 6 migrations em ordem e depois este script de novo.');
+    return;
+  end if;
 
   -- Nenhum XP válido duplicado
   select count(*) into n from (select 1 from public.xp_history where reason is not null and voided_at is null group by household_id, reason having count(*) > 1) x;

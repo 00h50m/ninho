@@ -73,6 +73,10 @@ echo "› pré-checagem (o que o script de diagnóstico mostra antes das migrati
 echo "› exportação JSON (backup A) antes das migrations"
 "${RUN[@]}" "$PG_BIN/psql" -X -q -h "$WORK" -p "$PORT" -U postgres -d legacy -v ON_ERROR_STOP=1 -At -f "$ROOT/supabase/scripts/export-data-json.sql" >"$WORK/backup.json"
 grep -q '"ninho_backup": "v1"' "$WORK/backup.json" && grep -q '"Penélope"' "$WORK/backup.json" && echo "  ok - backup JSON gerado ($(wc -c <"$WORK/backup.json") bytes)" || { echo "✗ backup JSON vazio"; exit 1; }
+echo "› pós-checagem rodada por engano ANTES das migrations: deve avisar, não quebrar"
+"${RUN[@]}" "$PG_BIN/psql" -X -q -h "$WORK" -p "$PORT" -U postgres -d legacy -v ON_ERROR_STOP=1 -A -F ' | ' -f "$ROOT/supabase/scripts/post-migration-check.sql" >"$WORK/early.txt" 2>&1 \
+  && grep -q "migrations | FALHA | migrations ainda não aplicadas" "$WORK/early.txt" \
+  && echo "  ok - pós-checagem antecipada mostra 'migrations ainda não aplicadas'" || { echo "✗ pós-checagem antecipada quebrou:"; cat "$WORK/early.txt"; exit 1; }
 echo "› migrations (1ª vez)"; psql_run legacy "${MIGRATIONS[@]}"
 echo "› migrations (2ª vez)"; psql_run legacy "${MIGRATIONS[@]}"
 psql_run legacy "$T/03-legacy-after.test.sql" "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/21-gamification-legacy.test.sql" "$T/30-push.test.sql"
