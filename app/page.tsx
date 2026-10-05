@@ -3,28 +3,46 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import NinhoApp from '@/components/NinhoApp'
+import { cachedHousehold, isOfflineError, rememberHousehold } from '@/lib/offline'
 
 export default function Home() {
   const [householdId, setHouseholdId] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Service worker: abre sem internet e recebe notificações (só no build de produção)
+  useEffect(() => {
+    if (process.env.NODE_ENV !== 'production' || !('serviceWorker' in navigator)) return
+    navigator.serviceWorker.register('/sw.js').catch(e => console.error('[ninho] service worker', e?.message))
+  }, [])
+
   useEffect(() => {
     async function init() {
+      // Sem internet: abre a última casa usada neste aparelho (os dados vêm do cache do app)
+      const cached = cachedHousehold()
+      const useCached = () => { if (!cached) return false; setHouseholdId(cached); return true }
       try {
         // Login anônimo automático
         let { data: { session } } = await supabase.auth.getSession()
         if (!session) {
           const { data, error: e } = await supabase.auth.signInAnonymously()
-          if (e || !data.session) { setError('Erro ao iniciar: ' + (e?.message || 'sem sessão')); setLoading(false); return }
+          if (e || !data.session) {
+            if (isOfflineError(e) && useCached()) return
+            setError('Erro ao iniciar: ' + (e?.message || 'sem sessão')); setLoading(false); return
+          }
           session = data.session
         }
 
         const uid = session.user.id
 
         // Verificar perfil
-        const { data: profile } = await supabase
+        const { data: profile, error: profileError } = await supabase
           .from('profiles').select('household_id').eq('id', uid).single()
+        // PGRST116 = perfil ainda não existe (primeiro acesso). Outro erro: não cria casa nova por engano.
+        if (profileError && profileError.code !== 'PGRST116') {
+          if (useCached()) return
+          throw profileError
+        }
 
         let hhId = profile?.household_id
 
@@ -46,9 +64,11 @@ export default function Home() {
           })
         }
 
+        if (hhId) rememberHousehold(hhId)
         setHouseholdId(hhId)
       } catch (e: any) {
-        setError(e?.message || 'Erro desconhecido')
+        if (isOfflineError(e) && useCached()) return
+        setError(isOfflineError(e) ? 'Sem conexão com o servidor. Confira a internet e tente de novo.' : (e?.message || 'Erro desconhecido'))
       } finally {
         setLoading(false)
       }

@@ -21,7 +21,9 @@ begin
     ('weekly_meetings','reward'), ('xp_history','voided_at'), ('xp_history','id'),
     ('puppy_accidents','occurred_at'),
     -- Fase 1 (migration 005)
-    ('xp_history','earned_by'), ('xp_history','activity_date'), ('xp_history','on_time'), ('weekly_settings','bet')
+    ('xp_history','earned_by'), ('xp_history','activity_date'), ('xp_history','on_time'), ('weekly_settings','bet'),
+    -- Fase 2 (migration 006)
+    ('push_subscriptions','endpoint'), ('push_log','kind')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -33,7 +35,9 @@ begin
                                'ninho_complete_dog_routines','ninho_uncomplete_dog_routines',
                                'ninho_household_xp','ninho_streak',
                                -- Fase 1 (migration 005)
-                               'ninho_is_on_time','ninho_xp_with_bonus','ninho_streaks','ninho_weekly_scores','ninho_achievement_stats']) as f loop
+                               'ninho_is_on_time','ninho_xp_with_bonus','ninho_streaks','ninho_weekly_scores','ninho_achievement_stats',
+                               -- Fase 2 (migration 006)
+                               'ninho_save_push_subscription']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';

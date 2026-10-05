@@ -1,8 +1,8 @@
 // Montagem da tela Hoje: grupos por horário e rotinas dos cães agrupadas.
-import type { Dog, DogItem, Doable, HItem } from './types'
+import type { Dog, DogItem, Doable, HItem, Task, Who } from './types'
 import { hhmm } from './dates'
 import { dueToday } from './frequency'
-import { dogKey, turnBy, type Slots } from './rotation'
+import { buildSlots, dogKey, ownerOf, turnBy, type Slots } from './rotation'
 
 export const GROUPS: Array<[string, string]> = [['late', '⚠ Atrasadas'], ['morning', '🌅 Manhã'], ['afternoon', '☀️ Tarde'], ['night', '🌙 Noite'], ['any', 'Hoje, a qualquer hora'], ['weekly', 'Até o fim da semana'], ['biweekly', 'Até o fim da quinzena'], ['monthly', 'Até o fim do mês'], ['once', 'Pontuais']]
 
@@ -47,4 +47,26 @@ export function groupToday(list: HItem[], nowHM: string) {
     k, label: l,
     items: g[k].sort((a, b) => byTime(a, b) || Number(b.essential) - Number(a.essential) || a.category.localeCompare(b.category)),
   }))
+}
+
+/**
+ * A conta da tela Hoje, usada pelo app e pela notificação da manhã:
+ * · com cães cadastrados, tarefas da categoria Cães ficam fora (as rotinas as substituem);
+ * · só o que é devido hoje (frequência);
+ * · com foco (modo sobrevivência ou energia baixa), só essenciais — rotinas dos cães sempre aparecem;
+ * · cada item tem dona: fixa ou pela vez do rodízio.
+ */
+export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { focus?: boolean } = {}) {
+  const slots = buildSlots(tasks.filter(t => !(dogs.length && t.category === 'dogs')), dogs)
+  const dogTasks = dogs.length ? tasks.filter(t => t.category === 'dogs') : []
+  const homeTasks = dogs.length ? tasks.filter(t => t.category !== 'dogs') : tasks
+  const dueList = homeTasks.filter(t => dueToday(t, today))
+  const todayTasks = opts.focus ? dueList.filter(t => t.essential) : dueList
+  const dogItems = buildDogItems(dogs, today, slots)
+  const items: HItem[] = [
+    ...todayTasks.map(t => ({ id: t.id, frequency: t.frequency, scheduled_time: t.scheduled_time, completed_today: t.completed_today, essential: t.essential, category: t.category, task: t })),
+    ...dogItems.map(d => ({ id: 'dog:' + d.key, frequency: d.frequency, scheduled_time: d.scheduled_time, completed_today: d.completed_today, essential: false, category: 'dogs', dog: d })),
+  ]
+  const ownerOfItem = (i: HItem): Who => i.task ? ownerOf(i.task, today, slots) : i.dog!.owner
+  return { slots, dogTasks, homeTasks, dueList, todayTasks, dogItems, items, ownerOfItem }
 }

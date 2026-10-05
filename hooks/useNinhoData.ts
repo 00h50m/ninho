@@ -9,32 +9,21 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js'
 import { supabase } from '@/lib/supabase'
 import * as api from '@/lib/services/ninho'
-import { summarizeCompletions } from '@/lib/completions'
+import { buildDogs, buildTasks } from '@/lib/build'
 import { applyCompletionDeleted, applyCompletionToday, applyTaskRow, isForHousehold } from '@/lib/realtime'
-import { byTime } from '@/lib/today'
 import { DEFAULT_NAMES } from '@/lib/constants'
 import { logError, toNinhoError, type NinhoError } from '@/lib/errors'
 import type { Accident, CompletionRow, Dog, Names, Settings, Task } from '@/lib/types'
 import { EMPTY_SCORES, EMPTY_STREAKS } from '@/lib/gamification'
+import { isOfflineError, readSnapshot, saveSnapshot } from '@/lib/offline'
+
+interface OfflineData {
+  tasks: Task[], dogs: Dog[], xp: number, streak: number, game: api.Gamification
+  names: Names | null, accidents: Accident[], settings: Settings
+}
 
 type Status = 'loading' | 'ready' | 'error'
 type Row = Record<string, any>
-
-function buildTasks(rows: Row[], comps: CompletionRow[], today: string): Task[] {
-  const info = summarizeCompletions(comps, 'task_id', today)
-  return rows.map(t => ({ ...(t as Task), ...info(t.id) }))
-}
-
-function buildDogs(rows: Row[], comps: CompletionRow[], today: string): Dog[] {
-  const info = summarizeCompletions(comps, 'routine_id', today)
-  return rows.map(d => ({
-    ...(d as Dog),
-    routines: (d.dog_routines || [])
-      .filter((r: Row) => r.active !== false)
-      .map((r: Row) => ({ ...r, ...info(r.id) }))
-      .sort((a: Row, b: Row) => Number(a.frequency !== 'daily') - Number(b.frequency !== 'daily') || byTime(a as any, b as any)),
-  }))
-}
 
 export function useNinhoData(householdId: string, today: string, weekStart: string, onError: (e: NinhoError) => void) {
   const [tasks, setTasks] = useState<Task[]>([])
@@ -46,6 +35,8 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   const [accidents, setAccidents] = useState<Accident[]>([])
   const [game, setGame] = useState<api.Gamification>({ scores: EMPTY_SCORES, lastWeek: EMPTY_SCORES, lastWeekBet: null, streaks: EMPTY_STREAKS, stats: {} })
   const [status, setStatus] = useState<Status>('loading')
+  /** Abriu sem internet com dados guardados no aparelho */
+  const [offline, setOffline] = useState<{ savedAt: string } | null>(null)
   const [loadError, setLoadError] = useState<NinhoError | null>(null)
 
   // Valores atuais para os handlers do Realtime (que vivem mais que um render)
@@ -63,13 +54,17 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   const reloadTasks = useCallback(async () => {
     const r = await api.loadTasks(householdId, ctx.current.today)
     indexCompletions('task', r.completions)
-    setTasks(buildTasks(r.tasks, r.completions, ctx.current.today))
+    const t = buildTasks(r.tasks, r.completions, ctx.current.today)
+    setTasks(t)
+    return t
   }, [householdId])
 
   const reloadDogs = useCallback(async () => {
     const r = await api.loadDogs(householdId, ctx.current.today)
     indexCompletions('dog', r.completions)
-    setDogs(buildDogs(r.dogs, r.completions, ctx.current.today))
+    const d = buildDogs(r.dogs, r.completions, ctx.current.today)
+    setDogs(d)
+    return d
   }, [householdId])
 
   const refreshStats = useCallback(async () => {
@@ -78,42 +73,71 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
       api.loadGamification(householdId, ctx.current.today, ctx.current.weekStart),
     ])
     setXp(s.xp); setStreak(s.streak); setGame(g)
+    return { ...s, game: g }
   }, [householdId])
 
   const reloadNames = useCallback(async () => {
     const n = await api.loadNames(householdId)
     if (n) setNames(n)
+    return n
   }, [householdId])
 
   const reloadAccidents = useCallback(async () => {
-    setAccidents(await api.loadAccidents(householdId))
+    const a = await api.loadAccidents(householdId)
+    setAccidents(a)
+    return a
   }, [householdId])
 
   const reloadSettings = useCallback(async () => {
     const s = await api.loadSettings(householdId, ctx.current.weekStart)
-    setSettings(s || { energy: 'medium', survival: false, bet: null })
+    const v = s || { energy: 'medium' as const, survival: false, bet: null }
+    setSettings(v)
+    return v
   }, [householdId])
 
   const loadAll = useCallback(async () => {
     if (!loaded.current) setStatus('loading')
     try {
-      await Promise.all([reloadTasks(), reloadDogs(), refreshStats(), reloadNames(), reloadAccidents(), reloadSettings()])
+      const [t, d, st, n, a, se] = await Promise.all([reloadTasks(), reloadDogs(), refreshStats(), reloadNames(), reloadAccidents(), reloadSettings()])
+      saveSnapshot<OfflineData>(householdId, ctx.current.today, { tasks: t, dogs: d, xp: st.xp, streak: st.streak, game: st.game, names: n, accidents: a, settings: se })
       loaded.current = true
+      setOffline(null)
       setLoadError(null)
       setStatus('ready')
     } catch (e) {
+      // Sem internet: mostra o último carregamento guardado no aparelho (só leitura)
+      const snap = isOfflineError(e) ? readSnapshot<OfflineData>(householdId) : null
+      if (snap && !loaded.current) {
+        const sd = snap.data
+        // Conclusões de outro dia não valem para hoje
+        const fresh = snap.today === ctx.current.today
+        const clear = <T extends object>(x: T) => fresh ? x : { ...x, completed_today: false, completed_by_today: null, completion_id: null }
+        setTasks(sd.tasks.map(clear)); setDogs(sd.dogs.map(dg => ({ ...dg, routines: dg.routines.map(clear) })))
+        setXp(sd.xp); setStreak(sd.streak); setGame(sd.game); if (sd.names) setNames(sd.names); setAccidents(sd.accidents); setSettings(sd.settings)
+        setOffline({ savedAt: snap.savedAt })
+        loaded.current = true
+        setStatus('ready')
+        return
+      }
       const err = toNinhoError(e, 'carregar a casa')
       if (!loaded.current) { setLoadError(err); setStatus('error') }
       else ctx.current.onError(err)
     }
-  }, [reloadTasks, reloadDogs, refreshStats, reloadNames, reloadAccidents, reloadSettings])
+  }, [householdId, reloadTasks, reloadDogs, refreshStats, reloadNames, reloadAccidents, reloadSettings])
 
   // Recarrega quando o dia ou a semana viram
   useEffect(() => { loadAll() }, [loadAll, today, weekStart])
 
+  // Voltou a internet: busca tudo de novo
+  useEffect(() => {
+    const on = () => { loadAll() }
+    window.addEventListener('online', on)
+    return () => window.removeEventListener('online', on)
+  }, [loadAll])
+
   // ── Realtime ────────────────────────────────────────────────────────
   const timers = useRef<Record<string, ReturnType<typeof setTimeout>>>({})
-  const later = useCallback((key: string, fn: () => Promise<void>, ms = 300) => {
+  const later = useCallback((key: string, fn: () => Promise<unknown>, ms = 300) => {
     clearTimeout(timers.current[key])
     timers.current[key] = setTimeout(() => {
       fn().catch(e => logError(`realtime:${key}`, e))
@@ -206,7 +230,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   }, [householdId, later, loadAll])
 
   return {
-    status, loadError, loadAll,
+    status, loadError, loadAll, offline,
     game,
     tasks, setTasks, dogs, setDogs, settings, setSettings, xp, setXp, streak, names, setNames, accidents, setAccidents,
     refreshStats, reloadTasks, reloadDogs, reloadAccidents, meetingTick,

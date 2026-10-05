@@ -25,8 +25,8 @@ async function run<T>(context: string, p: PromiseLike<Res<T>>): Promise<T> {
 
 // ── Leitura ─────────────────────────────────────────────────────────────
 
-/** Conclusões dos últimos 62 dias (cobre o período mensal e o "feita há X dias"). */
-export const COMPLETION_WINDOW_DAYS = 62
+import { COMPLETION_WINDOW_DAYS } from '@/lib/constants'
+export { COMPLETION_WINDOW_DAYS }
 
 export interface Snapshot {
   tasks: any[]
@@ -221,4 +221,23 @@ export async function loadGamification(householdId: string, today: string, weekS
 
 export async function saveBet(householdId: string, weekStart: string, bet: string | null) {
   await run('salvar aposta', supabase.from('weekly_settings').upsert({ household_id: householdId, week_start: weekStart, bet }, { onConflict: 'household_id,week_start' }))
+}
+
+// ── Notificações (migration 006) ──────────────────────────────────────
+
+export interface PushRow { who: Who, morning: boolean, weekly: boolean, active: boolean }
+
+export async function savePushSubscription(householdId: string, who: Who, keys: { endpoint: string, p256dh: string, auth: string }, prefs: { morning: boolean, weekly: boolean }) {
+  return await run('ativar notificações', supabase.rpc('ninho_save_push_subscription', {
+    p_household_id: householdId, p_who: who, p_endpoint: keys.endpoint, p_p256dh: keys.p256dh, p_auth: keys.auth,
+    p_user_agent: typeof navigator !== 'undefined' ? navigator.userAgent : null, p_morning: prefs.morning, p_weekly: prefs.weekly,
+  }))
+}
+
+export async function loadPushSubscription(endpoint: string): Promise<PushRow | null> {
+  return await run('carregar notificações', supabase.from('push_subscriptions').select('who,morning,weekly,active').eq('endpoint', endpoint).maybeSingle()) as PushRow | null
+}
+
+export async function updatePushPrefs(endpoint: string, prefs: Partial<Pick<PushRow, 'morning' | 'weekly' | 'active'>>) {
+  await run('salvar notificações', supabase.from('push_subscriptions').update(prefs).eq('endpoint', endpoint).select('id'))
 }

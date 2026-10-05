@@ -63,7 +63,7 @@ echo "══ Cenário A: banco novo ══"
 psql_run fresh "$T/00-supabase-stubs.sql"
 echo "› migrations (1ª vez)"; psql_run fresh "${MIGRATIONS[@]}"
 echo "› migrations (2ª vez, devem ser idempotentes)"; psql_run fresh "${MIGRATIONS[@]}"
-psql_run fresh "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql"
+psql_run fresh "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/30-push.test.sql"
 
 echo
 echo "══ Cenário B: produção antiga simulada ══"
@@ -75,7 +75,7 @@ echo "› exportação JSON (backup A) antes das migrations"
 grep -q '"ninho_backup": "v1"' "$WORK/backup.json" && grep -q '"Penélope"' "$WORK/backup.json" && echo "  ok - backup JSON gerado ($(wc -c <"$WORK/backup.json") bytes)" || { echo "✗ backup JSON vazio"; exit 1; }
 echo "› migrations (1ª vez)"; psql_run legacy "${MIGRATIONS[@]}"
 echo "› migrations (2ª vez)"; psql_run legacy "${MIGRATIONS[@]}"
-psql_run legacy "$T/03-legacy-after.test.sql" "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/21-gamification-legacy.test.sql"
+psql_run legacy "$T/03-legacy-after.test.sql" "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/21-gamification-legacy.test.sql" "$T/30-push.test.sql"
 echo "› pós-checagem"
 check_report legacy "$ROOT/supabase/scripts/post-migration-check.sql"
 check_report fresh "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null

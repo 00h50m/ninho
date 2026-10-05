@@ -25,3 +25,5 @@ export const DR_DEF = [{ t: 'Ração manhã', f: 'daily', time: '07:00' }, { t: 
 export const DR_PUP = [{ t: 'Saída xixi manhã', f: 'daily', time: '07:30' }, { t: 'Saída xixi tarde', f: 'daily', time: '14:00' }, { t: 'Saída xixi noite', f: 'daily', time: '21:00' }, { t: 'Treino básico', f: 'daily', time: null }, { t: 'Socialização', f: 'daily', time: null }]
 export const RFREQ: Array<[string, string]> = [['daily', 'Diária'], ['weekly', 'Semanal'], ['biweekly', 'Quinzenal'], ['monthly', 'Mensal']]
 export const ACCIDENT_PLACES = ['Sala', 'Quarto', 'Cozinha', 'Banheiro', 'Corredor']
+/** Conclusões dos últimos 62 dias (cobre o período mensal e o "feita há X dias"). */
+export const COMPLETION_WINDOW_DAYS = 62

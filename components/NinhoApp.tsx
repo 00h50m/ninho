@@ -4,8 +4,8 @@ import type { Accident, Dog, DogItem, DogRoutine, Energy, HistoryWeek, HItem, Me
 import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, TABS, WPT } from '@/lib/constants'
 import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '@/lib/dates'
 import { doneInPeriod, dueToday, lastDone, lastLabel } from '@/lib/frequency'
-import { buildSlots, dogKey, isFixed, ownerOf, turnBy, turnOf } from '@/lib/rotation'
-import { buildDogItems, byTime, groupToday, isLate } from '@/lib/today'
+import { dogKey, isFixed, ownerOf, turnBy, turnOf } from '@/lib/rotation'
+import { byTime, groupToday, isLate, planToday } from '@/lib/today'
 import { LEVELS, XPW, getChaosInfo, getLevel, levelProgress, weekDots } from '@/lib/xp'
 import { completedByLabel } from '@/lib/completions'
 import { logError, toNinhoError, type NinhoError } from '@/lib/errors'
@@ -19,6 +19,7 @@ import { BetModal } from '@/components/gamification/BetModal'
 import { Ring } from '@/components/ui/Ring'
 import { Sheet } from '@/components/ui/Sheet'
 import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
+import { NotificationsCard } from '@/components/NotificationsCard'
 import { useHomeClock } from '@/hooks/useHomeClock'
 import { useDeviceIdentity } from '@/hooks/useDeviceIdentity'
 import { useNinhoData } from '@/hooks/useNinhoData'
@@ -690,7 +691,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
   // Preferências locais: aba e coluna visualizada no celular.
   // A coluna visualizada NÃO muda quem está usando o aparelho.
   useEffect(()=>{
-    try{const t=localStorage.getItem('ninho.tab');if(t&&TABS.some(x=>x[0]===t))setTabState(t)}catch{}
+    // O app sempre abre em Hoje (a aba anterior não é mais restaurada)
+    try{localStorage.removeItem('ninho.tab')}catch{}
   },[])
   useEffect(()=>{
     if(!device.ready)return
@@ -699,7 +701,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
     if(saved==='g'||saved==='s')setPerson(saved)
     else if(me)setPerson(me)
   },[device.ready,me])
-  function setTab(t:string){setTabState(t);try{localStorage.setItem('ninho.tab',t)}catch{};window.scrollTo({top:0})}
+  function setTab(t:string){setTabState(t);window.scrollTo({top:0})}
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
   // Histórico da semana (só na aba Semana; recarrega quando alguém salva uma reunião)
@@ -950,20 +952,11 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
   // ── DERIVED ───────────────────────────────────────────
   const focusMode=settings.survival||settings.energy==='low'
-  // Com cães cadastrados, as tarefas da categoria Cães repetem as rotinas: ficam fora de Hoje
-  const slots=buildSlots(tasks.filter(t=>!(dogs.length&&t.category==='dogs')),dogs)
-  const dogTasks=dogs.length?tasks.filter(t=>t.category==='dogs'):[]
-  const homeTasks=dogs.length?tasks.filter(t=>t.category!=='dogs'):tasks
-  const dueList=homeTasks.filter(t=>dueToday(t,today))
-  const todayTasks=focusMode&&!showAllToday?dueList.filter(t=>t.essential):dueList
+  // Mesma conta usada pela notificação da manhã (lib/today.ts)
+  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday})
+  const {slots,dogTasks,homeTasks,dueList,todayTasks,dogItems,ownerOfItem}=plan
+  const hItems:HItem[]=plan.items
   const hiddenCount=dueList.length-todayTasks.length
-  const dogItems=buildDogItems(dogs,today,slots)
-  // Itens de Hoje: tarefas + rotinas dos cães (rotinas sempre aparecem, até no modo sobrevivência)
-  const hItems:HItem[]=[
-    ...todayTasks.map(t=>({id:t.id,frequency:t.frequency,scheduled_time:t.scheduled_time,completed_today:t.completed_today,essential:t.essential,category:t.category,task:t})),
-    ...dogItems.map(d=>({id:'dog:'+d.key,frequency:d.frequency,scheduled_time:d.scheduled_time,completed_today:d.completed_today,essential:false,category:'dogs',dog:d})),
-  ]
-  const ownerOfItem=(i:HItem):Who=>i.task?ownerOf(i.task,today,slots):i.dog!.owner
   const xpOfItem=(i:HItem)=>i.task?XPW[i.task.weight]:i.dog!.parts.length
   const allToday=[...dueList.map(t=>!!t.completed_today),...dogItems.map(d=>d.completed_today)]
   const doneToday=allToday.filter(Boolean).length
@@ -1166,6 +1159,8 @@ export default function NinhoApp({householdId}:{householdId:string}){
           <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>{data.loadError?.userMessage}</div>
           <button className="btn btn-p" onClick={()=>data.loadAll()}>Tentar novamente</button>
         </div>}
+        {data.status==='ready'&&data.offline&&<div className="banner low" role="status">📴 <span>Sem internet. Mostrando os dados de {timeOfInstant(data.offline.savedAt)}. Marcar e editar voltam quando a conexão voltar.</span>
+          <button className="lnk" onClick={()=>data.loadAll()}>Tentar agora</button></div>}
         {data.status==='ready'&&<>
         {/* ── HOJE ── */}
         {tab==='today'&&<div className="scr">
@@ -1470,6 +1465,9 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <button className="btn btn-g" style={{marginLeft:'auto'}} onClick={()=>openModal('device')}>Trocar</button>
             </div>
           </div>
+          <NotificationsCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
+            onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
+            onNeedIdentity={()=>openModal('device')}/>
           <div className="card" style={{marginBottom:14}}>
             <div className="slbl">Integrantes</div>
             {(['g','s'] as Who[]).map(w=>(
@@ -1530,6 +1528,15 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 <li>Em Hoje, a mesma rotina de cães diferentes (ex.: Ração manhã) vira <b>um item só</b>: um toque marca para todos. Elas entram no rodízio e aparecem na lista de quem é a vez; a bolinha com a inicial na aba Cães mostra de quem é.</li>
                 <li><b>Modo filhote:</b> registre acidentes por cômodo e acompanhe o dia.</li>
                 <li>Tarefas da categoria Cães repetem as rotinas e por isso não aparecem em Hoje; dá para arquivá-las pelo aviso em Tarefas.</li>
+              </ul>
+            </div></details>
+            <details><summary>📲 App e notificações</summary><div className="gb">
+              <ul>
+                <li><b>Instalar:</b> no Android, “Instalar” em Ajustes (ou menu ⋮ → Instalar app). No iPhone, Safari → Compartilhar → Adicionar à Tela de Início. O Ninho vira um ícone e abre como app.</li>
+                <li><b>Sem internet:</b> o app abre com os últimos dados que carregou neste aparelho. Marcar e editar voltam quando a conexão voltar.</li>
+                <li><b>☀️ Bom dia</b> (por volta das 7h): o que é seu hoje — fixo ou pela vez do rodízio — e o que vale ⚡ no horário.</li>
+                <li><b>🏆 Resumo de domingo</b> (por volta das 19h): placar, quem paga a aposta, sequência e o que ficou para trás.</li>
+                <li>Cada aparelho ativa as próprias notificações em Ajustes, e elas seguem “Este aparelho”. No iPhone, só com o app instalado (iOS 16.4+).</li>
               </ul>
             </div></details>
             <details><summary>🌤 Energia e modo sobrevivência</summary><div className="gb">
