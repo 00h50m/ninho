@@ -35,7 +35,13 @@ begin
     -- Telegram sem duplicar (migration 013)
     ('telegram_updates','update_id'),
     -- Redesign F2: configuração inicial e rotinas (migration 014)
-    ('household_setup','answers'), ('onboarding_progress','step'), ('routines','assign_mode'), ('routine_steps','survival')
+    ('household_setup','answers'), ('onboarding_progress','step'), ('routines','assign_mode'), ('routine_steps','survival'),
+    -- Redesign F3: check-in e dia (migration 015)
+    ('daily_checkins','mood'), ('household_days','survival'),
+    -- Redesign F4: rotinas com checklist e hábitos (migration 016)
+    ('routines','paused_until'), ('routine_runs','status'), ('routine_step_checks','done_by'), ('ninho_habits','weekly_target'), ('ninho_habit_logs','who'),
+    -- Modelos da casa (migration 017)
+    ('routine_templates','steps')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -59,7 +65,11 @@ begin
                                -- Fase 6 (migration 010)
                                'ninho_link_member','ninho_is_member',
                                -- Redesign F2 (migration 014)
-                               'ninho_finish_onboarding']) as f loop
+                               'ninho_finish_onboarding',
+                               -- Redesign F3 (migration 015)
+                               'ninho_checkin',
+                               -- Redesign F4 (migration 016)
+                               'ninho_routine_step','ninho_routine_finish']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';
@@ -147,7 +157,7 @@ begin
     for r in select unnest(array['tasks','task_completions','dogs','dog_routines','dog_completions','weekly_settings',
                                  'weekly_meetings','profiles','xp_history','puppy_accidents',
                                  'shopping_items','maintenance_items','maintenance_log','households','task_skips',
-                                 'household_setup','routines','routine_steps']) as t loop
+                                 'household_setup','routines','routine_steps','daily_checkins','household_days','routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs']) as t loop
       insert into ninho_check("check", status, detalhe)
       select 'realtime ' || r.t,
              case when exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = r.t) then 'ok' else 'FALHA' end, '';
