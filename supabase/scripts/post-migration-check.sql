@@ -29,7 +29,9 @@ begin
     -- Fase 4 (migration 008)
     ('tasks','weekdays'), ('tasks','due_date'), ('task_skips','kind'),
     -- Fase 5 (migration 009)
-    ('telegram_links','chat_id'), ('telegram_log','kind'), ('ai_log','kind')
+    ('telegram_links','chat_id'), ('telegram_log','kind'), ('ai_log','kind'),
+    -- Fase 6 (migration 010)
+    ('household_members','who')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -49,7 +51,9 @@ begin
                                -- Fase 4 (migration 008)
                                'ninho_task_on_day',
                                -- Fase 5 (migration 009)
-                               'ninho_telegram_link_code']) as f loop
+                               'ninho_telegram_link_code',
+                               -- Fase 6 (migration 010)
+                               'ninho_link_member','ninho_is_member']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';
@@ -108,6 +112,22 @@ begin
             ' · tarefas ' || (select count(*) from public.tasks where household_id = r.id) ||
             ' · conclusões ' || (select count(*) from public.task_completions where household_id = r.id));
   end loop;
+
+  -- Login (010) e segurança por casa (011)
+  for r in select h.id, h.name from public.households h order by h.created_at nulls last loop
+    insert into ninho_check("check", status, detalhe)
+    select 'contas da casa ' || coalesce(r.name, '?'),
+           case when count(*) = 2 then 'ok' else 'AVISO' end,
+           coalesce(string_agg(case m.who when 'g' then 'Giovanna' else 'Sabrina' end, ' e ' order by m.who), 'nenhuma')
+             || case when count(*) = 2 then ' ligadas' else ' — ligue com ninho_link_member(e-mail, g|s) antes da migration 011' end
+    from public.household_members m where m.household_id = r.id;
+  end loop;
+  insert into ninho_check("check", status, detalhe)
+  select 'segurança por casa (011)',
+         case when exists (select 1 from pg_policies where schemaname = 'public' and policyname = 'allow_all_auth') then 'AVISO' else 'ok' end,
+         case when exists (select 1 from pg_policies where schemaname = 'public' and policyname = 'allow_all_auth')
+              then 'ainda não aplicada: qualquer usuário do app acessa os dados (rode a 011 depois que as duas entrarem)'
+              else 'só quem é da casa acessa os dados' end;
 
   -- Realtime
   if exists (select 1 from pg_publication where pubname = 'supabase_realtime' and not puballtables) then

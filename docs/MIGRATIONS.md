@@ -14,6 +14,8 @@ As migrations ficam em `supabase/migrations/` e são a fonte da verdade do schem
 | `20261008120000_casa.sql` | **Fase 3.** `households.split_mode` (divisão inteligente ou rodízio fixo; padrão inteligente), `shopping_items` (lista de compras; item repetido não duplica, via `ninho_add_shopping_item`), `maintenance_items` + `maintenance_log` (manutenção recorrente, `ninho_complete_maintenance` com +3 XP e `ninho_undo_maintenance`), Realtime das tabelas novas. |
 | `20261009120000_rotina_flexivel.sql` | **Fase 4.** `tasks.weekdays` (dias da semana), `tasks.due_date` (pontual com data), `task_skips` (pular / deixar para amanhã) e `ninho_day_on_track` passa a ignorar tarefas fora do dia e puladas (não quebram a sequência "casa em dia"). |
 | `20261010120000_telegram_ia.sql` | **Fase 5.** `telegram_links` (conversa do Telegram ligada a uma pessoa, por código de uso único), `telegram_log` (no máximo um bom dia/resumo por conversa por dia), `ai_log` (limite diário da IA), `ninho_telegram_link_code` e permissão do servidor para concluir e adicionar à lista pelo bot. |
+| `20261011120000_login_membros.sql` | **Fase 6 (etapa A).** `household_members` (conta de login → casa e pessoa g/s), `ninho_link_member(e-mail, 'g'\|'s')` (só pelo SQL Editor) e `ninho_is_member`. Não muda o acesso: o app antigo continua funcionando. |
+| `20261011120100_rls_por_casa.sql` | **Fase 6 (etapa B) — rodar só depois que as duas entrarem com e-mail e senha.** Troca a regra “qualquer usuário autenticado acessa tudo” por “só quem é da casa acessa”. O servidor (service_role) continua com acesso. Para desfazer: `supabase/scripts/rollback-rls-por-casa.sql`. |
 
 ## Regras seguidas
 

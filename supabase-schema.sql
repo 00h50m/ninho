@@ -17,7 +17,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict OeeHmp6Wzr6PacyZJmpnrL6QxBvZYyWIPUsDBoh7BV4bwzlCacR7NqO6ZrG2OD9
+\restrict DDM0VBl8U1wLlePt6nkwiG6w7LOVuizW90mKDPtpOYr80RgPMTmIwv0Y478wP32
 
 -- Dumped from database version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -420,6 +420,18 @@ $$;
 
 
 --
+-- Name: ninho_is_member(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_is_member(p_household_id uuid) RETURNS boolean
+    LANGUAGE sql STABLE SECURITY DEFINER
+    SET search_path TO 'public'
+    AS $$
+  select exists (select 1 from public.household_members m where m.user_id = auth.uid() and m.household_id = p_household_id)
+$$;
+
+
+--
 -- Name: ninho_is_on_time(text, text, date, timestamp with time zone); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -431,6 +443,51 @@ CREATE FUNCTION public.ninho_is_on_time(p_frequency text, p_scheduled text, p_da
      and p_date = public.ninho_local_date(p_now)
      and to_char(p_now at time zone 'America/Sao_Paulo', 'HH24:MI') <= left(p_scheduled, 5)
 $$;
+
+
+--
+-- Name: ninho_link_member(text, text, uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_link_member(p_email text, p_who text, p_household_id uuid DEFAULT NULL::uuid) RETURNS text
+    LANGUAGE plpgsql SECURITY DEFINER
+    SET search_path TO 'public', 'auth'
+    AS $$
+declare
+  v_user  uuid;
+  v_house uuid := p_household_id;
+  v_name  text;
+  v_n     integer;
+begin
+  if p_who is null or p_who not in ('g','s') then
+    raise exception 'NINHO_INVALID_PERSON: use ''g'' (Giovanna) ou ''s'' (Sabrina)';
+  end if;
+  select id into v_user from auth.users where lower(email) = lower(btrim(p_email));
+  if v_user is null then
+    raise exception 'NINHO_NOT_FOUND: nenhuma conta com o e-mail %. Crie em Authentication › Users › Add user.', p_email;
+  end if;
+  if v_house is null then
+    select count(*) into v_n from public.households;
+    if v_n <> 1 then
+      raise exception 'NINHO_INVALID_INPUT: existem % casas; informe o id da casa no 3º parâmetro', v_n;
+    end if;
+    select id into v_house from public.households limit 1;
+  end if;
+
+  -- A pessoa troca de conta: a ligação antiga daquela pessoa sai
+  delete from public.household_members where household_id = v_house and who = p_who and user_id <> v_user;
+  insert into public.household_members (user_id, household_id, who) values (v_user, v_house, p_who)
+  on conflict (user_id) do update set household_id = excluded.household_id, who = excluded.who;
+
+  -- Perfil com o mesmo nome já usado no app para essa pessoa
+  select display_name into v_name from public.profiles
+  where household_id = v_house and role = p_who and display_name is not null order by created_at limit 1;
+  insert into public.profiles (id, household_id, name, role, display_name)
+  values (v_user, v_house, coalesce(v_name, case p_who when 'g' then 'Giovanna' else 'Sabrina' end), p_who, v_name)
+  on conflict (id) do update set household_id = excluded.household_id, role = excluded.role;
+
+  return format('ok: %s ligada à casa como %s', p_email, case p_who when 'g' then 'Giovanna' else 'Sabrina' end);
+end $$;
 
 
 --
@@ -863,6 +920,26 @@ CREATE TABLE public.dogs (
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now()
 );
+
+
+--
+-- Name: household_members; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.household_members (
+    user_id uuid NOT NULL,
+    household_id uuid NOT NULL,
+    who text NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT household_members_who_check CHECK ((who = ANY (ARRAY['g'::text, 's'::text])))
+);
+
+
+--
+-- Name: TABLE household_members; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.household_members IS 'Conta de login → casa e pessoa (g|s). Uma conta por pessoa por casa. Preenchida com ninho_link_member().';
 
 
 --
@@ -1311,6 +1388,22 @@ ALTER TABLE ONLY public.dog_routines
 
 ALTER TABLE ONLY public.dogs
     ADD CONSTRAINT dogs_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: household_members household_members_household_id_who_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.household_members
+    ADD CONSTRAINT household_members_household_id_who_key UNIQUE (household_id, who);
+
+
+--
+-- Name: household_members household_members_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.household_members
+    ADD CONSTRAINT household_members_pkey PRIMARY KEY (user_id);
 
 
 --
@@ -1847,6 +1940,22 @@ ALTER TABLE ONLY public.dogs
 
 
 --
+-- Name: household_members household_members_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.household_members
+    ADD CONSTRAINT household_members_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
+
+
+--
+-- Name: household_members household_members_user_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.household_members
+    ADD CONSTRAINT household_members_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
+
+
+--
 -- Name: maintenance_items maintenance_items_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -2013,125 +2122,6 @@ ALTER TABLE ONLY public.xp_history
 ALTER TABLE public.ai_log ENABLE ROW LEVEL SECURITY;
 
 --
--- Name: dog_completions allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.dog_completions TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: dog_routines allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.dog_routines TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: dogs allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.dogs TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: households allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.households TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: maintenance_items allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.maintenance_items TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: maintenance_log allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.maintenance_log TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: profiles allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.profiles TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: puppy_accidents allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.puppy_accidents TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: push_subscriptions allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.push_subscriptions TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: shopping_items allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.shopping_items TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: task_completions allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.task_completions TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: task_skips allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.task_skips TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: tasks allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.tasks TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: telegram_links allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.telegram_links TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: weekly_meetings allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.weekly_meetings TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: weekly_settings allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.weekly_settings TO authenticated USING (true) WITH CHECK (true);
-
-
---
--- Name: xp_history allow_all_auth; Type: POLICY; Schema: public; Owner: -
---
-
-CREATE POLICY allow_all_auth ON public.xp_history TO authenticated USING (true) WITH CHECK (true);
-
-
---
 -- Name: dog_completions; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -2150,6 +2140,142 @@ ALTER TABLE public.dog_routines ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.dogs ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: dog_completions household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.dog_completions TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: dog_routines household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.dog_routines TO authenticated USING (public.ninho_is_member(COALESCE(household_id, ( SELECT d.household_id
+   FROM public.dogs d
+  WHERE (d.id = dog_routines.dog_id))))) WITH CHECK (public.ninho_is_member(COALESCE(household_id, ( SELECT d.household_id
+   FROM public.dogs d
+  WHERE (d.id = dog_routines.dog_id)))));
+
+
+--
+-- Name: dogs household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.dogs TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: households household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.households FOR SELECT TO authenticated USING (public.ninho_is_member(id));
+
+
+--
+-- Name: maintenance_items household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.maintenance_items TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: maintenance_log household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.maintenance_log TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: profiles household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.profiles TO authenticated USING (((id = auth.uid()) OR public.ninho_is_member(household_id))) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: puppy_accidents household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.puppy_accidents TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: push_subscriptions household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.push_subscriptions TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: shopping_items household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.shopping_items TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: task_completions household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.task_completions TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: task_skips household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.task_skips TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: tasks household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.tasks TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: telegram_links household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.telegram_links TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: weekly_meetings household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.weekly_meetings TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: weekly_settings household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.weekly_settings TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: xp_history household_member; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member ON public.xp_history TO authenticated USING (public.ninho_is_member(household_id)) WITH CHECK (public.ninho_is_member(household_id));
+
+
+--
+-- Name: households household_member_update; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY household_member_update ON public.households FOR UPDATE TO authenticated USING (public.ninho_is_member(id)) WITH CHECK (public.ninho_is_member(id));
+
+
+--
+-- Name: household_members; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.household_members ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: households; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -2166,6 +2292,13 @@ ALTER TABLE public.maintenance_items ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.maintenance_log ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: household_members own_membership; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY own_membership ON public.household_members FOR SELECT TO authenticated USING ((user_id = auth.uid()));
+
 
 --
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
@@ -2249,5 +2382,5 @@ ALTER TABLE public.xp_history ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict OeeHmp6Wzr6PacyZJmpnrL6QxBvZYyWIPUsDBoh7BV4bwzlCacR7NqO6ZrG2OD9
+\unrestrict DDM0VBl8U1wLlePt6nkwiG6w7LOVuizW90mKDPtpOYr80RgPMTmIwv0Y478wP32
 

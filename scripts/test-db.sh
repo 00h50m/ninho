@@ -51,7 +51,9 @@ check_report() { # roda um script de checagem e falha se aparecer FALHA
   if grep -q "FALHA" "$WORK/report.txt"; then echo "✗ checagem com FALHA"; exit 1; fi
 }
 
-MIGRATIONS=("$ROOT"/supabase/migrations/*.sql)
+# A 011 (segurança por casa) é aplicada por último em cada cenário: os testes anteriores
+# rodam como no app antigo; depois dela, 80-login confere quem enxerga o quê.
+MIGRATIONS=(); for f in "$ROOT"/supabase/migrations/*.sql; do [[ "$f" == *rls_por_casa* ]] && RLS="$f" || MIGRATIONS+=("$f"); done
 T="$ROOT/supabase/tests"
 
 for db in fresh legacy prod; do
@@ -64,6 +66,8 @@ psql_run fresh "$T/00-supabase-stubs.sql"
 echo "› migrations (1ª vez)"; psql_run fresh "${MIGRATIONS[@]}"
 echo "› migrations (2ª vez, devem ser idempotentes)"; psql_run fresh "${MIGRATIONS[@]}"
 psql_run fresh "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/30-push.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql" "$T/70-telegram-ia.test.sql"
+echo "› segurança por casa (011), 2x"; psql_run fresh "$RLS" "$RLS"
+psql_run fresh "$T/80-login.test.sql"
 
 echo
 echo "══ Cenário B: produção antiga simulada ══"
@@ -87,6 +91,9 @@ echo "› rollback opcional + reaplicação das migrations"
 psql_run legacy "$ROOT/supabase/scripts/rollback-fase-0.sql" "${MIGRATIONS[@]}"
 check_report legacy "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 echo "  ok - rollback e reaplicação sem erro"
+echo "› segurança por casa (011) + desfazer + reaplicar"
+psql_run legacy "$RLS" "$ROOT/supabase/scripts/rollback-rls-por-casa.sql" "$RLS"
+check_report legacy "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 
 echo
 echo "══ Cenário C: schema REAL de produção (out/2026), 001 já aplicada ══"
@@ -95,6 +102,7 @@ psql_run prod "${MIGRATIONS[0]}"
 echo "› migrations 002–006 (1ª vez)"; psql_run prod "${MIGRATIONS[@]:1}"
 echo "› migrations 001–006 (2ª vez)"; psql_run prod "${MIGRATIONS[@]}"
 psql_run prod "$T/40-prod-schema.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql" "$T/70-telegram-ia.test.sql"
+psql_run prod "$RLS" "$T/80-login.test.sql"
 check_report prod "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 echo "  ok - pós-checagem sem FALHA no schema real"
 

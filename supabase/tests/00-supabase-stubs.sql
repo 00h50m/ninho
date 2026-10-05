@@ -10,8 +10,11 @@ end $$;
 
 create schema if not exists auth;
 create table if not exists auth.users (id uuid primary key, created_at timestamptz default now());
+alter table auth.users add column if not exists email text;
+-- Igual ao Supabase: lê o "sub" do token (PostgREST novo usa request.jwt.claims)
 create or replace function auth.uid() returns uuid language sql stable as
-  $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
+  $$ select coalesce(nullif(current_setting('request.jwt.claim.sub', true), ''),
+                     nullif(current_setting('request.jwt.claims', true), '')::json->>'sub')::uuid $$;
 
 grant usage on schema public, auth to anon, authenticated, service_role;
 alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
