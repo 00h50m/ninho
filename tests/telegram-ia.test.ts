@@ -62,3 +62,18 @@ describe('Telegram: configuração', () => {
     }
   })
 })
+
+describe('Telegram: menu', () => {
+  it('botões do menu viram comandos', async () => {
+    const { menuCommand, MENU } = await import('@/lib/server/telegram')
+    expect(menuCommand('📋 Hoje')).toBe('/hoje')
+    expect(menuCommand('🛒 Compras')).toBe('/compras')
+    expect(menuCommand('➕ Adicionar à lista')).toBe('/adicionar')
+    expect(menuCommand('✦ Dicas')).toBe('/dicas')
+    expect(menuCommand('❓ Ajuda')).toBe('/ajuda')
+    expect(menuCommand('leite')).toBeNull()
+    expect(menuCommand('/hoje')).toBeNull()
+    const labels = MENU.keyboard.flat().map(b => b.text)
+    labels.forEach(l => expect(menuCommand(l), l).not.toBeNull())
+  })
+})

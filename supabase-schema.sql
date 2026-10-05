@@ -17,7 +17,7 @@
 -- PostgreSQL database dump
 --
 
-\restrict DDM0VBl8U1wLlePt6nkwiG6w7LOVuizW90mKDPtpOYr80RgPMTmIwv0Y478wP32
+\restrict DNlTdNhb2VXiMnXW0NnZPINtXnGSo3e0fse1QnEOab1B5jweq0bM6NC9Ie4TcHY
 
 -- Dumped from database version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
 -- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
@@ -668,7 +668,7 @@ begin
   if p_who is null or p_who not in ('g','s') then
     raise exception 'NINHO_INVALID_PERSON: pessoa deve ser g ou s (recebido: %)', coalesce(p_who, 'vazio') using errcode = '22023';
   end if;
-  v_code := upper(substr(replace(uuid_generate_v4()::text, '-', ''), 1, 8));
+  v_code := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));
   -- Um código pendente por pessoa: renova o que ainda não foi usado
   update public.telegram_links set link_code = v_code, code_expires_at = now() + interval '30 minutes'
   where household_id = p_household_id and who = p_who and chat_id is null;
@@ -866,7 +866,7 @@ SET default_table_access_method = heap;
 --
 
 CREATE TABLE public.ai_log (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid NOT NULL,
     kind text NOT NULL,
     input_tokens integer,
@@ -880,7 +880,7 @@ CREATE TABLE public.ai_log (
 --
 
 CREATE TABLE public.dog_completions (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     routine_id uuid,
     date date DEFAULT public.ninho_today(),
     created_at timestamp with time zone DEFAULT now() NOT NULL,
@@ -894,7 +894,7 @@ CREATE TABLE public.dog_completions (
 --
 
 CREATE TABLE public.dog_routines (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     dog_id uuid,
     household_id uuid,
     title text NOT NULL,
@@ -911,7 +911,7 @@ CREATE TABLE public.dog_routines (
 --
 
 CREATE TABLE public.dogs (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid,
     name text NOT NULL,
     breed text,
@@ -947,7 +947,7 @@ COMMENT ON TABLE public.household_members IS 'Conta de login → casa e pessoa (
 --
 
 CREATE TABLE public.households (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     name text DEFAULT 'Ninho'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     updated_at timestamp with time zone DEFAULT now(),
@@ -968,7 +968,7 @@ COMMENT ON COLUMN public.households.split_mode IS 'Divisão das tarefas sem dona
 --
 
 CREATE TABLE public.maintenance_items (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid NOT NULL,
     title text NOT NULL,
     category text DEFAULT 'casa'::text NOT NULL,
@@ -1003,7 +1003,7 @@ COMMENT ON TABLE public.maintenance_items IS 'Manutenções de tempos em tempos.
 --
 
 CREATE TABLE public.maintenance_log (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     item_id uuid NOT NULL,
     household_id uuid NOT NULL,
     done_on date DEFAULT public.ninho_today() NOT NULL,
@@ -1043,7 +1043,7 @@ CREATE TABLE public.profiles (
 --
 
 CREATE TABLE public.puppy_accidents (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     dog_id uuid,
     household_id uuid,
     location text NOT NULL,
@@ -1058,7 +1058,7 @@ CREATE TABLE public.puppy_accidents (
 --
 
 CREATE TABLE public.push_log (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     subscription_id uuid NOT NULL,
     kind text NOT NULL,
     day date DEFAULT public.ninho_today() NOT NULL,
@@ -1075,7 +1075,7 @@ CREATE TABLE public.push_log (
 --
 
 CREATE TABLE public.push_subscriptions (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid NOT NULL,
     who text NOT NULL,
     endpoint text NOT NULL,
@@ -1105,7 +1105,7 @@ COMMENT ON TABLE public.push_subscriptions IS 'Aparelhos com notificação ativa
 --
 
 CREATE TABLE public.shopping_items (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid NOT NULL,
     title text NOT NULL,
     qty text,
@@ -1137,7 +1137,7 @@ COMMENT ON TABLE public.shopping_items IS 'Lista de compras. checked_at = riscad
 --
 
 CREATE TABLE public.task_completions (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     task_id uuid,
     household_id uuid NOT NULL,
     completed_by text,
@@ -1151,7 +1151,7 @@ CREATE TABLE public.task_completions (
 --
 
 CREATE TABLE public.task_skips (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     task_id uuid NOT NULL,
     household_id uuid NOT NULL,
     date date DEFAULT public.ninho_today() NOT NULL,
@@ -1175,7 +1175,7 @@ COMMENT ON TABLE public.task_skips IS 'snooze = deixar para amanhã (some só na
 --
 
 CREATE TABLE public.tasks (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid,
     title text NOT NULL,
     category text DEFAULT 'general'::text NOT NULL,
@@ -1212,7 +1212,7 @@ COMMENT ON COLUMN public.tasks.due_date IS 'Tarefa pontual: data a partir da qua
 --
 
 CREATE TABLE public.telegram_links (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid NOT NULL,
     who text NOT NULL,
     chat_id bigint,
@@ -1240,7 +1240,7 @@ COMMENT ON TABLE public.telegram_links IS 'Conversas do Telegram ligadas a uma p
 --
 
 CREATE TABLE public.telegram_log (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     link_id uuid NOT NULL,
     kind text NOT NULL,
     day date DEFAULT public.ninho_today() NOT NULL,
@@ -1253,11 +1253,28 @@ CREATE TABLE public.telegram_log (
 
 
 --
+-- Name: telegram_updates; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.telegram_updates (
+    update_id bigint NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
+);
+
+
+--
+-- Name: TABLE telegram_updates; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.telegram_updates IS 'update_id do Telegram já processados (evita respostas e conclusões em dobro). Linhas antigas são apagadas pelo bot.';
+
+
+--
 -- Name: weekly_meetings; Type: TABLE; Schema: public; Owner: -
 --
 
 CREATE TABLE public.weekly_meetings (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid,
     week_start date NOT NULL,
     what_worked text,
@@ -1279,7 +1296,7 @@ CREATE TABLE public.weekly_meetings (
 --
 
 CREATE TABLE public.weekly_settings (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid,
     week_start date NOT NULL,
     energy text DEFAULT 'medium'::text,
@@ -1301,7 +1318,7 @@ COMMENT ON COLUMN public.weekly_settings.bet IS 'Aposta simbólica da semana (ex
 --
 
 CREATE TABLE public.xp_history (
-    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    id uuid DEFAULT extensions.uuid_generate_v4() NOT NULL,
     household_id uuid,
     amount integer DEFAULT 0 NOT NULL,
     reason text,
@@ -1591,6 +1608,14 @@ ALTER TABLE ONLY public.telegram_log
 
 
 --
+-- Name: telegram_updates telegram_updates_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.telegram_updates
+    ADD CONSTRAINT telegram_updates_pkey PRIMARY KEY (update_id);
+
+
+--
 -- Name: weekly_meetings weekly_meetings_household_id_week_start_key; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1777,6 +1802,13 @@ CREATE INDEX telegram_links_household_idx ON public.telegram_links USING btree (
 --
 
 CREATE UNIQUE INDEX telegram_log_once_per_day ON public.telegram_log USING btree (link_id, kind, day) WHERE (kind <> 'test'::text);
+
+
+--
+-- Name: telegram_updates_created_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX telegram_updates_created_idx ON public.telegram_updates USING btree (created_at);
 
 
 --
@@ -2361,6 +2393,12 @@ ALTER TABLE public.telegram_links ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.telegram_log ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: telegram_updates; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.telegram_updates ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: weekly_meetings; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -2382,5 +2420,5 @@ ALTER TABLE public.xp_history ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
-\unrestrict DDM0VBl8U1wLlePt6nkwiG6w7LOVuizW90mKDPtpOYr80RgPMTmIwv0Y478wP32
+\unrestrict DNlTdNhb2VXiMnXW0NnZPINtXnGSo3e0fse1QnEOab1B5jweq0bM6NC9Ie4TcHY
 

@@ -55,3 +55,15 @@ do $$ begin
 end $$;
 reset role;
 select pg_temp.ok(exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'telegram_links'), 'vínculos do Telegram no Realtime');
+
+-- 013: cada atualização do Telegram uma vez só
+set role service_role;
+insert into public.telegram_updates (update_id) values (555001);
+do $$ begin
+  begin insert into public.telegram_updates (update_id) values (555001); raise exception 'FALHOU: aceitou a mesma atualização duas vezes';
+  exception when unique_violation then raise notice 'ok - atualização repetida do Telegram é recusada'; end;
+end $$;
+reset role;
+set role authenticated;
+select pg_temp.ok((select count(*) from public.telegram_updates) = 0, 'app não enxerga as atualizações do bot');
+reset role;

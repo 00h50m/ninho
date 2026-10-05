@@ -21,6 +21,7 @@ export async function GET(req: Request) {
     allowed_updates: ['message', 'callback_query'], drop_pending_updates: true,
   })
   const commands = await tg('setMyCommands', { commands: [
+    { command: 'menu', description: 'Mostrar o menu' },
     { command: 'hoje', description: 'O que é seu hoje' },
     { command: 'feito', description: 'Concluir pelo nome (ex.: /feito louça)' },
     { command: 'compras', description: 'Lista de compras (ou adicionar: /compras leite)' },

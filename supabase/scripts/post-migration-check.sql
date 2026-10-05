@@ -31,7 +31,9 @@ begin
     -- Fase 5 (migration 009)
     ('telegram_links','chat_id'), ('telegram_log','kind'), ('ai_log','kind'),
     -- Fase 6 (migration 010)
-    ('household_members','who')
+    ('household_members','who'),
+    -- Telegram sem duplicar (migration 013)
+    ('telegram_updates','update_id')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
