@@ -79,16 +79,45 @@ function lastLabel(d:string|null,today:string){if(!d)return'nunca feita';const n
 // ── Rodízio: alterna a cada período, igual nos dois celulares ──
 function hashStr(s:string){let h=0;for(let i=0;i<s.length;i++)h=(h*31+s.charCodeAt(i))|0;return Math.abs(h)}
 function isFixed(t:Task){return t.assigned_to==='g'||t.assigned_to==='s'}
-function turnOf(t:Task,today:string):Who{return (hashStr(t.id)+periodIdx(t.frequency,today))%2===0?'g':'s'}
-function ownerOf(t:Task,today:string):Who{return isFixed(t)?t.assigned_to as Who:turnOf(t,today)}
+// Cada item em rodízio ganha uma posição (ordenado por horário); posições vizinhas ficam com pessoas diferentes
+// e todas trocam a cada período. Assim a divisão sai equilibrada, e não depende de sorte.
+type Slots=Map<string,number>
+function dogKey(r:{title:string,scheduled_time:string|null,frequency:string}){return `${r.title.trim().toLowerCase()}|${hhmm(r.scheduled_time)}|${r.frequency}`}
+function buildSlots(tasks:Task[],dogs:Dog[]):Slots{
+  const units=new Map<string,{freq:string,time:string,title:string}>()
+  tasks.filter(t=>!isFixed(t)).forEach(t=>units.set(t.id,{freq:t.frequency,time:hhmm(t.scheduled_time),title:t.title.toLowerCase()}))
+  dogs.forEach(d=>d.routines.forEach(r=>units.set('dog:'+dogKey(r),{freq:r.frequency,time:hhmm(r.scheduled_time),title:r.title.toLowerCase()})))
+  const byFreq:Record<string,string[]>={}
+  units.forEach((u,id)=>(byFreq[u.freq]=byFreq[u.freq]||[]).push(id))
+  const slots:Slots=new Map()
+  Object.values(byFreq).forEach(ids=>ids.sort((a,b)=>{const x=units.get(a)!,y=units.get(b)!;return (x.time||'99').localeCompare(y.time||'99')||x.title.localeCompare(y.title)||a.localeCompare(b)}).forEach((id,i)=>slots.set(id,i)))
+  return slots
+}
+function turnBy(id:string,freq:string,today:string,slots:Slots):Who{return ((slots.get(id)??hashStr(id))+periodIdx(freq,today))%2===0?'g':'s'}
+function turnOf(t:Task,today:string,slots:Slots):Who{return turnBy(t.id,t.frequency,today,slots)}
+function ownerOf(t:Task,today:string,slots:Slots):Who{return isFixed(t)?t.assigned_to as Who:turnOf(t,today,slots)}
 
 // ── Hoje por horário ──
 const GROUPS:Array<[string,string]>=[['late','⚠ Atrasadas'],['morning','🌅 Manhã'],['afternoon','☀️ Tarde'],['night','🌙 Noite'],['any','Hoje, a qualquer hora'],['weekly','Até o fim da semana'],['biweekly','Até o fim da quinzena'],['monthly','Até o fim do mês'],['once','Pontuais']]
 function bucketOf(time:string){const h=Number(time.slice(0,2));return h<12?'morning':h<18?'afternoon':'night'}
 function isLate(x:Doable&{scheduled_time:string|null},nowHM:string){return x.frequency==='daily'&&!!x.scheduled_time&&!x.completed_today&&hhmm(x.scheduled_time)<nowHM}
 function byTime(a:{scheduled_time:string|null},b:{scheduled_time:string|null}){return (hhmm(a.scheduled_time)||'99').localeCompare(hhmm(b.scheduled_time)||'99')}
-function groupToday(list:Task[],nowHM:string){
-  const g:Record<string,Task[]>={}
+// Item de Hoje: uma tarefa ou uma rotina de cães (rotinas iguais de cães diferentes viram um item só)
+interface DogItem { key:string;title:string;frequency:string;scheduled_time:string|null;completed_today:boolean;owner:Who;parts:Array<{r:DogRoutine,dog:Dog}> }
+interface HItem { id:string;frequency:string;scheduled_time:string|null;completed_today?:boolean;essential:boolean;category:string;task?:Task;dog?:DogItem }
+function buildDogItems(dogs:Dog[],today:string,slots:Slots):DogItem[]{
+  const m=new Map<string,DogItem>()
+  dogs.forEach(dog=>dog.routines.filter(r=>dueToday(r,today)).forEach(r=>{
+    const key=dogKey(r)
+    let it=m.get(key)
+    if(!it){it={key,title:r.title,frequency:r.frequency,scheduled_time:r.scheduled_time,completed_today:true,owner:turnBy('dog:'+key,r.frequency,today,slots),parts:[]};m.set(key,it)}
+    it.parts.push({r,dog})
+    if(!r.completed_today)it.completed_today=false
+  }))
+  return Array.from(m.values())
+}
+function groupToday(list:HItem[],nowHM:string){
+  const g:Record<string,HItem[]>={}
   list.forEach(t=>{
     let k:string
     if(t.frequency==='daily')k=!t.scheduled_time?'any':isLate(t,nowHM)?'late':bucketOf(hhmm(t.scheduled_time))
@@ -222,6 +251,11 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .dr-m{font-size:11px;color:var(--sub);font-family:'DM Mono',monospace;white-space:nowrap}
 .dr-m.late{color:var(--cor)}
 .dr .ib{width:30px;height:30px;font-size:14px}
+.dsum{display:flex;align-items:center;gap:12px;padding:10px;margin:0 -10px;width:calc(100% + 20px);border:none;background:transparent;border-radius:var(--rs);text-align:left;transition:background .12s}
+.dsum:hover{background:var(--sf2)}
+.dsum-h{display:flex;justify-content:space-between;align-items:baseline;font-size:14px}.dsum-h b{font-weight:500}.dsum-h .mono{font-size:11.5px;color:var(--sub)}
+.dsum-s{display:block;font-size:12px;color:var(--sub);margin-top:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.dsum-s .late{color:var(--cor)}
 .addr{width:100%;margin-top:8px;border:1px dashed var(--bd2);background:transparent;color:var(--sub);border-radius:var(--rs);padding:9px;font-size:13px;transition:all .12s}
 .addr:hover{color:var(--green);border-color:var(--gbdr)}
 .acts{display:flex;flex-direction:column;gap:6px}
@@ -252,6 +286,15 @@ button.stat{transition:border-color .15s}button.stat:hover{border-color:var(--bd
 .tc-meta{display:flex;gap:5px;align-items:center;flex-wrap:wrap}
 .bdg{font-family:'DM Mono',monospace;font-size:10.5px;padding:2px 7px;border-radius:5px;white-space:nowrap}
 .bdg-l{background:var(--gbg);color:var(--green)}.bdg-m{background:var(--abg);color:var(--amb)}.bdg-h{background:var(--cbg);color:var(--cor)}.bdg-n{background:var(--sf2);color:var(--sub)}.bdg-e{background:var(--cbg);color:#ff7b6b;border:1px solid var(--cbdr)}.bdg-t{background:var(--abg);color:var(--amb)}
+.qb{border:1px solid transparent;cursor:pointer;transition:all .12s}
+.qb.bdg-n:hover{color:var(--tx);border-color:var(--bd2)}
+.qb.bdg-n{border-style:dashed;border-color:var(--bd2);background:transparent}
+.qtw{display:inline-flex;align-items:center;background:var(--abg);border-radius:5px;padding:0 2px 0 6px;height:20px}
+.qtime{background:transparent;border:none;outline:none;color:var(--amb);font-family:'DM Mono',monospace;font-size:10.5px;width:62px;color-scheme:dark;padding:0}
+.qtime::-webkit-calendar-picker-indicator{display:none}
+.qx{background:none;border:none;color:var(--amb);opacity:.6;font-size:10px;padding:0 3px}.qx:hover{opacity:1}
+.dupe{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-radius:var(--rs);background:var(--pbg);border:1px solid var(--pbdr);color:var(--pur);font-size:13px;margin-bottom:14px}
+.dupe .btn{margin-left:auto;padding:7px 12px}
 .asg{display:flex;background:var(--sf2);border-radius:999px;padding:3px;gap:2px;flex-shrink:0}
 .asg button{border:none;background:transparent;color:var(--sub);font-size:11.5px;padding:4px 10px;border-radius:999px;transition:all .12s;white-space:nowrap}
 .asg button:hover{color:var(--tx)}
@@ -419,6 +462,21 @@ function Sheet({title,onClose,children,footer,size}:{title:ReactNode,onClose:()=
         {footer&&<div className="mfoot">{footer}</div>}
       </div>
     </div>
+  )
+}
+
+// Horário editável direto na lista de Tarefas
+function QuickTime({value,onSave}:{value:string,onSave:(v:string)=>void}){
+  const[edit,setEdit]=useState(false)
+  const[v,setV]=useState(value)
+  useEffect(()=>{setV(value)},[value])
+  const commit=()=>{setEdit(false);if(v!==value)onSave(v)}
+  if(!edit&&!value)return <button className="bdg bdg-n qb" onClick={e=>{e.stopPropagation();setEdit(true)}} title="Definir horário">+ horário</button>
+  return(
+    <span className="qtw" onClick={e=>e.stopPropagation()}>
+      <input type="time" className="qtime" value={v} autoFocus={edit} onChange={e=>setV(e.target.value)} onBlur={commit} onKeyDown={e=>{if(e.key==='Enter')(e.target as HTMLInputElement).blur();if(e.key==='Escape'){setV(value);setEdit(false)}}} aria-label="Horário"/>
+      {v&&<button className="qx" onMouseDown={e=>e.preventDefault()} onClick={()=>{setV('');setEdit(false);onSave('')}} title="Tirar horário" aria-label="Tirar horário">✕</button>}
+    </span>
   )
 }
 
@@ -768,22 +826,43 @@ export default function NinhoApp({householdId}:{householdId:string}){
     loadAll()
   }
 
-  async function completeDog(r:DogRoutine){
-    const was=!!r.completed_today
-    setDogs(p=>p.map(d=>({...d,routines:d.routines.map(x=>x.id===r.id?{...x,completed_today:!was}:x)})))
-    if(was){
-      await supabase.from('dog_completions').delete().eq('routine_id',r.id).eq('date',today)
-      await supabase.from('xp_history').delete().eq('household_id',householdId).eq('reason',`dog:${r.id}:${today}`)
-    }else{
-      showToast(`+1 XP · ${r.title}`,()=>{setToast(null);completeDog({...r,completed_today:true})})
-      await supabase.from('dog_completions').upsert({routine_id:r.id,date:today},{onConflict:'routine_id,date'})
-      await supabase.from('xp_history').insert({household_id:householdId,amount:1,reason:`dog:${r.id}:${today}`})
-    }
+  // Marca (done=true) ou desmarca várias rotinas de uma vez — ex.: "Ração manhã" de todos os cães
+  async function markDogs(rs:DogRoutine[],done:boolean,label?:string){
+    const list=rs.filter(r=>!!r.completed_today!==done)
+    if(!list.length)return
+    const ids=new Set(list.map(r=>r.id))
+    setDogs(p=>p.map(d=>({...d,routines:d.routines.map(x=>ids.has(x.id)?{...x,completed_today:done}:x)})))
+    if(done)showToast(`+${list.length} XP · ${label||list[0].title}`,()=>{setToast(null);markDogs(list.map(r=>({...r,completed_today:true})),false)})
+    await Promise.all(list.map(async r=>{
+      if(done){
+        await supabase.from('dog_completions').upsert({routine_id:r.id,date:today},{onConflict:'routine_id,date'})
+        await supabase.from('xp_history').insert({household_id:householdId,amount:1,reason:`dog:${r.id}:${today}`})
+      }else{
+        await supabase.from('dog_completions').delete().eq('routine_id',r.id).eq('date',today)
+        await supabase.from('xp_history').delete().eq('household_id',householdId).eq('reason',`dog:${r.id}:${today}`)
+      }
+    }))
+    loadAll()
+  }
+  function completeDog(r:DogRoutine){markDogs([r],!r.completed_today)}
+  function toggleDogItem(it:DogItem){markDogs(it.parts.map(p=>p.r),!it.completed_today,it.title)}
+
+  async function quickUpdate(id:string,data:Partial<Task>){
+    setTasks(p=>p.map(x=>x.id===id?{...x,...data}:x))
+    await supabase.from('tasks').update(data).eq('id',id)
+  }
+
+  async function archiveTasks(list:Task[]){
+    if(!confirm(`Arquivar ${list.length} tarefa${list.length!==1?'s':''} de cães? As rotinas da aba Cães continuam.`))return
+    const ids=list.map(t=>t.id)
+    setTasks(p=>p.filter(x=>!ids.includes(x.id)))
+    showToast(`${list.length} tarefas arquivadas`,async()=>{setToast(null);await supabase.from('tasks').update({active:true}).in('id',ids);loadAll()})
+    await supabase.from('tasks').update({active:false}).in('id',ids)
     loadAll()
   }
 
   async function swapTask(t:Task){
-    const n:Who=ownerOf(t,today)==='g'?'s':'g'
+    const n:Who=ownerOf(t,today,slots)==='g'?'s':'g'
     const prev=t.assigned_to
     setTasks(p=>p.map(x=>x.id===t.id?{...x,assigned_to:n}:x))
     showToast(`Passada para ${firstName(names[n])}${isFixed(t)?'':' (sai do rodízio)'}`,()=>{setToast(null);assignTask(t.id,prev)})
@@ -883,7 +962,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
   }
 
   async function autoDistribute(){
-    const active=tasks.filter(t=>t.frequency!=='once')
+    const active=homeTasks.filter(t=>t.frequency!=='once')
     if(!active.length){showToast('Adicione tarefas primeiro');return}
     let gS=0,sS=0
     const updates:Array<{id:string,assigned_to:string}>=[]
@@ -899,29 +978,42 @@ export default function NinhoApp({householdId}:{householdId:string}){
 
   // ── DERIVED ───────────────────────────────────────────
   const focusMode=settings.survival||settings.energy==='low'
-  const dueList=tasks.filter(t=>dueToday(t,today))
+  // Com cães cadastrados, as tarefas da categoria Cães repetem as rotinas: ficam fora de Hoje
+  const slots=buildSlots(tasks.filter(t=>!(dogs.length&&t.category==='dogs')),dogs)
+  const dogTasks=dogs.length?tasks.filter(t=>t.category==='dogs'):[]
+  const homeTasks=dogs.length?tasks.filter(t=>t.category!=='dogs'):tasks
+  const dueList=homeTasks.filter(t=>dueToday(t,today))
   const todayTasks=focusMode&&!showAllToday?dueList.filter(t=>t.essential):dueList
   const hiddenCount=dueList.length-todayTasks.length
-  const doneToday=dueList.filter(t=>t.completed_today).length
-  const dayPct=dueList.length?Math.round(doneToday/dueList.length*100):0
-  const dailyTasks=tasks.filter(t=>t.frequency==='daily')
+  const dogItems=buildDogItems(dogs,today,slots)
+  // Itens de Hoje: tarefas + rotinas dos cães (rotinas sempre aparecem, até no modo sobrevivência)
+  const hItems:HItem[]=[
+    ...todayTasks.map(t=>({id:t.id,frequency:t.frequency,scheduled_time:t.scheduled_time,completed_today:t.completed_today,essential:t.essential,category:t.category,task:t})),
+    ...dogItems.map(d=>({id:'dog:'+d.key,frequency:d.frequency,scheduled_time:d.scheduled_time,completed_today:d.completed_today,essential:false,category:'dogs',dog:d})),
+  ]
+  const ownerOfItem=(i:HItem):Who=>i.task?ownerOf(i.task,today,slots):i.dog!.owner
+  const xpOfItem=(i:HItem)=>i.task?XPW[i.task.weight]:i.dog!.parts.length
+  const allToday=[...dueList.map(t=>!!t.completed_today),...dogItems.map(d=>d.completed_today)]
+  const doneToday=allToday.filter(Boolean).length
+  const dayPct=allToday.length?Math.round(doneToday/allToday.length*100):0
+  const dailyTasks=homeTasks.filter(t=>t.frequency==='daily')
   const chaos=dailyTasks.length?Math.max(0,Math.round(100-(dailyTasks.filter(t=>t.completed_today).length/dailyTasks.length)*100)):0
   const ci=getChaosInfo(chaos)
   const lv=getLevel(xp)
   const xpPct=Math.min(100,Math.round(((xp-lv.min)/(lv.max-lv.min))*100))
   const puppies=dogs.filter(d=>d.is_puppy)
-  const dogDaily=dogs.flatMap(d=>d.routines.filter(r=>dueToday(r,today)).map(r=>({r,dog:d}))).sort((a,b)=>byTime(a.r,b.r))
+  const dogDaily=dogs.flatMap(d=>d.routines.filter(r=>dueToday(r,today)).map(r=>({r,dog:d})))
   const dogDone=dogDaily.filter(x=>x.r.completed_today).length
   const en=ENERGY[settings.energy]||ENERGY.medium
   const h=now.getHours()
   const hello=h<5?'Boa noite':h<12?'Bom dia':h<18?'Boa tarde':'Boa noite'
   const dateLabel=now.toLocaleDateString('pt-BR',{weekday:'long',day:'numeric',month:'long'})
-  const countFor=(w:Who)=>{const all=todayTasks.filter(t=>ownerOf(t,today)===w);return{all:all.length,done:all.filter(t=>t.completed_today).length}}
+  const countFor=(w:Who)=>{const all=hItems.filter(i=>ownerOfItem(i)===w);return{all:all.length,done:all.filter(i=>i.completed_today).length}}
 
   // ── RENDER HELPERS ────────────────────────────────────
   const taskRow=(t:Task,o:{actions?:boolean,next?:boolean}={})=>{
     const actions=o.actions!==false
-    const other:Who=ownerOf(t,today)==='g'?'s':'g'
+    const other:Who=ownerOf(t,today,slots)==='g'?'s':'g'
     const late=isLate(t,nowHM)
     return(
       <div key={t.id} className={`tr ${t.completed_today?'done':''} ${o.next?'next':''}`}>
@@ -944,13 +1036,35 @@ export default function NinhoApp({householdId}:{householdId:string}){
     )
   }
 
+  const dogItemRow=(it:DogItem,o:{next?:boolean}={})=>{
+    const late=isLate(it,nowHM)
+    const multi=it.parts.length>1
+    return(
+      <div key={'dog:'+it.key} className={`tr ${it.completed_today?'done':''} ${o.next?'next':''}`}>
+        <button className="chk" onClick={()=>toggleDogItem(it)} aria-label={it.completed_today?`Desmarcar ${it.title}`:`Concluir ${it.title}`}>✓</button>
+        <div className="trb" onClick={()=>toggleDogItem(it)}>
+          <div className="trt">{it.title}</div>
+          <div className="trm">
+            <span>🐾 {it.parts.map(p=>p.dog.name+(multi&&p.r.completed_today&&!it.completed_today?' ✓':'')).join(', ')}</span>
+            {o.next&&<span className="tag-next">▸ próxima</span>}
+            {it.scheduled_time&&<span className={`tag-t ${late?'late':''}`}>⏰ {hhmm(it.scheduled_time)}</span>}
+            {it.frequency!=='daily'&&<span>{FPT[it.frequency]||it.frequency}</span>}
+            <span className="tag-r" title="Rotinas dos cães alternam entre vocês">↻ rodízio</span>
+          </div>
+        </div>
+        <span className="xp xp-l">+{it.parts.length}</span>
+      </div>
+    )
+  }
+  const itemRow=(i:HItem,o:{actions?:boolean,next?:boolean}={})=>i.task?taskRow(i.task,o):dogItemRow(i.dog!,o)
+
   const personCard=(who:Who)=>{
-    const all=todayTasks.filter(t=>ownerOf(t,today)===who)
-    const pend=all.filter(t=>!t.completed_today)
-    const done=all.filter(t=>t.completed_today)
+    const all=hItems.filter(i=>ownerOfItem(i)===who)
+    const pend=all.filter(i=>!i.completed_today)
+    const done=all.filter(i=>i.completed_today)
     const pct=all.length?Math.round(done.length/all.length*100):0
-    const doneXP=done.reduce((s,t)=>s+XPW[t.weight],0)
-    const essLeft=pend.filter(t=>t.essential).length
+    const doneXP=done.reduce((s,i)=>s+xpOfItem(i),0)
+    const essLeft=pend.filter(i=>i.essential).length
     return(
       <section key={who} className="card pcard" data-hide={person!==who?'1':'0'}>
         <div className="ph">
@@ -961,7 +1075,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
           </div>
           <Ring pct={pct} color={who==='g'?'var(--green)':'var(--pur)'} label={`${done.length}/${all.length}`}/>
         </div>
-        {all.length===0?(tasks.some(t=>ownerOf(t,today)===who)?(
+        {all.length===0?(homeTasks.some(t=>ownerOf(t,today,slots)===who)||dogs.length>0?(
           <div className="alldone">🎉 Nada pendente para hoje<small>As tarefas do período já estão em dia</small></div>
         ):(
           <div className="empty"><span className="empty-icon">📋</span>{who==='g'?'Nenhuma tarefa ainda':'Nenhuma tarefa atribuída'}
@@ -975,7 +1089,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
             return groups.map(g=>(
               <div key={g.k}>
                 <div className={`cdiv ${g.k==='late'?'late':''}`}>{g.label}<span className="n">{g.items.length}</span></div>
-                {g.items.map(t=>taskRow(t,{next:t.id===nextId}))}
+                {g.items.map(i=>itemRow(i,{next:i.id===nextId}))}
               </div>
             ))
           })()}
@@ -984,7 +1098,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <span style={{width:12}}>{showDone[who]?'▾':'▸'}</span>Concluídas ({done.length})
               <span className="mono" style={{marginLeft:'auto',color:'var(--green)',fontSize:12}}>+{doneXP} XP</span>
             </button>
-            {showDone[who]&&done.map(t=>taskRow(t,{actions:false}))}
+            {showDone[who]&&done.map(i=>itemRow(i,{actions:false}))}
           </>}
         </>}
       </section>
@@ -1003,6 +1117,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
         {sat?<span className="dr-m">✓ {lastLabel(r.prev_done||null,today)}</span>
           :r.frequency!=='daily'&&<span className="bdg bdg-n">{FPT[r.frequency]||r.frequency}</span>}
         {r.scheduled_time&&<span className={`dr-m ${late?'late':''}`}>{hhmm(r.scheduled_time)}</span>}
+        {!sat&&!r.completed_today&&<span className="dr-m" style={{color:turnBy('dog:'+dogKey(r),r.frequency,today,slots)==='g'?'var(--green)':'var(--pur)'}} title="De quem é a vez">↻ {firstName(names[turnBy('dog:'+dogKey(r),r.frequency,today,slots)])}</span>}
         {o.dog&&<button className="ib" onClick={()=>openModal('routine',{dog:o.dog,routine:r})} title="Editar rotina" aria-label={`Editar ${r.title}`}>✎</button>}
       </div>
     )
@@ -1023,6 +1138,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
     if(taskFilter==='g'&&t.assigned_to!=='g')return false
     if(taskFilter==='s'&&t.assigned_to!=='s')return false
     if(taskFilter==='r'&&t.assigned_to)return false
+    if(taskFilter==='notime'&&t.scheduled_time)return false
     if(CAT[taskFilter]&&t.category!==taskFilter)return false
     if(q&&!t.title.toLowerCase().includes(q))return false
     return true
@@ -1030,9 +1146,11 @@ export default function NinhoApp({householdId}:{householdId:string}){
   const usedCats=Object.keys(CAT).filter(k=>tasks.some(t=>t.category===k))
 
   // ── SEMANA: equilíbrio ────────────────────────────────
-  const act=tasks.filter(t=>t.frequency!=='once')
-  // Rodízio conta metade para cada uma
-  const loadOf=(w:Who)=>act.reduce((s,t)=>{const v=XPW[t.weight]*(FEFF[t.frequency]||1);return s+(isFixed(t)?(t.assigned_to===w?v:0):v/2)},0)
+  const act=homeTasks.filter(t=>t.frequency!=='once')
+  const allRoutines=dogs.flatMap(d=>d.routines)
+  const dogLoad=allRoutines.reduce((s,r)=>s+(FEFF[r.frequency]||1),0)
+  // Rodízio (e rotinas dos cães) conta metade para cada uma
+  const loadOf=(_w:Who)=>act.reduce((s,t)=>{const v=XPW[t.weight]*(FEFF[t.frequency]||1);return s+(isFixed(t)?(t.assigned_to===_w?v:0):v/2)},0)+dogLoad/2
   const rotCount=act.filter(t=>!isFixed(t)).length
   const gS=loadOf('g'),sS=loadOf('s'),tot=gS+sS
   const gP=tot>0?Math.round((gS/tot)*100):50
@@ -1115,8 +1233,24 @@ export default function NinhoApp({householdId}:{householdId:string}){
                 <div className="slbl">🐾 Cães hoje {dogDaily.length>0&&<span className="mono" style={{color:'var(--faint)'}}>{dogDone}/{dogDaily.length}</span>}<button className="lnk" onClick={()=>setTab('pets')}>Ver →</button></div>
                 {dogs.length===0?(
                   <div className="empty" style={{padding:'12px 0'}}>Nenhum pet ainda<div><button className="btn btn-s" onClick={()=>openModal('pet')}>+ Cadastrar pet</button></div></div>
-                ):dogDaily.length===0?<div style={{fontSize:13,color:'var(--sub)'}}>Sem rotinas diárias</div>
-                :dogDaily.map(({r,dog})=>dogRow(r,{dogName:dogs.length>1?dog.name:undefined}))}
+                ):dogs.map(dog=>{
+                  // Resumo: as rotinas em si já estão na lista de quem é a vez
+                  const due=dog.routines.filter(r=>dueToday(r,today))
+                  const dn=due.filter(r=>r.completed_today).length
+                  const nxt=due.filter(r=>!r.completed_today).sort(byTime)[0]
+                  const acc=dog.is_puppy?accidents.filter(a=>a.dog_id===dog.id&&a.date===today).length:0
+                  return(
+                    <button key={dog.id} className="dsum" onClick={()=>setTab('pets')}>
+                      <span className="dav" style={{width:36,height:36,fontSize:18}}>{dog.is_puppy?'🐶':'🐕'}</span>
+                      <span style={{flex:1,minWidth:0}}>
+                        <span className="dsum-h"><b>{dog.name}</b><span className="mono">{dn}/{due.length}</span></span>
+                        <span className="bar" style={{marginTop:6,display:'block'}}><span className="barf" style={{display:'block',width:(due.length?dn/due.length*100:100)+'%',background:'var(--gdk)'}}/></span>
+                        <span className="dsum-s">{nxt?<>Próxima: {nxt.title}{nxt.scheduled_time&&<span className={isLate(nxt,nowHM)?'late':''}> · {hhmm(nxt.scheduled_time)}</span>}</>:due.length?'✓ Tudo feito hoje':'Sem rotinas hoje'}{dog.is_puppy&&` · ${acc} acidente${acc!==1?'s':''}`}</span>
+                      </span>
+                    </button>
+                  )
+                })}
+                {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
               </div>
               <div className="card">
                 <div className="slbl">Atalhos</div>
@@ -1145,8 +1279,12 @@ export default function NinhoApp({householdId}:{householdId:string}){
             <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar tarefa..." aria-label="Buscar tarefa"/>
             {query&&<button className="x" onClick={()=>setQuery('')} aria-label="Limpar busca">✕</button>}
           </div>
+          {dogTasks.length>0&&<div className="dupe">
+            <span>🐾 {dogTasks.length} tarefa{dogTasks.length!==1?'s':''} de cães repete{dogTasks.length===1?'':'m'} as rotinas da aba Cães — por isso não aparece{dogTasks.length===1?'':'m'} em Hoje.</span>
+            <button className="btn btn-pur" onClick={()=>archiveTasks(dogTasks)}>Arquivar</button>
+          </div>}
           <div className="fchips">
-            {[['all',`Todas · ${tasks.length}`],['essential','🔴 Essenciais'],['g',firstName(names.g)],['s',firstName(names.s)],['r','Rodízio'],...usedCats.map(k=>[k,CAT[k]])].map(([k,v])=>(
+            {[['all',`Todas · ${tasks.length}`],['essential','🔴 Essenciais'],['g',firstName(names.g)],['s',firstName(names.s)],['r','Rodízio'],['notime','⏰ Sem horário'],...usedCats.map(k=>[k,CAT[k]])].map(([k,v])=>(
               <button key={k} className={`fc ${taskFilter===k?'on':''}`} onClick={()=>setTaskFilter(k)}>{v}</button>
             ))}
           </div>
@@ -1164,11 +1302,11 @@ export default function NinhoApp({householdId}:{householdId:string}){
                     <div className="tc-info" onClick={()=>openModal('task',t)}>
                       <div className="tc-title">{t.title}</div>
                       <div className="tc-meta">
-                        {t.essential&&<span className="bdg bdg-e">essencial</span>}
+                        <button className={`bdg qb ${t.essential?'bdg-e':'bdg-n'}`} onClick={e=>{e.stopPropagation();quickUpdate(t.id,{essential:!t.essential})}} title={t.essential?'Tirar de essencial':'Marcar como essencial'} aria-pressed={t.essential}>{t.essential?'● essencial':'○ essencial'}</button>
+                        <QuickTime value={hhmm(t.scheduled_time)} onSave={v=>quickUpdate(t.id,{scheduled_time:v||null})}/>
                         <span className={`bdg bdg-${wCls(t.weight)}`}>{WPT[t.weight]} +{XPW[t.weight]}</span>
                         <span className="bdg bdg-n">{FPT[t.frequency]}</span>
-                        {t.scheduled_time&&<span className="bdg bdg-t">⏰ {hhmm(t.scheduled_time)}</span>}
-                        {!isFixed(t)&&<span className="bdg" style={{background:'var(--pbg)',color:'var(--pur)'}}>↻ vez de {firstName(names[turnOf(t,today)])}</span>}
+                        {!isFixed(t)&&<span className="bdg" style={{background:'var(--pbg)',color:'var(--pur)'}}>↻ vez de {firstName(names[turnOf(t,today,slots)])}</span>}
                         {t.frequency!=='daily'&&(doneInPeriod(t,today)
                           ?<span className="bdg bdg-l">✓ feita {lastLabel(lastDone(t,today),today)}</span>
                           :<span className="bdg bdg-n">{t.frequency==='once'?'pendente':`última: ${lastLabel(t.prev_done||null,today)}`}</span>)}
@@ -1207,7 +1345,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
                   <span><b style={{color:'var(--tx)',fontWeight:500}}>{Math.round(gS)}</b> pts · {act.filter(t=>t.assigned_to==='g').length} fixas</span>
                   <span><b style={{color:'var(--tx)',fontWeight:500}}>{Math.round(sS)}</b> pts · {act.filter(t=>t.assigned_to==='s').length} fixas</span>
                 </div>
-                {rotCount>0&&<div style={{fontSize:12,color:'var(--sub)',marginTop:-6,marginBottom:14}}><span className="tag-r">↻ {rotCount} em rodízio</span> — alternam a cada dia, semana ou mês, metade da carga para cada</div>}
+                {(rotCount>0||allRoutines.length>0)&&<div style={{fontSize:12,color:'var(--sub)',marginTop:-6,marginBottom:14}}><span className="tag-r">↻ {[rotCount>0&&`${rotCount} tarefa${rotCount!==1?'s':''}`,allRoutines.length>0&&`${allRoutines.length} rotina${allRoutines.length!==1?'s':''} dos cães`].filter(Boolean).join(' + ')} em rodízio</span> — alternam a cada dia, semana ou mês, metade da carga para cada</div>}
                 <button className="btn btn-pur btn-w" onClick={autoDistribute}>✦ Distribuir automaticamente</button>
                 <div style={{fontSize:12,color:'var(--sub)',marginTop:8,textAlign:'center'}}>Ou ajuste uma a uma em <button onClick={()=>setTab('tasks')} style={{background:'none',border:'none',color:'var(--green)',fontSize:12}}>Tarefas →</button></div>
               </div>
@@ -1346,7 +1484,7 @@ export default function NinhoApp({householdId}:{householdId:string}){
               <div className="lg"><span className="lg-k">🔥</span><span><b>Sequência</b> — dias seguidos com pelo menos uma tarefa concluída.</span></div>
               <div className="lg"><span className="lg-k">🏠</span><span><b>Casa</b> — mede quantas tarefas diárias ainda estão pendentes hoje.</span></div>
               <div className="lg"><span className="lg-k">📅</span><span><b>Frequência</b> — semanais, quinzenais e mensais aparecem em Hoje até serem feitas; depois somem até o próximo período (semana começa na segunda).</span></div>
-              <div className="lg"><span className="lg-k"><span className="tag-r">↻ rodízio</span></span><span><b>Rodízio</b> — a tarefa alterna entre vocês: diárias a cada dia, semanais a cada semana, mensais a cada mês.</span></div>
+              <div className="lg"><span className="lg-k"><span className="tag-r">↻ rodízio</span></span><span><b>Rodízio</b> — a tarefa alterna entre vocês: diárias a cada dia, semanais a cada semana, mensais a cada mês. As rotinas dos cães também: a mesma rotina de cães diferentes (ex.: ração manhã) fica com a mesma pessoa e vira um item só.</span></div>
               <div className="lg"><span className="lg-k"><span className="tag-t late">⏰ atrasada</span></span><span><b>Atrasada</b> — tarefa diária cujo horário já passou.</span></div>
               <div className="lg"><span className="lg-k">⇄</span><span><b>Trocar</b> — passa a tarefa para a outra pessoa (no rodízio, fixa com ela).</span></div>
             </div>
