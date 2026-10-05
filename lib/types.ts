@@ -16,7 +16,12 @@ export interface CompletionState {
   prev_done?: string | null
   /** id da conclusão de hoje no banco (para reconhecer exclusões vindas do Realtime) */
   completion_id?: string | null
+  /** Conclusões ANTES de hoje (mais recente primeiro), usadas pela divisão inteligente. */
+  hist?: HistEntry[]
 }
+
+/** Uma conclusão anterior: data e quem fez (null = registro antigo sem autoria). */
+export interface HistEntry { d: string, by: Who | null }
 
 export interface Task extends CompletionState {
   id: string

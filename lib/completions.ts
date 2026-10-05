@@ -1,5 +1,5 @@
 // Conclusões: resumo por item (feita hoje, por quem, última vez) e rótulos.
-import type { CompletionRow, CompletionState, Names, Who } from './types'
+import type { CompletionRow, CompletionState, HistEntry, Names, Who } from './types'
 import { isWho } from './rotation'
 
 export type CompletionSummary = CompletionState
@@ -11,12 +11,19 @@ export type CompletionSummary = CompletionState
 export function summarizeCompletions(rows: CompletionRow[], key: 'task_id' | 'routine_id', today: string) {
   const todayRow = new Map<string, CompletionRow>()
   const prev = new Map<string, string>()
+  const hist = new Map<string, HistEntry[]>()
   for (const c of rows) {
     const id = c[key]
     if (!id) continue
     if (c.date === today) todayRow.set(id, c)
-    else if (c.date < today && (!prev.has(id) || c.date > prev.get(id)!)) prev.set(id, c.date)
+    else if (c.date < today) {
+      if (!prev.has(id) || c.date > prev.get(id)!) prev.set(id, c.date)
+      const h = hist.get(id) || []
+      h.push({ d: c.date, by: isWho(c.completed_by) ? c.completed_by : null })
+      hist.set(id, h)
+    }
   }
+  hist.forEach(h => h.sort((a, b) => b.d.localeCompare(a.d)))
   return (id: string): CompletionSummary => {
     const t = todayRow.get(id)
     return {
@@ -24,6 +31,7 @@ export function summarizeCompletions(rows: CompletionRow[], key: 'task_id' | 'ro
       completed_by_today: t ? (isWho(t.completed_by) ? t.completed_by : null) : null,
       completion_id: t?.id ?? null,
       prev_done: prev.get(id) ?? null,
+      hist: hist.get(id) ?? [],
     }
   }
 }

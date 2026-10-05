@@ -12,7 +12,7 @@ export const ENERGY: Record<string, { ic: string, l: string, short: string, s: s
   medium: { ic: '🌤', l: 'Energia média', short: 'Média', s: 'Modo padrão', cls: 'amber' },
   low: { ic: '🌧', l: 'Baixa energia', short: 'Baixa', s: 'Foco no essencial', cls: 'coral' },
 }
-export const TABS: Array<[string, string, string]> = [['today', '☀️', 'Hoje'], ['tasks', '📋', 'Tarefas'], ['week', '📅', 'Semana'], ['pets', '🐾', 'Cães'], ['settings', '⚙️', 'Ajustes']]
+export const TABS: Array<[string, string, string]> = [['today', '☀️', 'Hoje'], ['tasks', '📋', 'Tarefas'], ['shop', '🛒', 'Compras'], ['week', '📅', 'Semana'], ['pets', '🐾', 'Cães'], ['settings', '⚙️', 'Ajustes']]
 export const SUGG: Record<string, Array<{ t: string, w: string, f: string, cat: string, ess: boolean }>> = {
   'Cozinha': [{ t: 'Louça diária', w: 'light', f: 'daily', cat: 'kitchen', ess: true }, { t: 'Limpar bancada e fogão', w: 'light', f: 'daily', cat: 'kitchen', ess: true }, { t: 'Lixo da cozinha', w: 'light', f: 'daily', cat: 'kitchen', ess: true }, { t: 'Organizar geladeira', w: 'medium', f: 'weekly', cat: 'kitchen', ess: false }, { t: 'Limpar microondas', w: 'light', f: 'weekly', cat: 'kitchen', ess: false }, { t: 'Limpar geladeira por dentro', w: 'medium', f: 'monthly', cat: 'kitchen', ess: false }],
   'Banheiro': [{ t: 'Limpar pia e espelho', w: 'light', f: 'weekly', cat: 'bathroom', ess: false }, { t: 'Limpar vaso sanitário', w: 'medium', f: 'weekly', cat: 'bathroom', ess: false }, { t: 'Limpar box / chuveiro', w: 'medium', f: 'weekly', cat: 'bathroom', ess: false }, { t: 'Repor papel e sabonete', w: 'light', f: 'weekly', cat: 'bathroom', ess: true }],

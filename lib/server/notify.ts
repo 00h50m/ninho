@@ -6,7 +6,9 @@ import { buildDogs, buildTasks } from '@/lib/build'
 import { addDays, homeClock, weekStartOf } from '@/lib/dates'
 import { planToday } from '@/lib/today'
 import { COMPLETION_WINDOW_DAYS, DEFAULT_NAMES } from '@/lib/constants'
-import { morningMessage, testMessage, weeklyMessage, type PushPayload } from '@/lib/digest'
+import { morningMessage, testMessage, weeklyMessage, type MaintNote, type PushPayload } from '@/lib/digest'
+import { dueForPerson, type MaintenanceItem } from '@/lib/maintenance'
+import type { SplitMode } from '@/lib/split'
 import { EMPTY_SCORES, type WeeklyScores } from '@/lib/gamification'
 
 export interface Subscription { id: string, household_id: string, who: Who, endpoint: string, p256dh: string, auth: string, morning: boolean, weekly: boolean, failures?: number }
@@ -35,6 +37,11 @@ async function loadHousehold(db: SupabaseClient, householdId: string, today: str
   // Pontuais: conclusões antigas também valem
   const onceIds = (tasks as any[]).filter(t => t.frequency === 'once').map(t => t.id)
   const old = onceIds.length ? must(await db.from('task_completions').select('id,task_id,date,completed_by').in('task_id', onceIds).lt('date', since), 'pontuais') : []
+  // Fase 3 (migration 007): sem a migration, segue com o rodízio e sem manutenção
+  const house = await db.from('households').select('split_mode').eq('id', householdId).maybeSingle()
+  const split: SplitMode = house.error || (house.data as any)?.split_mode === 'rotation' ? 'rotation' : 'smart'
+  const mt = await db.from('maintenance_items').select('id,title,next_due,assigned_to,active').eq('household_id', householdId).eq('active', true)
+  const maint = (mt.error ? [] : mt.data || []) as Array<Pick<MaintenanceItem, 'id' | 'title' | 'next_due' | 'assigned_to' | 'active'>>
   const g = (profiles as any[]).find(p => p.role === 'g'), s = (profiles as any[]).find(p => p.role === 's')
   const names: Names = { g: g?.display_name || DEFAULT_NAMES.g, s: s?.display_name || DEFAULT_NAMES.s }
   const st = settings as any
@@ -43,7 +50,7 @@ async function loadHousehold(db: SupabaseClient, householdId: string, today: str
     dogs: buildDogs(dogs as any[], dcomps as any[], today),
     focus: !!st?.survival || st?.energy === 'low',
     bet: (st?.bet as string | null) ?? null,
-    names,
+    names, split, maint,
   }
 }
 
@@ -93,12 +100,13 @@ export async function runMorning(deps: NotifyDeps): Promise<Report> {
     report.households++
     try {
       const h = await loadHousehold(deps.db, householdId, clock.date)
-      const plan = planToday(h.tasks, h.dogs, clock.date, { focus: h.focus })
+      const plan = planToday(h.tasks, h.dogs, clock.date, { focus: h.focus, split: h.split })
       const mine = (w: Who): HItem[] => plan.items.filter(i => plan.ownerOfItem(i) === w)
+      const maintOf = (w: Who): MaintNote[] => dueForPerson(h.maint as MaintenanceItem[], w, clock.date).map(m => ({ title: m.title, late: m.next_due < clock.date }))
       for (const sub of subs) {
         const logId = await claim(deps.db, sub.id, 'morning', clock.date)
         if (!logId) { report.skipped++; continue }
-        await deliver(deps, sub, logId, morningMessage(sub.who, h.names, mine(sub.who), clock.hm), report)
+        await deliver(deps, sub, logId, morningMessage(sub.who, h.names, mine(sub.who), clock.hm, maintOf(sub.who)), report)
       }
     } catch (e: any) {
       report.failed += subs.length
@@ -123,9 +131,10 @@ export async function runWeekly(deps: NotifyDeps): Promise<Report> {
       ])
       const sc = (scoresRaw || {}) as any
       const scores: WeeklyScores = { g: { ...EMPTY_SCORES.g, ...sc.g }, s: { ...EMPTY_SCORES.s, ...sc.s }, unknown: { ...EMPTY_SCORES.unknown, ...sc.unknown } }
-      const plan = planToday(h.tasks, h.dogs, clock.date)
+      const plan = planToday(h.tasks, h.dogs, clock.date, { split: h.split })
+      const nextMaint = h.maint.filter(m => m.next_due > clock.date && m.next_due <= addDays(clock.date, 7)).sort((a, b) => a.next_due.localeCompare(b.next_due)).map(m => m.title)
       const pending = plan.dueList.filter(t => t.frequency !== 'daily' && t.frequency !== 'once' && !t.completed_today).map(t => ({ title: t.title, frequency: t.frequency }))
-      const payload = weeklyMessage(h.names, scores, h.bet, Number((streaksRaw as any)?.house) || 0, pending)
+      const payload = weeklyMessage(h.names, scores, h.bet, Number((streaksRaw as any)?.house) || 0, pending, nextMaint)
       for (const sub of subs) {
         const logId = await claim(deps.db, sub.id, 'weekly', clock.date)
         if (!logId) { report.skipped++; continue }

@@ -17,7 +17,10 @@
 -- PostgreSQL database dump
 --
 
+\restrict LPoM8ffaWFSkYOMlQ7c2Iyn8KFt27Y3XHRhkt6ppCj0f0oAaFVMDKh0CCNyMIY0
 
+-- Dumped from database version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
+-- Dumped by pg_dump version 16.14 (Ubuntu 16.14-0ubuntu0.24.04.1)
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -86,6 +89,53 @@ begin
     ));
   end loop;
   return v_out;
+end $$;
+
+
+--
+-- Name: ninho_add_shopping_item(uuid, text, text, text, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_add_shopping_item(p_household_id uuid, p_title text, p_qty text DEFAULT NULL::text, p_category text DEFAULT 'outros'::text, p_by text DEFAULT NULL::text) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_title text := btrim(coalesce(p_title, ''));
+  v_row   public.shopping_items%rowtype;
+begin
+  if length(v_title) = 0 or length(v_title) > 80 then
+    raise exception 'NINHO_INVALID_INPUT: nome do item vazio ou longo demais' using errcode = '22023';
+  end if;
+  if p_by is not null and p_by not in ('g','s') then
+    raise exception 'NINHO_INVALID_PERSON: quem adicionou deve ser g ou s (recebido: %)', p_by using errcode = '22023';
+  end if;
+
+  select * into v_row from public.shopping_items
+  where household_id = p_household_id and lower(btrim(title)) = lower(v_title) and done_at is null
+  for update;
+
+  if found then
+    if v_row.checked_at is not null or (nullif(btrim(coalesce(p_qty, '')), '') is not null and v_row.qty is distinct from btrim(p_qty)) then
+      update public.shopping_items
+      set checked_at = null, checked_by = null,
+          qty = coalesce(nullif(btrim(coalesce(p_qty, '')), ''), qty)
+      where id = v_row.id;
+    end if;
+    return jsonb_build_object('id', v_row.id, 'created', false, 'reopened', v_row.checked_at is not null);
+  end if;
+
+  insert into public.shopping_items (household_id, title, qty, category, added_by)
+  values (p_household_id, v_title, nullif(btrim(coalesce(p_qty, '')), ''), coalesce(nullif(p_category, ''), 'outros'), p_by)
+  on conflict (household_id, lower(btrim(title))) where done_at is null do nothing
+  returning * into v_row;
+
+  if not found then -- outro aparelho adicionou no mesmo instante
+    select * into v_row from public.shopping_items
+    where household_id = p_household_id and lower(btrim(title)) = lower(v_title) and done_at is null;
+    return jsonb_build_object('id', v_row.id, 'created', false, 'reopened', false);
+  end if;
+  return jsonb_build_object('id', v_row.id, 'created', true, 'reopened', false);
 end $$;
 
 
@@ -169,7 +219,7 @@ begin
 
     select * into v_row from public.dog_completions where routine_id = v_r.id and date = p_date;
 
-    v_on_time := v_new and public.ninho_is_on_time(v_r.frequency, v_r.scheduled_time, p_date, now());
+    v_on_time := v_new and public.ninho_is_on_time(v_r.frequency, v_r.scheduled_time::text, p_date, now());
     v_amount := public.ninho_xp_with_bonus(1, v_on_time);
     insert into public.xp_history (household_id, amount, reason, earned_by, activity_date, on_time)
     values (v_r.household_id, v_amount, public.ninho_xp_reason('dog', v_r.id, p_date), v_row.completed_by, p_date, v_on_time)
@@ -188,6 +238,50 @@ begin
   end if;
 
   return jsonb_build_object('date', p_date, 'routines', v_found, 'created', v_created, 'xp_added', v_xp, 'on_time', v_on_any, 'completions', v_out);
+end $$;
+
+
+--
+-- Name: ninho_complete_maintenance(uuid, date, text); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_complete_maintenance(p_item_id uuid, p_date date, p_by text) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_item public.maintenance_items%rowtype;
+  v_log  uuid;
+  v_next date;
+  v_xp   integer := 0;
+begin
+  perform public.ninho_check_completion_input(p_date, p_by, true);
+
+  select * into v_item from public.maintenance_items where id = p_item_id for update;
+  if not found then
+    raise exception 'NINHO_NOT_FOUND: manutenção % não encontrada', p_item_id using errcode = 'P0002';
+  end if;
+
+  insert into public.maintenance_log (item_id, household_id, done_on, done_by, prev_last_done, prev_next_due)
+  values (p_item_id, v_item.household_id, p_date, p_by, v_item.last_done, v_item.next_due)
+  on conflict (item_id, done_on) do nothing
+  returning id into v_log;
+
+  if v_log is null then
+    select id into v_log from public.maintenance_log where item_id = p_item_id and done_on = p_date;
+    return jsonb_build_object('created', false, 'log_id', v_log, 'next_due', v_item.next_due, 'xp', 0);
+  end if;
+
+  v_next := public.ninho_next_due(p_date, v_item.every_months, v_item.every_days);
+  update public.maintenance_items set last_done = p_date, next_due = v_next where id = p_item_id;
+
+  insert into public.xp_history (household_id, amount, reason, earned_by, activity_date, on_time)
+  values (v_item.household_id, public.ninho_maintenance_xp(), public.ninho_xp_reason('maint', p_item_id, p_date), p_by, p_date, false)
+  on conflict (household_id, reason) where reason is not null and voided_at is null do nothing;
+  get diagnostics v_xp = row_count;
+
+  return jsonb_build_object('created', true, 'log_id', v_log, 'next_due', v_next,
+                            'xp', case when v_xp > 0 then public.ninho_maintenance_xp() else 0 end);
 end $$;
 
 
@@ -223,7 +317,7 @@ begin
 
   v_base := public.ninho_xp_for_weight(v_task.weight);
   -- Pontualidade conta só para a conclusão real (a primeira), pelo relógio do banco
-  v_on_time := v_created and public.ninho_is_on_time(v_task.frequency, v_task.scheduled_time, p_date, now());
+  v_on_time := v_created and public.ninho_is_on_time(v_task.frequency, v_task.scheduled_time::text, p_date, now());
   v_xp := public.ninho_xp_with_bonus(v_base, v_on_time);
 
   insert into public.xp_history (household_id, amount, reason, earned_by, activity_date, on_time)
@@ -350,6 +444,27 @@ CREATE FUNCTION public.ninho_local_date(p_ts timestamp with time zone) RETURNS d
 --
 
 COMMENT ON FUNCTION public.ninho_local_date(p_ts timestamp with time zone) IS 'Converte um instante para a data doméstica em America/Sao_Paulo.';
+
+
+--
+-- Name: ninho_maintenance_xp(); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_maintenance_xp() RETURNS integer
+    LANGUAGE sql IMMUTABLE
+    AS $$ select 3 $$;
+
+
+--
+-- Name: ninho_next_due(date, integer, integer); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_next_due(p_from date, p_months integer, p_days integer) RETURNS date
+    LANGUAGE sql IMMUTABLE
+    AS $$
+  select case when p_months is not null then (p_from + make_interval(months => p_months))::date
+              else p_from + coalesce(p_days, 30) end
+$$;
 
 
 --
@@ -551,6 +666,40 @@ end $$;
 
 
 --
+-- Name: ninho_undo_maintenance(uuid); Type: FUNCTION; Schema: public; Owner: -
+--
+
+CREATE FUNCTION public.ninho_undo_maintenance(p_log_id uuid) RETURNS jsonb
+    LANGUAGE plpgsql
+    SET search_path TO 'public'
+    AS $$
+declare
+  v_log  public.maintenance_log%rowtype;
+  v_item public.maintenance_items%rowtype;
+begin
+  select * into v_log from public.maintenance_log where id = p_log_id;
+  if not found then
+    return jsonb_build_object('removed', false);
+  end if;
+  select * into v_item from public.maintenance_items where id = v_log.item_id for update;
+
+  if v_item.last_done is not distinct from v_log.done_on
+     and not exists (select 1 from public.maintenance_log where item_id = v_log.item_id and done_on > v_log.done_on) then
+    update public.maintenance_items
+    set last_done = v_log.prev_last_done, next_due = coalesce(v_log.prev_next_due, next_due)
+    where id = v_log.item_id;
+  end if;
+
+  delete from public.maintenance_log where id = p_log_id;
+  delete from public.xp_history
+  where household_id = v_log.household_id
+    and reason = public.ninho_xp_reason('maint', v_log.item_id, v_log.done_on)
+    and voided_at is null;
+  return jsonb_build_object('removed', true);
+end $$;
+
+
+--
 -- Name: ninho_weekly_scores(uuid, date); Type: FUNCTION; Schema: public; Owner: -
 --
 
@@ -671,8 +820,76 @@ CREATE TABLE public.households (
     id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
     name text DEFAULT 'Ninho'::text NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
-    updated_at timestamp with time zone DEFAULT now()
+    updated_at timestamp with time zone DEFAULT now(),
+    split_mode text DEFAULT 'smart'::text NOT NULL,
+    CONSTRAINT households_split_mode_check CHECK ((split_mode = ANY (ARRAY['smart'::text, 'rotation'::text])))
 );
+
+
+--
+-- Name: COLUMN households.split_mode; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON COLUMN public.households.split_mode IS 'Divisão das tarefas sem dona fixa: smart (quem fez por último passa a vez + equilíbrio) ou rotation (rodízio fixo).';
+
+
+--
+-- Name: maintenance_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.maintenance_items (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    household_id uuid NOT NULL,
+    title text NOT NULL,
+    category text DEFAULT 'casa'::text NOT NULL,
+    every_months integer,
+    every_days integer,
+    last_done date,
+    next_due date DEFAULT public.ninho_today() NOT NULL,
+    assigned_to text,
+    notes text,
+    active boolean DEFAULT true NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT maintenance_items_assigned_to_check CHECK (((assigned_to IS NULL) OR (assigned_to = ANY (ARRAY['g'::text, 's'::text])))),
+    CONSTRAINT maintenance_items_category_check CHECK ((category = ANY (ARRAY['casa'::text, 'carro'::text, 'caes'::text, 'saude'::text, 'outros'::text]))),
+    CONSTRAINT maintenance_items_every_days_check CHECK (((every_days IS NULL) OR ((every_days >= 1) AND (every_days <= 3650)))),
+    CONSTRAINT maintenance_items_every_months_check CHECK (((every_months IS NULL) OR ((every_months >= 1) AND (every_months <= 120)))),
+    CONSTRAINT maintenance_items_interval CHECK (((every_months IS NOT NULL) OR (every_days IS NOT NULL))),
+    CONSTRAINT maintenance_items_notes_check CHECK (((notes IS NULL) OR (length(notes) <= 300))),
+    CONSTRAINT maintenance_items_title_check CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 80)))
+);
+
+
+--
+-- Name: TABLE maintenance_items; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.maintenance_items IS 'Manutenções de tempos em tempos. next_due = próxima data; ao concluir, vira data + intervalo.';
+
+
+--
+-- Name: maintenance_log; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.maintenance_log (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    item_id uuid NOT NULL,
+    household_id uuid NOT NULL,
+    done_on date DEFAULT public.ninho_today() NOT NULL,
+    done_by text,
+    prev_last_done date,
+    prev_next_due date,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT maintenance_log_done_by_check CHECK (((done_by IS NULL) OR (done_by = ANY (ARRAY['g'::text, 's'::text]))))
+);
+
+
+--
+-- Name: TABLE maintenance_log; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.maintenance_log IS 'Histórico das manutenções feitas (guarda as datas anteriores para poder desfazer).';
 
 
 --
@@ -751,6 +968,38 @@ CREATE TABLE public.push_subscriptions (
 --
 
 COMMENT ON TABLE public.push_subscriptions IS 'Aparelhos com notificação ativada. who = pessoa do aparelho (identificação local, sem login).';
+
+
+--
+-- Name: shopping_items; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.shopping_items (
+    id uuid DEFAULT public.uuid_generate_v4() NOT NULL,
+    household_id uuid NOT NULL,
+    title text NOT NULL,
+    qty text,
+    category text DEFAULT 'outros'::text NOT NULL,
+    note text,
+    added_by text,
+    checked_at timestamp with time zone,
+    checked_by text,
+    done_at timestamp with time zone,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    updated_at timestamp with time zone DEFAULT now(),
+    CONSTRAINT shopping_items_added_by_check CHECK (((added_by IS NULL) OR (added_by = ANY (ARRAY['g'::text, 's'::text])))),
+    CONSTRAINT shopping_items_checked_by_check CHECK (((checked_by IS NULL) OR (checked_by = ANY (ARRAY['g'::text, 's'::text])))),
+    CONSTRAINT shopping_items_note_check CHECK (((note IS NULL) OR (length(note) <= 200))),
+    CONSTRAINT shopping_items_qty_check CHECK (((qty IS NULL) OR (length(qty) <= 30))),
+    CONSTRAINT shopping_items_title_check CHECK (((length(btrim(title)) >= 1) AND (length(btrim(title)) <= 80)))
+);
+
+
+--
+-- Name: TABLE shopping_items; Type: COMMENT; Schema: public; Owner: -
+--
+
+COMMENT ON TABLE public.shopping_items IS 'Lista de compras. checked_at = riscado no mercado; done_at = compra finalizada (sai da lista e vira histórico).';
 
 
 --
@@ -927,6 +1176,30 @@ ALTER TABLE ONLY public.households
 
 
 --
+-- Name: maintenance_items maintenance_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.maintenance_items
+    ADD CONSTRAINT maintenance_items_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: maintenance_log maintenance_log_item_id_done_on_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.maintenance_log
+    ADD CONSTRAINT maintenance_log_item_id_done_on_key UNIQUE (item_id, done_on);
+
+
+--
+-- Name: maintenance_log maintenance_log_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.maintenance_log
+    ADD CONSTRAINT maintenance_log_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: profiles profiles_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -964,6 +1237,14 @@ ALTER TABLE ONLY public.push_subscriptions
 
 ALTER TABLE ONLY public.push_subscriptions
     ADD CONSTRAINT push_subscriptions_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: shopping_items shopping_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.shopping_items
+    ADD CONSTRAINT shopping_items_pkey PRIMARY KEY (id);
 
 
 --
@@ -1099,6 +1380,20 @@ CREATE INDEX dogs_household_idx ON public.dogs USING btree (household_id);
 
 
 --
+-- Name: maintenance_items_household_due_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX maintenance_items_household_due_idx ON public.maintenance_items USING btree (household_id, next_due) WHERE active;
+
+
+--
+-- Name: maintenance_log_household_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX maintenance_log_household_idx ON public.maintenance_log USING btree (household_id, done_on DESC);
+
+
+--
 -- Name: profiles_household_idx; Type: INDEX; Schema: public; Owner: -
 --
 
@@ -1131,6 +1426,20 @@ CREATE INDEX push_log_subscription_idx ON public.push_log USING btree (subscript
 --
 
 CREATE INDEX push_subscriptions_household_idx ON public.push_subscriptions USING btree (household_id) WHERE active;
+
+
+--
+-- Name: shopping_items_household_done_idx; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX shopping_items_household_done_idx ON public.shopping_items USING btree (household_id, done_at DESC);
+
+
+--
+-- Name: shopping_items_open_title; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE UNIQUE INDEX shopping_items_open_title ON public.shopping_items USING btree (household_id, lower(btrim(title))) WHERE (done_at IS NULL);
 
 
 --
@@ -1204,6 +1513,13 @@ CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.households FOR EACH 
 
 
 --
+-- Name: maintenance_items ninho_set_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.maintenance_items FOR EACH ROW EXECUTE FUNCTION public.ninho_set_updated_at();
+
+
+--
 -- Name: profiles ninho_set_updated_at; Type: TRIGGER; Schema: public; Owner: -
 --
 
@@ -1215,6 +1531,13 @@ CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.profiles FOR EACH RO
 --
 
 CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.push_subscriptions FOR EACH ROW EXECUTE FUNCTION public.ninho_set_updated_at();
+
+
+--
+-- Name: shopping_items ninho_set_updated_at; Type: TRIGGER; Schema: public; Owner: -
+--
+
+CREATE TRIGGER ninho_set_updated_at BEFORE UPDATE ON public.shopping_items FOR EACH ROW EXECUTE FUNCTION public.ninho_set_updated_at();
 
 
 --
@@ -1279,6 +1602,30 @@ ALTER TABLE ONLY public.dogs
 
 
 --
+-- Name: maintenance_items maintenance_items_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.maintenance_items
+    ADD CONSTRAINT maintenance_items_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
+
+
+--
+-- Name: maintenance_log maintenance_log_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.maintenance_log
+    ADD CONSTRAINT maintenance_log_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
+
+
+--
+-- Name: maintenance_log maintenance_log_item_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.maintenance_log
+    ADD CONSTRAINT maintenance_log_item_id_fkey FOREIGN KEY (item_id) REFERENCES public.maintenance_items(id) ON DELETE CASCADE;
+
+
+--
 -- Name: profiles profiles_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1324,6 +1671,14 @@ ALTER TABLE ONLY public.push_log
 
 ALTER TABLE ONLY public.push_subscriptions
     ADD CONSTRAINT push_subscriptions_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
+
+
+--
+-- Name: shopping_items shopping_items_household_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.shopping_items
+    ADD CONSTRAINT shopping_items_household_id_fkey FOREIGN KEY (household_id) REFERENCES public.households(id) ON DELETE CASCADE;
 
 
 --
@@ -1403,6 +1758,20 @@ CREATE POLICY allow_all_auth ON public.households TO authenticated USING (true) 
 
 
 --
+-- Name: maintenance_items allow_all_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY allow_all_auth ON public.maintenance_items TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- Name: maintenance_log allow_all_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY allow_all_auth ON public.maintenance_log TO authenticated USING (true) WITH CHECK (true);
+
+
+--
 -- Name: profiles allow_all_auth; Type: POLICY; Schema: public; Owner: -
 --
 
@@ -1421,6 +1790,13 @@ CREATE POLICY allow_all_auth ON public.puppy_accidents TO authenticated USING (t
 --
 
 CREATE POLICY allow_all_auth ON public.push_subscriptions TO authenticated USING (true) WITH CHECK (true);
+
+
+--
+-- Name: shopping_items allow_all_auth; Type: POLICY; Schema: public; Owner: -
+--
+
+CREATE POLICY allow_all_auth ON public.shopping_items TO authenticated USING (true) WITH CHECK (true);
 
 
 --
@@ -1483,6 +1859,18 @@ ALTER TABLE public.dogs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.households ENABLE ROW LEVEL SECURITY;
 
 --
+-- Name: maintenance_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.maintenance_items ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: maintenance_log; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.maintenance_log ENABLE ROW LEVEL SECURITY;
+
+--
 -- Name: profiles; Type: ROW SECURITY; Schema: public; Owner: -
 --
 
@@ -1505,6 +1893,12 @@ ALTER TABLE public.push_log ENABLE ROW LEVEL SECURITY;
 --
 
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
+
+--
+-- Name: shopping_items; Type: ROW SECURITY; Schema: public; Owner: -
+--
+
+ALTER TABLE public.shopping_items ENABLE ROW LEVEL SECURITY;
 
 --
 -- Name: task_completions; Type: ROW SECURITY; Schema: public; Owner: -
@@ -1540,4 +1934,5 @@ ALTER TABLE public.xp_history ENABLE ROW LEVEL SECURITY;
 -- PostgreSQL database dump complete
 --
 
+\unrestrict LPoM8ffaWFSkYOMlQ7c2Iyn8KFt27Y3XHRhkt6ppCj0f0oAaFVMDKh0CCNyMIY0
 
