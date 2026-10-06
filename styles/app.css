@@ -775,3 +775,40 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 }
 .rt-other .row-t,.rt-other .row-s{display:block}
 @media(max-width:860px){.tpl{flex-wrap:wrap}.mfoot{flex-wrap:wrap}}
+
+/* ── Sprint do Ninho (Fase 5) ──────────────────────────────────────── */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.sp-top-t{flex:1;text-align:center;font-weight:500;font-size:14px}
+.sp-in{width:100%;max-width:640px;margin:0 auto;padding:28px 20px 60px}
+.sp-in h1{font-size:var(--fs-2xl);font-weight:500;line-height:1.2;margin-bottom:8px;outline:none}
+.sp .onb-lbl span{text-transform:none;letter-spacing:0;font-weight:500;color:var(--faint)}
+.sp-custom{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mu)}
+.sp-custom input{width:84px;padding:8px 10px}
+.sp-prefs{display:flex;gap:16px;flex-wrap:wrap}
+.sp-prefs .rt-toggle{margin:0}
+.sp-go{position:sticky;bottom:calc(12px + var(--safe-b));display:flex;justify-content:center;margin-top:8px}
+.sp-go .btn{min-height:52px;padding:0 32px;font-size:16px;box-shadow:var(--shadow-pri)}
+.sp-hist{list-style:none;display:flex;flex-direction:column;gap:8px}
+.sp-hist li{display:flex;flex-direction:column}
+.sp-hist b{font-weight:500;font-size:13.5px}
+.sp-hist small{font-size:12px;color:var(--sub)}
+.sp-h1{text-align:center}
+.sp-who{text-align:center;color:var(--sub);font-size:13px;margin-bottom:16px}
+.sp-ring{position:relative;width:min(260px,70vw);aspect-ratio:1;margin:0 auto 18px}
+.sp-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.sp-track{fill:none;stroke:var(--sf3);stroke-width:8}
+.sp-bar{fill:none;stroke:var(--pri);stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+.sp-ring.paused .sp-bar{stroke:var(--amb)}
+.sp-ring.up .sp-bar{stroke:var(--green)}
+.sp-clock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sp-clock b{font-size:44px;font-weight:500;letter-spacing:-.02em}
+.sp-clock small{font-size:12.5px;color:var(--sub)}
+.sp-ctrl{display:flex;gap:10px;justify-content:center;margin-bottom:20px}
+.sp-ctrl .btn{min-height:var(--touch);padding:0 22px}
+.sp-cancel{display:block;margin:12px auto 0;font-size:12.5px;color:var(--sub)}
+.sp-sum{margin:0 auto}
+.sp-res{font-size:18px;font-weight:500;color:var(--green);margin-bottom:12px}
+.sp-banner{width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:14px;border-radius:var(--r);border:1px solid var(--pri-bd);background:var(--pri-bg);color:var(--tx);text-align:left;font-size:13.5px}
+.sp-banner b{font-weight:500}
+.sp-banner>span:nth-child(2){flex:1;min-width:0}
+.sp-banner-go{color:var(--pri);font-weight:500;white-space:nowrap}

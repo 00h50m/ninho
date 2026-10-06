@@ -51,6 +51,10 @@ import { TEMPLATES } from '@/lib/onboarding'
 import { RoutinesView } from '@/components/rotinas/RoutinesView'
 import { HabitsView } from '@/components/rotinas/HabitsView'
 import { HabitEditor, RoutineEditor, TemplatesSheet } from '@/components/rotinas/Editors'
+import { useSprint } from '@/hooks/useSprint'
+import * as spApi from '@/lib/services/sprint'
+import { SprintPanel, type SprintStart } from '@/components/sprint/SprintPanel'
+import { areaLabel, fmtClock, remainingMs, type Sprint } from '@/lib/sprint'
 
 function firstName(n:string){return (n||'').split(' ')[0]}
 function initials(n:string){return (n||'??').slice(0,2).toUpperCase()}
@@ -363,6 +367,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // Configuração inicial (migration 014) e rotinas cadastradas
   const [setup,setSetup]=useState<setupApi.SetupState|null>(null)
   const rot=useRotinas(householdId,today)
+  const sp=useSprint(householdId)
+  const [sprintOpen,setSprintOpen]=useState(false)
+  const [spBusy,setSpBusy]=useState(false)
   const routines=rot.routines
   const [onb,setOnb]=useState<null|'open'|'redo'>(null)
   async function loadSetup(auto:boolean){
@@ -786,10 +793,26 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   function toggleHabit(h:Habit,done:boolean){const w=requireMe();if(!w)return
     rot.logHabit(h.id,w,done).catch(e=>showError(toNinhoError(e,'registrar hábito')))}
 
+  // ── SPRINT DO NINHO ──
+  async function startSprint(v:SprintStart){const w=requireMe();if(!w)return;setSpBusy(true)
+    try{await spApi.startSprint(householdId,{...v,started_by:w,date:today});await sp.reload()}
+    catch(e:any){if(e?.code==='23505'){showToast('Já tem um sprint em andamento');await sp.reload()}else showError(toNinhoError(e,'iniciar sprint'))}
+    finally{setSpBusy(false)}}
+  async function pauseSprint(pause:boolean,extra=0){if(!sp.active)return;setSpBusy(true)
+    try{await spApi.pauseSprint(sp.active.id,pause,extra);await sp.reload()}catch(e){showError(toNinhoError(e,pause?'pausar sprint':'continuar sprint'))}finally{setSpBusy(false)}}
+  async function finishSprint(cancel:boolean):Promise<Sprint|null>{if(!sp.active)return null;const id=sp.active.id;setSpBusy(true)
+    try{await spApi.finishSprint(id,cancel);const d=await spApi.loadSprints(householdId);sp.setData(d);refreshStats()
+      if(cancel){showToast('Sprint cancelado');return null}
+      return d.recent.find(x=>x.id===id)||null}
+    catch(e){showError(toNinhoError(e,cancel?'cancelar sprint':'encerrar sprint'));return null}finally{setSpBusy(false)}}
+  async function setSprintTasks(ids:string[]){if(!sp.active)return
+    try{await spApi.updateSprintTasks(sp.active.id,ids);await sp.reload()}catch(e){showError(toNinhoError(e,'atualizar tarefas do sprint'))}}
+
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
+    ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),
     {id:'routine',icon:'rotinas',label:'Iniciar rotina',sub:rn.now?rn.now.title:rn.next?`Próxima: ${rn.next.title}`:'Ver as rotinas',run:()=>go('rotinas')},
     {id:'dogs',icon:'caes',label:'Cuidado dos cães',sub:'Comida, passeio, acidente',run:()=>go('caes')},
     {id:'checkin',icon:'nos',label:'Check-in do dia',sub:'Humor e energia',run:()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}},
@@ -994,6 +1017,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       </header>
 
       <main className="main">
+        {sp.active&&!sprintOpen&&<button className="sp-banner" onClick={()=>setSprintOpen(true)} aria-label="Voltar para o sprint em andamento">
+          <span aria-hidden="true">⏱</span><span><b>Sprint · {sp.active.goal||areaLabel(sp.active.area)}</b> <span className="mono">{remainingMs(sp.active,sp.now)===0?'tempo esgotado':`${fmtClock(remainingMs(sp.active,sp.now))}${sp.active.paused_at?' · pausado':''}`}</span></span><span className="sp-banner-go">Voltar ›</span>
+        </button>}
         {data.status==='loading'&&<div className="loadscr" role="status" aria-live="polite"><span className="spin" aria-hidden="true"/>Carregando a casa…</div>}
         {data.status==='error'&&<div className="card loaderr" role="alert">
           <div style={{fontSize:16,fontWeight:500,marginBottom:6}}>Não foi possível carregar o Ninho</div>
@@ -1127,6 +1153,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                   {actionBtn(en.ic,'Energia da semana',en.l,()=>openModal('energy'))}
                   {actionBtn('🛡',settings.survival?'Sair do modo sobrevivência':'Modo sobrevivência',settings.survival?'Ativo · só essenciais':'Só o essencial por um tempo',toggleSurvival,settings.survival?'var(--cbg)':undefined)}
                   {actionBtn('📋','Reunião semanal','15 minutos, sem cobranças',()=>openModal('meeting'))}
+                  {sp.available&&actionBtn('⏱','Sprint do Ninho',sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão curto com cronômetro',()=>setSprintOpen(true))}
                 </div>
               </div>
             </aside>
@@ -1616,6 +1643,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         onClose={closeModal}/>}
       {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
       {modal==='maint'&&<MaintenanceForm item={modalData} today={today} names={names} saving={saving} onClose={closeModal} onSave={saveMaint} onDelete={removeMaint}/>}
+      {sprintOpen&&sp.available&&<SprintPanel active={sp.active} recent={sp.recent} now={sp.now} tasks={tasks} today={today} me={me} names={names} busy={spBusy}
+        onStart={startSprint} onPause={pauseSprint} onFinish={finishSprint} onToggleTask={toggleTask} onSetTasks={setSprintTasks} onClose={()=>setSprintOpen(false)}/>}
       {modal==='rtedit'&&<RoutineEditor routine={modalData} names={names} saving={saving} onSave={saveRoutineDraft} onArchive={archiveRoutine} onClose={closeModal} onSaveTemplate={rot.templates?saveRoutineTemplate:undefined}/>}
       {modal==='rttpl'&&<TemplatesSheet existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)} existingTitles={routines.map(r=>r.title)} house={rot.templates} busy={tplBusy} onAdd={addRoutineTemplate} onAddHouse={addHouseTemplate} onDeleteHouse={deleteHouseTemplate} onClose={closeModal}/>}
       {modal==='hbedit'&&<HabitEditor habit={modalData?.habit??null} preset={modalData?.preset} names={names} saving={saving} onSave={saveHabitDraft} onArchive={archiveHabit} onClose={closeModal}/>}
