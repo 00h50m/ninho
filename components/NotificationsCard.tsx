@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import * as api from '@/lib/services/ninho'
 import { toNinhoError } from '@/lib/errors'
+import { RKINDS, prefsOf, type RKind, type RPrefs } from '@/lib/reminders'
 import { canPromptInstall, currentSubscription, isIOS, isStandalone, onInstallChange, promptInstall, pushBlock, subscribePush, subscriptionKeys } from '@/lib/pushClient'
 
 const VAPID = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY
@@ -17,6 +18,7 @@ export function NotificationsCard({ householdId, me, names, onToast, onError, on
 }) {
   const [state, setState] = useState<State>('checking')
   const [prefs, setPrefs] = useState({ morning: true, weekly: true })
+  const [rem, setRem] = useState<{ ok: boolean, kinds: RPrefs, quiet_start: string, quiet_end: string }>({ ok: false, kinds: prefsOf(null), quiet_start: '22:00', quiet_end: '07:00' })
   const [endpoint, setEndpoint] = useState<string | null>(null)
   const [installable, setInstallable] = useState(false)
   const [installed, setInstalled] = useState(false)
@@ -38,6 +40,7 @@ export function NotificationsCard({ householdId, me, names, onToast, onError, on
       const row = await api.loadPushSubscription(keys.endpoint)
       if (!row || !row.active) { setState('off'); return }
       setPrefs({ morning: row.morning, weekly: row.weekly })
+      setRem(row.quiet_start ? { ok: true, kinds: prefsOf(row.reminders), quiet_start: row.quiet_start, quiet_end: row.quiet_end || '07:00' } : r => ({ ...r, ok: false }))
       setState('on')
       // O aparelho trocou de pessoa em Ajustes: as notificações passam a ser dela
       if (me && row.who !== me) await api.savePushSubscription(householdId, me, keys, { morning: row.morning, weekly: row.weekly })
@@ -78,6 +81,15 @@ export function NotificationsCard({ householdId, me, names, onToast, onError, on
     catch (e) { setPrefs(prev); onError(toNinhoError(e, 'salvar notificações').userMessage) }
   }
 
+  async function setRemPref(patch: { kinds?: Partial<RPrefs>, quiet_start?: string, quiet_end?: string }) {
+    if (!endpoint) return
+    const prev = rem
+    const next = { ...rem, ...patch, kinds: { ...rem.kinds, ...(patch.kinds || {}) } }
+    setRem(next)
+    try { await api.updatePushPrefs(endpoint, { reminders: next.kinds, quiet_start: next.quiet_start, quiet_end: next.quiet_end }) }
+    catch (e) { setRem(prev); onError(toNinhoError(e, 'salvar lembretes').userMessage) }
+  }
+
   async function test() {
     if (!endpoint) return
     try {
@@ -116,7 +128,7 @@ export function NotificationsCard({ householdId, me, names, onToast, onError, on
           <div className="row-s">
             {block ? blockText[block]
               : state === 'on' ? `Para ${me ? first(names[me]) : 'este aparelho'}: só o que é seu (fixo ou pela vez do rodízio).`
-              : 'Bom dia com as suas tarefas e resumo da semana aos domingos.'}
+              : 'Bom dia, lembretes (remédio, rotinas, sprint, cães, agenda) e o resumo de domingo.'}
           </div>
         </div>
         {!block && state !== 'checking' && (state === 'on'
@@ -129,9 +141,25 @@ export function NotificationsCard({ householdId, me, names, onToast, onError, on
           <button className={`switch ${prefs.morning ? 'on' : ''}`} style={prefs.morning ? { background: 'var(--gdk)' } : undefined} onClick={() => setPref('morning', !prefs.morning)} role="switch" aria-checked={prefs.morning} aria-label="Bom dia" />
         </div>
         <div className="row">
-          <div><div className="row-t">🏆 Resumo de domingo</div><div className="row-s">Domingo, por volta das 19h: placar, aposta e o que ficou para trás.</div></div>
+          <div><div className="row-t">🏡 Resumo de domingo</div><div className="row-s">Domingo, por volta das 19h: o que a casa fez junta e o que ficou para trás.</div></div>
           <button className={`switch ${prefs.weekly ? 'on' : ''}`} style={prefs.weekly ? { background: 'var(--gdk)' } : undefined} onClick={() => setPref('weekly', !prefs.weekly)} role="switch" aria-checked={prefs.weekly} aria-label="Resumo de domingo" />
         </div>
+        {rem.ok && <div className="nt-rem">
+          <div className="slbl rt-sec">Lembretes com o app fechado</div>
+          {RKINDS.map(([k, ic, l, d]) => (
+            <div className="row" key={k}>
+              <div><div className="row-t">{ic} {l}</div><div className="row-s">{d}</div></div>
+              <button className={`switch ${rem.kinds[k] ? 'on' : ''}`} style={rem.kinds[k] ? { background: 'var(--gdk)' } : undefined} onClick={() => setRemPref({ kinds: { [k]: !rem.kinds[k] } as Partial<Record<RKind, boolean>> })} role="switch" aria-checked={rem.kinds[k]} aria-label={l} data-kind={k}/>
+            </div>))}
+          <div className="row nt-quiet">
+            <div><div className="row-t">🌙 Horário de silêncio</div><div className="row-s">Nenhum lembrete nesse intervalo (bom dia e domingo seguem no horário deles).</div></div>
+            <div className="nt-q">
+              <input className="fi" type="time" aria-label="Silêncio começa" value={rem.quiet_start} onChange={e => e.target.value && setRemPref({ quiet_start: e.target.value })}/>
+              <span>até</span>
+              <input className="fi" type="time" aria-label="Silêncio termina" value={rem.quiet_end} onChange={e => e.target.value && setRemPref({ quiet_end: e.target.value })}/>
+            </div>
+          </div>
+        </div>}
         <div className="row"><button className="btn btn-g btn-w" onClick={test}>Enviar notificação de teste</button></div>
       </>}
     </div>

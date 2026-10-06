@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import type { Accident, Dog, DogItem, DogRoutine, Energy, HistoryWeek, HItem, Meeting, Names, Task, Who } from '@/lib/types'
 import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, WPT } from '@/lib/constants'
 import { BottomNav, Icon, QuickActionsSheet, SideNav, SubTabs, legacyScreen, type CasaView, type QuickAction, type ScreenId } from '@/components/shell/Shell'
@@ -57,6 +57,8 @@ import * as agApi from '@/lib/services/agenda'
 import { AgendaView, EventSheet } from '@/components/casa/Agenda'
 import { useCaes } from '@/hooks/useCaes'
 import { useMeuDia } from '@/hooks/useMeuDia'
+import { enqueue, flush as flushOutbox, newId, readOutbox, writeOutbox, type OutItem } from '@/lib/outbox'
+import { isOfflineError } from '@/lib/offline'
 import * as mdApi from '@/lib/services/meudia'
 import { MeuDiaView, MeuDiaCard } from '@/components/meudia/MeuDia'
 import { useNos } from '@/hooks/useNos'
@@ -442,6 +444,44 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const ag=useAgenda(householdId,today)
   const cz=useCaes(householdId,today)
   const md=useMeuDia(householdId,today)
+  // ── Fila sem internet ──
+  const [outbox,setOutbox]=useState<OutItem[]>(()=>readOutbox(householdId))
+  const flushing=useRef(false)
+  const queue=(it:OutItem)=>setOutbox(l=>{const n=enqueue(l,it);writeOutbox(householdId,n);return n})
+  const sendOutbox=useCallback(async()=>{
+    const list=readOutbox(householdId)
+    if(!list.length||flushing.current)return
+    flushing.current=true
+    try{
+      const r=await flushOutbox(list,{
+        task:async(id,date,by,done)=>{if(done)await api.completeTask(id,date,by);else await api.uncompleteTask(id,date)},
+        dogs:async(ids,date,by,done)=>{if(done)await api.completeDogRoutines(ids,date,by);else await api.uncompleteDogRoutines(ids,date)},
+        log:async it=>{try{await mdApi.addLog(householdId,it.who,it.date,it.logKind as any,it.value,it.data,it.logId)}catch(e:any){if(e?.code!=='23505'&&e?.original?.code!=='23505'&&!/duplicate|23505/i.test(String(e?.message)))throw e}},
+        isOffline:isOfflineError,
+      })
+      writeOutbox(householdId,r.left);setOutbox(r.left)
+      if(r.sent){showToast(`✓ ${r.sent} ação${r.sent>1?'ões':''} feita${r.sent>1?'s':''} sem internet ${r.sent>1?'foram enviadas':'foi enviada'}`);data.loadAll();md.reload()}
+      if(r.rejected.length)showError(toNinhoError(r.rejected[0].error,`enviar "${r.rejected[0].item.title}" (feito sem internet)`))
+    }finally{flushing.current=false}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[householdId])
+  useEffect(()=>{
+    sendOutbox()
+    const on=()=>{sendOutbox()}
+    window.addEventListener('online',on)
+    const iv=setInterval(()=>{if(readOutbox(householdId).length)sendOutbox()},20000)
+    return()=>{window.removeEventListener('online',on);clearInterval(iv)}
+  },[sendOutbox,householdId])
+  /** +1 copo, autocuidado, remédio: sem internet fica na fila (com id fixo para não duplicar). */
+  const mdAdd=async(who:Who,k:any,v:number|null,d:Record<string,any>={})=>{
+    try{await md.add(who,k,v,d)}catch(e){
+      if(!isOfflineError(e)||!['agua','autocuidado','remedio'].includes(k))throw e
+      const logId=newId()
+      md.setData(x=>({...x,logs:[...x.logs,{id:logId,who,date:today,kind:k,value:v,data:d}]}))
+      queue({id:newId(),at:new Date().toISOString(),kind:'log',logId,who,date:today,logKind:k,value:v,data:d,title:k==='agua'?'água':k})
+      showToast('📴 Sem internet: guardado. Envia quando a conexão voltar.')
+    }
+  }
   const nos=useNos(householdId,today)
   const [sprintOpen,setSprintOpen]=useState(false)
   const [spBusy,setSpBusy]=useState(false)
@@ -491,6 +531,26 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   function setTab(t:string){const r=legacyScreen(t);setScreenState(r.screen);if(r.casa)setCasaView(r.casa);window.scrollTo({top:0})}
   const go=(sc:ScreenId)=>setTab(sc)
   const goCasa=(v:CasaView)=>{setTab('casa');setCasaView(v)}
+  // Links das notificações (?ir=meudia, desafios, sprint…): abre a tela certa e limpa o endereço
+  const [wantSprint,setWantSprint]=useState(false)
+  useEffect(()=>{
+    if(typeof window==='undefined')return
+    const u=new URL(window.location.href),ir=u.searchParams.get('ir')
+    if(!ir)return
+    u.searchParams.delete('ir');window.history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)
+    switch(ir){
+      case 'meudia':setTab('rotinas');setRotView('meu');break
+      case 'rotinas':setTab('rotinas');setRotView('rotinas');break
+      case 'caes':setTab('caes');break
+      case 'agenda':setTab('casa');setCasaView('agenda');break
+      case 'desafios':setTab('nos');setNosView('desafios');break
+      case 'nos':setTab('nos');setNosView('semana');break
+      case 'sprint':setTab('inicio');setWantSprint(true);break
+      case 'checkin':setTab('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),900);break
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[])
+  useEffect(()=>{if(wantSprint&&sp.available){setWantSprint(false);if(sp.active)setSprintOpen(true)}},[wantSprint,sp.available,sp.active])
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
   // Histórico da semana (só na aba Semana; recarrega quando alguém salva uma reunião)
@@ -546,6 +606,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           else showToast(`Já estava concluída por ${completedByLabel(r.completed_by,names)}`)
         }
       }catch(e){
+        if(isOfflineError(e)){queue({id:newId(),at:new Date().toISOString(),kind:'task',done:!was,taskId:t.id,date:today,by,title:t.title});showToast(`📴 Sem internet: ${was?'desmarcada':'feita'} no aparelho. Envia quando a conexão voltar.`);return}
         patchTask(t.id,before);setXp(v=>v-delta)
         showError(toNinhoError(e,'concluir tarefa'),()=>toggleTask(t))
       }finally{refreshStats()}
@@ -576,6 +637,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           showToast(`Desmarcada · ${label||list[0].title}`)
         }
       }catch(e){
+        if(isOfflineError(e)){queue({id:newId(),at:new Date().toISOString(),kind:'dogs',done,ids,date:today,by,title:label||list[0].title});showToast(`📴 Sem internet: ${label||list[0].title} guardado. Envia quando a conexão voltar.`);return}
         patchRoutines(before);setXp(v=>v-(done?ids.length:-ids.length))
         showError(toNinhoError(e,'concluir rotina'),()=>markDogs(rs,done,label))
       }finally{refreshStats()}
@@ -1206,6 +1268,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         </div>}
         {data.status==='ready'&&data.offline&&<div className="banner low" role="status">📴 <span>Sem internet. Mostrando os dados de {timeOfInstant(data.offline.savedAt)}. Marcar e editar voltam quando a conexão voltar.</span>
           <button className="lnk" onClick={()=>data.loadAll()}>Tentar agora</button></div>}
+        {outbox.length>0&&<div className="banner low" role="status">📤 <span>{outbox.length} aç{outbox.length>1?'ões feitas':'ão feita'} sem internet guardada{outbox.length>1?'s':''} neste aparelho. Envia sozinho quando a conexão voltar.</span>
+          <button className="lnk" onClick={()=>sendOutbox()}>Enviar agora</button></div>}
         {data.status==='ready'&&<>
         {/* ── HOJE ── */}
         {screen==='inicio'&&<div className="scr">
@@ -1294,7 +1358,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <aside className="side">
               {week.available&&me&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
               {md.available&&me&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} today={today} nowHM={nowHM}
-                onAdd={(k,v)=>{md.add(me,k,v).then(()=>showToast('+1 copo 💧')).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>{go('rotinas');setRotView('meu')}}/>}
+                onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>{go('rotinas');setRotView('meu')}}/>}
               {setup?.available&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
                 turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
               <div className="card">
@@ -1358,7 +1422,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
           <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],['meu','Meu dia']]}/>
           {rotView==='meu'?(me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds}
-            onAdd={(k,v,d)=>md.add(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
+            onAdd={(k,v,d)=>mdAdd(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
             onRemove={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'apagar registro'));throw e})}
             onSaveSettings={x=>mdApi.saveSettings(householdId,me,x).then(md.reload).then(()=>showToast('Salvo')).catch(e=>{showError(toNinhoError(e,'salvar'));throw e})}
             onSaveMed={m=>mdApi.saveMed(householdId,me,m).then(md.reload).then(()=>showToast('Remédio salvo')).catch(e=>{showError(toNinhoError(e,'salvar remédio'));throw e})}

@@ -259,7 +259,7 @@ export async function saveBet(householdId: string, weekStart: string, bet: strin
 
 // ── Notificações (migration 006) ──────────────────────────────────────
 
-export interface PushRow { who: Who, morning: boolean, weekly: boolean, active: boolean }
+export interface PushRow { who: Who, morning: boolean, weekly: boolean, active: boolean, reminders?: Record<string, boolean>, quiet_start?: string, quiet_end?: string }
 
 export async function savePushSubscription(householdId: string, who: Who, keys: { endpoint: string, p256dh: string, auth: string }, prefs: { morning: boolean, weekly: boolean }) {
   return await run('ativar notificações', supabase.rpc('ninho_save_push_subscription', {
@@ -269,9 +269,13 @@ export async function savePushSubscription(householdId: string, who: Who, keys: 
 }
 
 export async function loadPushSubscription(endpoint: string): Promise<PushRow | null> {
-  return await run('carregar notificações', supabase.from('push_subscriptions').select('who,morning,weekly,active').eq('endpoint', endpoint).maybeSingle()) as PushRow | null
+  // Lembretes (migration 023): sem ela, só bom dia e domingo
+  const r = await supabase.from('push_subscriptions').select('who,morning,weekly,active,reminders,quiet_start,quiet_end').eq('endpoint', endpoint).maybeSingle()
+  if (r.error && (r.error.code === '42703' || r.error.code === 'PGRST204' || /column/i.test(r.error.message || '')))
+    return await run('carregar notificações', supabase.from('push_subscriptions').select('who,morning,weekly,active').eq('endpoint', endpoint).maybeSingle()) as PushRow | null
+  return await run('carregar notificações', Promise.resolve(r) as any) as PushRow | null
 }
 
-export async function updatePushPrefs(endpoint: string, prefs: Partial<Pick<PushRow, 'morning' | 'weekly' | 'active'>>) {
+export async function updatePushPrefs(endpoint: string, prefs: Partial<Pick<PushRow, 'morning' | 'weekly' | 'active' | 'reminders' | 'quiet_start' | 'quiet_end'>>) {
   await run('salvar notificações', supabase.from('push_subscriptions').update(prefs).eq('endpoint', endpoint).select('id'))
 }

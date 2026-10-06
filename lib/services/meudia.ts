@@ -29,8 +29,8 @@ export async function saveSettings(householdId: string, who: Who, s: Partial<Omi
   must(await supabase.from('personal_settings').upsert({ household_id: householdId, who, ...s, updated_at: new Date().toISOString() }, { onConflict: 'household_id,who' }).select('who'), 'salvar ajustes do Meu dia')
 }
 
-export async function addLog(householdId: string, who: Who, date: string, kind: PKind, value: number | null, data: Record<string, any> = {}): Promise<PLog> {
-  return must(await supabase.from('personal_logs').insert({ household_id: householdId, who, date, kind, value, data }).select('id,who,date,kind,value,data,created_at').single(), 'registrar') as PLog
+export async function addLog(householdId: string, who: Who, date: string, kind: PKind, value: number | null, data: Record<string, any> = {}, id?: string): Promise<PLog> {
+  return must(await supabase.from('personal_logs').insert({ ...(id ? { id } : {}), household_id: householdId, who, date, kind, value, data }).select('id,who,date,kind,value,data,created_at').single(), 'registrar') as PLog
 }
 
 export async function updateLog(id: string, value: number | null, data: Record<string, any>): Promise<void> {
