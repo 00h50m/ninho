@@ -27,7 +27,7 @@ export interface MeuDiaProps {
 
 export function MeuDiaView(p: MeuDiaProps) {
   const [tab, setTab] = useState<Tab>('hoje')
-  if (!p.available) return <div className="card empty"><span className="empty-icon">💧</span>O Meu dia precisa da atualização do banco (migration 021).</div>
+  if (!p.available) return <div className="card empty"><span className="empty-icon">💧</span>O Meu dia ainda não está ativo: falta rodar a atualização do banco (migration 021) no Supabase.</div>
   const mine = p.settings.find(s => s.who === p.me) || DEFAULT_SETTINGS(p.me)
   const other: Who = p.me === 'g' ? 's' : 'g'
   const theirs = p.settings.find(s => s.who === other)

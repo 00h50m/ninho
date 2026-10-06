@@ -1270,7 +1270,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── ROTINAS ── */}
         {screen==='rotinas'&&<div className="scr">
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
-          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],...(md.available?[['meu','Meu dia'] as ['meu',string]]:[])]}/>
+          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],['meu','Meu dia']]}/>
           {rotView==='meu'?(me?<MeuDiaView available={md.available} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds}
             onAdd={(k,v,d)=>md.add(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
             onRemove={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'apagar registro'));throw e})}
