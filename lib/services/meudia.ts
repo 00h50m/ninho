@@ -9,7 +9,7 @@ function must<T>(r: { data: T | null, error: any }, ctx: string): T {
   return r.data as T
 }
 
-export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[] }
+export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], reason?: string }
 
 export async function loadMeuDia(householdId: string, from: string): Promise<MeuDiaData> {
   const [s, l, m] = await Promise.all([
@@ -19,7 +19,7 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
   ])
   const e = s.error || l.error || m.error
   if (e) {
-    if (isMissingTable(e)) return { available: false, settings: [], logs: [], meds: [] }
+    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
     must({ data: null, error: e }, 'carregar Meu dia')
   }
   return { available: true, settings: (s.data || []) as PSettings[], logs: ((l.data || []) as any[]).map(x => ({ ...x, value: x.value == null ? null : Number(x.value) })), meds: (m.data || []) as PMed[] }

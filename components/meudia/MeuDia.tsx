@@ -16,7 +16,7 @@ const fmtN = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
 type Tab = 'hoje' | 'treinos' | 'corpo' | 'ajustes'
 
 export interface MeuDiaProps {
-  available: boolean, me: Who, names: Names, today: string, nowHM: string
+  available: boolean, reason?: string, me: Who, names: Names, today: string, nowHM: string
   settings: PSettings[], logs: PLog[], meds: PMed[]
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
@@ -27,7 +27,7 @@ export interface MeuDiaProps {
 
 export function MeuDiaView(p: MeuDiaProps) {
   const [tab, setTab] = useState<Tab>('hoje')
-  if (!p.available) return <div className="card empty"><span className="empty-icon">💧</span>O Meu dia ainda não está ativo: falta rodar a atualização do banco (migration 021) no Supabase.</div>
+  if (!p.available) return <div className="card empty"><span className="empty-icon">💧</span>O Meu dia ainda não está ativo: falta rodar a atualização do banco (migration 021) no Supabase.{p.reason && <div className="row-s" style={{ marginTop: 6 }}>Detalhe: {p.reason}</div>}</div>
   const mine = p.settings.find(s => s.who === p.me) || DEFAULT_SETTINGS(p.me)
   const other: Who = p.me === 'g' ? 's' : 'g'
   const theirs = p.settings.find(s => s.who === other)
