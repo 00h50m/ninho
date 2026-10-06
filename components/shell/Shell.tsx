@@ -23,6 +23,7 @@ const P: Record<string, ReactNode> = {
   reuniao: <><rect x="4" y="5" width="16" height="15" rx="3"/><path d="M8 3v4M16 3v4M4 10h16"/></>,
   energia: <><path d="M13 3 5 14h6l-1 7 8-11h-6Z"/></>,
   busca: <><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></>,
+  sprint: <><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 2.5h4M19 6l-1.5 1.5"/></>,
   escudo: <><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6Z"/></>,
 }
 

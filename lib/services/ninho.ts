@@ -147,6 +147,22 @@ export async function updateTask(id: string, data: Partial<Task>) {
   await run('atualizar tarefa', supabase.from('tasks').update(data).eq('id', id).select('id'))
 }
 
+/** Histórico de uma tarefa: conclusões (com quem fez) e pausas, mais recentes primeiro. */
+export async function taskHistory(taskId: string): Promise<Array<{ date: string, kind: 'done' | 'skip' | 'snooze', by: Who | null }>> {
+  const [c, k] = await Promise.all([
+    run('carregar histórico da tarefa', supabase.from('task_completions').select('date,completed_by').eq('task_id', taskId).order('date', { ascending: false }).limit(12)),
+    supabase.from('task_skips').select('date,kind,skipped_by').eq('task_id', taskId).order('date', { ascending: false }).limit(6),
+  ])
+  const done = ((c || []) as any[]).map(x => ({ date: x.date, kind: 'done' as const, by: (x.completed_by === 'g' || x.completed_by === 's') ? x.completed_by : null }))
+  const skips = ((k.data || []) as any[]).map(x => ({ date: x.date, kind: x.kind as 'skip' | 'snooze', by: x.skipped_by ?? null }))
+  return [...done, ...skips].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12)
+}
+
+/** Pedir ajuda numa tarefa (who) ou cancelar o pedido (null). */
+export async function setTaskHelp(id: string, who: Who | null) {
+  await run(who ? 'pedir ajuda' : 'cancelar pedido de ajuda', supabase.from('tasks').update({ help_by: who, help_at: who ? new Date().toISOString() : null }).eq('id', id).select('id'))
+}
+
 export async function updateTasks(ids: string[], data: Partial<Task>) {
   if (!ids.length) return
   await run('atualizar tarefas', supabase.from('tasks').update(data).in('id', ids).select('id'))

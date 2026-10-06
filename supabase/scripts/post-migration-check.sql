@@ -41,7 +41,13 @@ begin
     -- Redesign F4: rotinas com checklist e hábitos (migration 016)
     ('routines','paused_until'), ('routine_runs','status'), ('routine_step_checks','done_by'), ('ninho_habits','weekly_target'), ('ninho_habit_logs','who'),
     -- Modelos da casa (migration 017)
-    ('routine_templates','steps')
+    ('routine_templates','steps'),
+    -- Sprint do Ninho (migration 018)
+    ('sprints','paused_ms'),
+    -- Casa completa (migration 019)
+    ('tasks','checklist'), ('tasks','help_by'), ('shopping_items','running_low'), ('maintenance_items','provider'), ('house_events','paid'), ('households','sobrou_url'),
+    -- Cães (migration 020)
+    ('dogs','food_g_day'), ('dog_health','next_date'), ('puppy_accidents','notes')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -69,7 +75,11 @@ begin
                                -- Redesign F3 (migration 015)
                                'ninho_checkin',
                                -- Redesign F4 (migration 016)
-                               'ninho_routine_step','ninho_routine_finish']) as f loop
+                               'ninho_routine_step','ninho_routine_finish',
+                               -- Sprint (migration 018)
+                               'ninho_finish_sprint','ninho_sprint_pause',
+                               -- Casa completa (migration 019)
+                               'ninho_shopping_recur']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';

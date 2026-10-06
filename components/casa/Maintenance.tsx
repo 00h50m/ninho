@@ -65,6 +65,9 @@ function MaintRow({ it, today, names, actions, onEdit, compact }: { it: Maintena
           {!compact && <span>{everyLabel(it)}</span>}
           {it.assigned_to && <span className="tag-by">{first(names[it.assigned_to])}</span>}
           {!compact && it.last_done && <span className="tag-by">última: {fmtDate(it.last_done)}</span>}
+          {!compact && it.provider && <span className="tag-by">🔧 {it.provider}</span>}
+          {!compact && it.warranty_until && <span className={`tag-by ${it.warranty_until < today ? 'late' : ''}`}>garantia {it.warranty_until < today ? 'vencida' : `até ${fmtDate(it.warranty_until)}`}</span>}
+          {!compact && it.link && <a className="lnk-inline" href={it.link} target="_blank" rel="noopener noreferrer" onClick={e => e.stopPropagation()}>📎 comprovante</a>}
         </div>
       </div>
       <span className="xp xp-h" title={`Vale ${MAINT_XP} XP`}>+{MAINT_XP}</span>
@@ -138,8 +141,8 @@ export function MaintenanceSection({ items, log, today, names, state, error, act
 }
 
 /** Formulário de manutenção. */
-export function MaintenanceForm({ item, today, names, saving, onClose, onSave, onDelete }: {
-  item: MaintenanceItem | null, today: string, names: Names, saving: boolean
+export function MaintenanceForm({ item, today, names, saving, onClose, onSave, onDelete, extras = false }: {
+  item: MaintenanceItem | null, today: string, names: Names, saving: boolean, extras?: boolean
   onClose: () => void, onSave: (d: casa.MaintenanceInput, id?: string) => void, onDelete: (it: MaintenanceItem) => void
 }) {
   const editing = !!item
@@ -151,15 +154,21 @@ export function MaintenanceForm({ item, today, names, saving, onClose, onSave, o
   const [next, setNext] = useState(item?.next_due || '')
   const [assign, setAssign] = useState<Who | ''>(item?.assigned_to || '')
   const [notes, setNotes] = useState(item?.notes || '')
+  const [provider, setProvider] = useState(item?.provider || '')
+  const [warranty, setWarranty] = useState(item?.warranty_until || '')
+  const [cost, setCost] = useState(item?.cost != null ? String(item.cost) : '')
+  const [link, setLink] = useState(item?.link || '')
+  const linkOk = !link.trim() || /^https?:\/\//i.test(link.trim())
   const num = Math.max(1, Math.min(unit === 'months' ? 120 : 3650, Number(n) || 0))
   const months = unit === 'months' ? num : null, days = unit === 'days' ? num : null
   // Próxima: a escolhida, senão última + intervalo, senão hoje
   const computed = last ? nextDue(last, months, days) : today
   const due = next || computed
-  const valid = title.trim().length > 0 && Number(n) > 0
+  const valid = title.trim().length > 0 && Number(n) > 0 && linkOk
   const handle = () => {
     if (!valid || saving) return
-    onSave({ title: title.trim().slice(0, 80), category, every_months: months, every_days: days, last_done: last || null, next_due: due, assigned_to: assign || null, notes: notes.trim() || null }, item?.id)
+    const more = extras ? { provider: provider.trim().slice(0, 80) || null, warranty_until: warranty || null, cost: cost.trim() ? Math.max(0, Number(cost.replace(',', '.')) || 0) : null, link: link.trim() || null } : {}
+    onSave({ title: title.trim().slice(0, 80), category, every_months: months, every_days: days, last_done: last || null, next_due: due, assigned_to: assign || null, notes: notes.trim() || null, ...more } as casa.MaintenanceInput, item?.id)
   }
   return (
     <Sheet title={editing ? 'Editar manutenção' : 'Nova manutenção'} onClose={onClose} footer={<>
@@ -191,6 +200,17 @@ export function MaintenanceForm({ item, today, names, saving, onClose, onSave, o
       </div>
       <label className="fl">Observações <span className="hint">(opcional)</span></label>
       <input className="fi" value={notes} onChange={e => setNotes(e.target.value)} placeholder="Ex.: telefone do técnico, marca do filtro" maxLength={300}/>
+      {extras && <>
+        <label className="fl">Prestador <span className="hint">(opcional)</span></label>
+        <input className="fi" value={provider} onChange={e => setProvider(e.target.value)} placeholder="Ex.: Clima Frio · (11) 99999-0000" maxLength={80}/>
+        <div className="onb-row" style={{ marginTop: 4 }}>
+          <label className="onb-f"><span>Garantia até</span><input className="fi" type="date" value={warranty} onChange={e => setWarranty(e.target.value)}/></label>
+          <label className="onb-f"><span>Custo (opcional)</span><input className="fi" inputMode="decimal" value={cost} onChange={e => setCost(e.target.value)} placeholder="R$"/></label>
+        </div>
+        <label className="fl">Comprovante ou link <span className="hint">(opcional)</span></label>
+        <input className="fi" type="url" value={link} onChange={e => setLink(e.target.value)} placeholder="https://…" maxLength={500} aria-invalid={!linkOk}/>
+        {!linkOk && <div className="row-s" style={{ color: 'var(--cor-tx)' }}>O link precisa começar com https://</div>}
+      </>}
     </Sheet>
   )
 }

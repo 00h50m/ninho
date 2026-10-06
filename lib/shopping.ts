@@ -14,6 +14,12 @@ export interface ShoppingItem {
   checked_by: Who | null
   done_at: string | null
   created_at: string
+  /** Migration 019 */
+  unit?: string | null
+  priority?: 'alta' | 'normal'
+  assigned_to?: Who | null
+  running_low?: boolean
+  recur_days?: number | null
 }
 
 /** Ordem = ordem dos corredores num mercado comum. */
@@ -83,13 +89,24 @@ function cap(s: string): string {
 }
 
 /** Lista aberta agrupada por categoria (ordem do mercado); riscados vão para o fim de cada grupo. */
+/** Acabando (2) e prioridade alta (1) sobem na lista. */
+export function urgency(i: Pick<ShoppingItem, 'running_low' | 'priority'>): number {
+  return (i.running_low ? 2 : 0) + (i.priority === 'alta' ? 1 : 0)
+}
+
+/** "2 kg", "1 pct", "3" */
+export function qtyLabel(i: Pick<ShoppingItem, 'qty' | 'unit'>): string {
+  return [i.qty, i.unit].filter(Boolean).join(' ')
+}
+
 export function groupOpen(items: ShoppingItem[]): Array<{ cat: string, label: string, items: ShoppingItem[] }> {
   const open = items.filter(i => !i.done_at)
   return SHOP_CATS
     .map(([cat, label]) => ({
       cat, label,
       items: open.filter(i => (SHOP_CAT_LABEL[i.category] ? i.category : 'outros') === cat)
-        .sort((a, b) => Number(!!a.checked_at) - Number(!!b.checked_at) || a.title.localeCompare(b.title, 'pt-BR')),
+        // riscados no fim; antes, o que está acabando e o de prioridade alta
+        .sort((a, b) => Number(!!a.checked_at) - Number(!!b.checked_at) || urgency(b) - urgency(a) || a.title.localeCompare(b.title, 'pt-BR')),
     }))
     .filter(g => g.items.length)
 }

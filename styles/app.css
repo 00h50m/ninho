@@ -775,3 +775,121 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 }
 .rt-other .row-t,.rt-other .row-s{display:block}
 @media(max-width:860px){.tpl{flex-wrap:wrap}.mfoot{flex-wrap:wrap}}
+
+/* ── Sprint do Ninho (Fase 5) ──────────────────────────────────────── */
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+.sp-top-t{flex:1;text-align:center;font-weight:500;font-size:14px}
+.sp-in{width:100%;max-width:640px;margin:0 auto;padding:28px 20px 60px}
+.sp-in h1{font-size:var(--fs-2xl);font-weight:500;line-height:1.2;margin-bottom:8px;outline:none}
+.sp .onb-lbl span{text-transform:none;letter-spacing:0;font-weight:500;color:var(--faint)}
+.sp-custom{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--mu)}
+.sp-custom input{width:84px;padding:8px 10px}
+.sp-prefs{display:flex;gap:16px;flex-wrap:wrap}
+.sp-prefs .rt-toggle{margin:0}
+.sp-go{position:sticky;bottom:calc(12px + var(--safe-b));display:flex;justify-content:center;margin-top:8px}
+.sp-go .btn{min-height:52px;padding:0 32px;font-size:16px;box-shadow:var(--shadow-pri)}
+.sp-hist{list-style:none;display:flex;flex-direction:column;gap:8px}
+.sp-hist li{display:flex;flex-direction:column}
+.sp-hist b{font-weight:500;font-size:13.5px}
+.sp-hist small{font-size:12px;color:var(--sub)}
+.sp-h1{text-align:center}
+.sp-who{text-align:center;color:var(--sub);font-size:13px;margin-bottom:16px}
+.sp-ring{position:relative;width:min(260px,70vw);aspect-ratio:1;margin:0 auto 18px}
+.sp-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.sp-track{fill:none;stroke:var(--sf3);stroke-width:8}
+.sp-bar{fill:none;stroke:var(--pri);stroke-width:8;stroke-linecap:round;transition:stroke-dashoffset 1s linear}
+.sp-ring.paused .sp-bar{stroke:var(--amb)}
+.sp-ring.up .sp-bar{stroke:var(--green)}
+.sp-clock{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.sp-clock b{font-size:44px;font-weight:500;letter-spacing:-.02em}
+.sp-clock small{font-size:12.5px;color:var(--sub)}
+.sp-ctrl{display:flex;gap:10px;justify-content:center;margin-bottom:20px}
+.sp-ctrl .btn{min-height:var(--touch);padding:0 22px}
+.sp-cancel{display:block;margin:12px auto 0;font-size:12.5px;color:var(--sub)}
+.sp-sum{margin:0 auto}
+.sp-res{font-size:18px;font-weight:500;color:var(--green);margin-bottom:12px}
+.sp-banner{width:100%;display:flex;align-items:center;gap:10px;padding:10px 14px;margin-bottom:14px;border-radius:var(--r);border:1px solid var(--pri-bd);background:var(--pri-bg);color:var(--tx);text-align:left;font-size:13.5px}
+.sp-banner b{font-weight:500}
+.sp-banner>span:nth-child(2){flex:1;min-width:0}
+.sp-banner-go{color:var(--pri);font-weight:500;white-space:nowrap}
+
+/* ── Casa completa (Fase 6) ────────────────────────────────────────── */
+.tag-pri{color:var(--cor-tx);font-weight:500}
+.tag-ck{color:var(--sub)}
+.tag-help,.chip.tag-help{color:var(--pur);font-weight:500}
+.chip.tag-help{background:var(--pbg);border-color:var(--pbdr);cursor:pointer}
+.tag-low{color:var(--amb);font-weight:500}
+.bdg-help{background:var(--pbg);color:var(--pur)}
+.tk-check{list-style:none;display:flex;flex-direction:column;gap:4px;margin-bottom:6px}
+.tk-check li{display:flex;align-items:center;gap:8px;padding:6px 10px;border:1px solid var(--bd);border-radius:var(--rs);background:var(--sf2)}
+.tk-check label{flex:1;display:flex;align-items:center;gap:10px;font-size:14px;cursor:pointer}
+.tk-check input{width:18px;height:18px;accent-color:var(--green)}
+.tk-check .done{text-decoration:line-through;color:var(--sub)}
+.tk-add{display:flex;gap:6px}
+.tk-hist{list-style:none;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu)}
+.tk-hist li{display:flex;gap:10px}
+.tk-hist .mono{color:var(--sub);min-width:48px}
+.sh-recur{display:flex;align-items:center;gap:8px}
+.sh-recur input{max-width:90px}
+.sh-recur small{color:var(--sub)}
+.ag-day{padding:10px 16px;margin-bottom:10px}
+.ag-dl{font-size:var(--fs-xs);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.ag-dl.today{color:var(--pri)}
+.ag-dl.late{color:var(--cor-tx)}
+.ag-row,.ag-bill{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.ag-row:last-child,.ag-bill:last-of-type{border-bottom:none}
+.ag-ic{width:28px;text-align:center;font-size:16px}
+.ag-b{flex:1;min-width:0;display:flex;flex-direction:column;align-items:flex-start;background:none;border:none;padding:0;text-align:left;color:var(--tx)}
+.ag-t{font-size:14px;font-weight:500}
+.ag-m{font-size:12px;color:var(--sub)}
+.ag-bill.late .ag-m{color:var(--cor-tx);font-weight:500}
+.ag-bill.paid{opacity:.7}
+.ag-bill .btn{white-space:nowrap}
+.ag-paid summary{font-size:13px;color:var(--sub);cursor:pointer;margin:8px 0}
+.ag-sobrou{display:flex;gap:8px;margin-top:12px;padding-top:12px;border-top:1px solid var(--bd)}
+.ag-home-i{display:flex;justify-content:space-between;gap:10px;font-size:13px;padding:4px 0}
+.ag-home-i.late .mono{color:var(--cor-tx)}
+@media(max-width:860px){
+  .ag-bill{flex-wrap:wrap}
+  .ag-bill .ag-b{flex-basis:100%}
+  .subtabs{overflow-x:auto;scrollbar-width:none}
+  .subtab{white-space:nowrap}
+}
+@media(max-width:860px){
+  .subtabs{gap:2px}
+  .subtab{padding:8px 8px;font-size:13px;flex:1 1 auto}
+  .subtab-n{margin-left:4px}
+}
+@media(max-width:520px){
+  .subtabs:has(.subtab:nth-child(4)){display:grid;grid-template-columns:1fr 1fr;overflow:visible}
+  .subtabs:has(.subtab:nth-child(4)) .subtab{justify-content:center}
+}
+
+/* ── Cães (Fase 7) ─────────────────────────────────────────────────── */
+.dog-ph{border-radius:50%;object-fit:cover;flex-shrink:0;border:2px solid var(--sf)}
+.dh .dog-ph,.dh .dav{width:44px;height:44px}
+.dog-ph-row{display:flex;align-items:center;gap:12px;margin-bottom:12px;flex-wrap:wrap}
+.dog-ph-row .btn{cursor:pointer}
+.dh-health{margin:4px 0 12px;padding-bottom:12px;border-bottom:1px solid var(--bd)}
+.dh-facts{display:flex;gap:6px;flex-wrap:wrap;font-size:12.5px;color:var(--sub);margin-bottom:6px}
+.dh-facts span+span::before{content:'·';margin-right:6px}
+.dh-food{font-size:13px;color:var(--mu);display:flex;gap:4px 8px;flex-wrap:wrap;align-items:center}
+.dh-food.low b{color:var(--cor-tx)}
+.dh-next{width:100%;display:flex;justify-content:space-between;gap:10px;padding:7px 10px;margin-bottom:4px;border-radius:var(--rs);border:1px solid var(--bd);background:var(--sf2);color:var(--tx);font-size:13px;text-align:left}
+.dh-next.soon{border-color:var(--abdr);background:var(--abg)}
+.dh-next.late{border-color:var(--cbdr);background:var(--cbg)}
+.dh-next.late .mono{color:var(--cor-tx)}
+.dh-acts{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
+.dh-hist{list-style:none;display:flex;flex-direction:column;gap:2px;margin-top:6px}
+.dh-hist button{width:100%;display:grid;grid-template-columns:auto 1fr auto;gap:8px;padding:6px 0;background:none;border:none;border-bottom:1px solid var(--bd);color:var(--tx);font-size:12.5px;text-align:left}
+.dh-hist .mono{color:var(--sub)}
+.dh-by{color:var(--sub);font-size:11.5px}
+.pp-stats{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin:12px 0}
+.pp-box{background:var(--sf);border:1px solid var(--bd);border-radius:var(--rs);padding:10px}
+.pp-l{font-size:var(--fs-xs);font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--sub);margin-bottom:6px}
+.pp-bars{display:flex;gap:4px;align-items:flex-end;height:52px}
+.pp-bars span{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}
+.pp-bars i{display:block;width:100%;min-height:2px;background:var(--amb);border-radius:3px 3px 0 0}
+.pp-bars small{font-size:10px;color:var(--sub)}
+.pp-row{display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0}
+@media(max-width:860px){.pp-stats{grid-template-columns:1fr}}
