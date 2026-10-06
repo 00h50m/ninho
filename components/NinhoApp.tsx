@@ -58,6 +58,9 @@ import { useAgenda } from '@/hooks/useAgenda'
 import * as agApi from '@/lib/services/agenda'
 import { AgendaView, EventSheet } from '@/components/casa/Agenda'
 import { useCaes } from '@/hooks/useCaes'
+import { useMeuDia } from '@/hooks/useMeuDia'
+import * as mdApi from '@/lib/services/meudia'
+import { MeuDiaView, MeuDiaCard } from '@/components/meudia/MeuDia'
 import * as cApi from '@/lib/services/caes'
 import { DogAvatar, DogHealthBlock, DogProfileSheet, HealthSheet, PuppyPanel } from '@/components/caes/DogPanels'
 import { kindInfo, upcomingCare, type AccidentRow, type HealthKind, type HealthRecord } from '@/lib/caes'
@@ -366,7 +369,7 @@ export interface Account { who:Who, email:string, onSignOut:()=>void }
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const [screen,setScreenState]=useState<ScreenId>('inicio')
   const [casaView,setCasaView]=useState<CasaView>('tarefas')
-  const [rotView,setRotView]=useState<'rotinas'|'habitos'>('rotinas')
+  const [rotView,setRotView]=useState<'rotinas'|'habitos'|'meu'>('rotinas')
   const [theme,setThemeState]=useState<ThemeId>('aconchego')
   useEffect(()=>{setThemeState(readTheme(null,typeof matchMedia!=='undefined'&&matchMedia('(prefers-color-scheme: dark)').matches))},[])
   function pickTheme(t:ThemeId){saveTheme(t);applyTheme(t);setThemeState(t)}
@@ -409,6 +412,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const sp=useSprint(householdId)
   const ag=useAgenda(householdId,today)
   const cz=useCaes(householdId,today)
+  const md=useMeuDia(householdId,today)
   const [sprintOpen,setSprintOpen]=useState(false)
   const [spBusy,setSpBusy]=useState(false)
   const routines=rot.routines
@@ -899,6 +903,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
     ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),
     {id:'routine',icon:'rotinas',label:'Iniciar rotina',sub:rn.now?rn.now.title:rn.next?`Próxima: ${rn.next.title}`:'Ver as rotinas',run:()=>go('rotinas')},
+    ...(md.available&&me?[{id:'meudia',icon:'agua',label:'Meu dia',sub:'Água, sono, remédios e treino',run:()=>{go('rotinas');setRotView('meu')}}]:[]),
     {id:'dogs',icon:'caes',label:'Cuidado dos cães',sub:'Comida, passeio, acidente',run:()=>go('caes')},
     {id:'checkin',icon:'nos',label:'Check-in do dia',sub:'Humor e energia',run:()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}},
     ...(ag.available?[{id:'event',icon:'reuniao',label:'Agenda da casa',sub:'Consulta, visita, entrega, vencimento',run:()=>{goCasa('agenda');openModal('event',{event:null,kind:'compromisso' as EventKind})}}]:[]),
@@ -1202,6 +1207,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {personCard('s')}
             <aside className="side">
               {week.available&&me&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
+              {md.available&&me&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} today={today} nowHM={nowHM}
+                onAdd={(k,v)=>{md.add(me,k,v).then(()=>showToast('+1 copo 💧')).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>{go('rotinas');setRotView('meu')}}/>}
               {setup?.available&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
                 turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
               <div className="card">
@@ -1263,8 +1270,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── ROTINAS ── */}
         {screen==='rotinas'&&<div className="scr">
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
-          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length]]}/>
-          {rotView==='rotinas'?<>
+          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],...(md.available?[['meu','Meu dia'] as ['meu',string]]:[])]}/>
+          {rotView==='meu'?(me?<MeuDiaView available={md.available} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds}
+            onAdd={(k,v,d)=>md.add(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
+            onRemove={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'apagar registro'));throw e})}
+            onSaveSettings={x=>mdApi.saveSettings(householdId,me,x).then(md.reload).then(()=>showToast('Salvo')).catch(e=>{showError(toNinhoError(e,'salvar'));throw e})}
+            onSaveMed={m=>mdApi.saveMed(householdId,me,m).then(md.reload).then(()=>showToast('Remédio salvo')).catch(e=>{showError(toNinhoError(e,'salvar remédio'));throw e})}
+            onStopMed={m=>mdApi.stopMed(m.id).then(md.reload).then(()=>showToast('Remédio encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar remédio'));throw e})}/>
+            :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>)
+          :rotView==='rotinas'?<>
             {!rot.routinesOk&&rot.ready?<div className="card empty"><span className="empty-icon">🔁</span>Rotinas com passos precisam da atualização do banco (migration 014).</div>
             :<>
               {routines.length===0&&rot.ready&&<div className="card intro">

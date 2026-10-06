@@ -893,3 +893,55 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .pp-bars small{font-size:10px;color:var(--sub)}
 .pp-row{display:flex;justify-content:space-between;font-size:12.5px;padding:1px 0}
 @media(max-width:860px){.pp-stats{grid-template-columns:1fr}}
+
+/* ── Meu dia ───────────────────────────────────────────────────────── */
+.md{display:flex;flex-direction:column;gap:12px}
+.md-tabs{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px}
+.md-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;align-items:start}
+.md-card{margin:0}
+.md-water{display:flex;align-items:baseline;gap:8px;margin:2px 0}
+.md-water b{font-size:26px;font-weight:600;letter-spacing:-.02em}
+.md-water span{font-size:13px;color:var(--sub)}
+.md-acts{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}
+.md-sleep{font-size:14px;display:flex;flex-wrap:wrap;gap:4px 6px;align-items:baseline}
+.md-sleep b{font-size:20px}
+.md-late{color:var(--cor-tx)}
+.md-card .rt-step .mono{margin-left:auto;font-size:12px;color:var(--sub)}
+.md-card .rt-step .mono.md-late{color:var(--cor-tx)}
+.md-other-g{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px}
+.md-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.md-row:last-child{border-bottom:none}
+.md-d{font-size:12px;color:var(--sub);flex-shrink:0;width:52px}
+.md-t{flex:1;min-width:0;font-size:13.5px}
+.md-t small{display:block;color:var(--sub);font-size:12px;margin-top:2px;overflow-wrap:anywhere}
+.md-body-f{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 10px}
+.md-home-w{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.md-home-w .mono{font-size:15px;font-weight:600}
+.md-home-s{font-size:12.5px;color:var(--sub);margin-top:10px}
+.wk-ex{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+.wk-ex-h,.wk-ex-r{display:grid;grid-template-columns:minmax(0,1fr) 56px 56px 72px 32px;gap:6px;align-items:center}
+.wk-ex-h{font-size:11px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.wk-ex-r .fi{padding-left:8px;padding-right:8px;min-width:0}
+/* gráfico de evolução: uma série, sem legenda, grade discreta */
+.lc{position:relative;margin:4px 0 0}
+.lc svg{width:100%;height:auto;display:block;overflow:visible}
+.lc-grid{stroke:var(--bd);stroke-width:1}
+.lc-ax{font-size:11px;fill:var(--sub);font-family:'DM Mono',monospace}
+.lc-line{fill:none;stroke:var(--pri);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.lc-hit{fill:transparent;cursor:pointer}
+.lc-dot{fill:var(--pri);stroke:var(--sf);stroke-width:2;transition:r .12s}
+.lc-dot.on{r:6}
+g:focus{outline:none}
+g:focus-visible .lc-dot{stroke:var(--tx)}
+.lc-last{font-size:12px;font-weight:600;fill:var(--tx)}
+.lc-tip{position:absolute;top:0;right:0;font-size:12px;background:var(--sf2);border:1px solid var(--bd2);border-radius:8px;padding:4px 8px;color:var(--mu);pointer-events:none}
+.lc-tbl{margin-top:6px;font-size:12px}
+.lc-table{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:6px}
+.lc-table th,.lc-table td{text-align:left;padding:4px 0;border-bottom:1px solid var(--bd)}
+.lc-table th{font-weight:500;color:var(--sub)}
+.lc-empty{font-size:13px;color:var(--sub);padding:14px 0}
+@media(max-width:520px){
+  .md-grid{grid-template-columns:1fr}
+  .md-body-f{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .wk-ex-h,.wk-ex-r{grid-template-columns:minmax(0,1fr) 44px 44px 58px 28px;gap:4px}
+}

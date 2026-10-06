@@ -48,3 +48,27 @@ drop policy if exists "household_member" on public.profiles;
 create policy "household_member" on public.profiles for all to authenticated
   using (id = auth.uid() or public.ninho_is_member(household_id))
   with check (public.ninho_is_member(household_id));
+
+-- "Meu dia" (021): regras próprias — a dona vê tudo, a outra só o que foi compartilhado
+do $$
+declare t text;
+begin
+  if to_regclass('public.personal_logs') is null or to_regprocedure('public.ninho_my_who(uuid)') is null then return; end if;
+  foreach t in array array['personal_settings','personal_logs','personal_meds'] loop
+    execute format('drop policy if exists "allow_all_auth" on public.%I', t);
+    execute format('drop policy if exists "household_member" on public.%I', t);
+    execute format('drop policy if exists "personal_read" on public.%I', t);
+    execute format('drop policy if exists "personal_write" on public.%I', t);
+  end loop;
+  create policy "personal_read" on public.personal_settings for select to authenticated using (public.ninho_is_member(household_id));
+  create policy "personal_write" on public.personal_settings for all to authenticated
+    using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
+  create policy "personal_read" on public.personal_logs for select to authenticated
+    using (who = public.ninho_my_who(household_id) or (public.ninho_is_member(household_id) and public.ninho_personal_shared(household_id, who, kind)));
+  create policy "personal_write" on public.personal_logs for all to authenticated
+    using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
+  create policy "personal_read" on public.personal_meds for select to authenticated
+    using (who = public.ninho_my_who(household_id) or (public.ninho_is_member(household_id) and public.ninho_personal_shared(household_id, who, 'remedio')));
+  create policy "personal_write" on public.personal_meds for all to authenticated
+    using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
+end $$;
