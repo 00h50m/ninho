@@ -43,7 +43,9 @@ begin
     -- Modelos da casa (migration 017)
     ('routine_templates','steps'),
     -- Sprint do Ninho (migration 018)
-    ('sprints','paused_ms')
+    ('sprints','paused_ms'),
+    -- Casa completa (migration 019)
+    ('tasks','checklist'), ('tasks','help_by'), ('shopping_items','running_low'), ('maintenance_items','provider'), ('house_events','paid'), ('households','sobrou_url')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -73,7 +75,9 @@ begin
                                -- Redesign F4 (migration 016)
                                'ninho_routine_step','ninho_routine_finish',
                                -- Sprint (migration 018)
-                               'ninho_finish_sprint','ninho_sprint_pause']) as f loop
+                               'ninho_finish_sprint','ninho_sprint_pause',
+                               -- Casa completa (migration 019)
+                               'ninho_shopping_recur']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';

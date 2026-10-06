@@ -34,16 +34,29 @@ export async function saveSplitMode(householdId: string, mode: SplitMode) {
 
 // ── Compras ────────────────────────────────────────────────────────────
 
-const SHOP_COLS = 'id,household_id,title,qty,category,note,added_by,checked_at,checked_by,done_at,created_at'
+const SHOP_COLS_OLD = 'id,household_id,title,qty,category,note,added_by,checked_at,checked_by,done_at,created_at'
+const SHOP_COLS = SHOP_COLS_OLD + ',unit,priority,assigned_to,running_low,recur_days'
+const missingColumn = (e: any) => e?.code === '42703' || e?.code === 'PGRST204' || /column .* does not exist/i.test(e?.message || '')
+/** Colunas da 019 disponíveis? (descoberto na primeira leitura) */
+let casa019: boolean | null = null
 
-/** Lista aberta + histórico recente (para "comprar de novo"). */
-export async function loadShopping(householdId: string, historyDays = 120): Promise<{ open: ShoppingItem[], history: ShoppingItem[] }> {
+/** Lista aberta + histórico recente (para "comprar de novo"). Devolve à lista os recorrentes que chegaram na data. */
+export async function loadShopping(householdId: string, historyDays = 120): Promise<{ open: ShoppingItem[], history: ShoppingItem[], extras: boolean }> {
+  if (casa019 !== false) {
+    const r = await supabase.rpc('ninho_shopping_recur', { p_household_id: householdId })
+    if (r.error && !['PGRST202', '42883'].includes((r.error as any).code)) logError('compras recorrentes', r.error)
+  }
   const since = new Date(Date.now() - historyDays * 86400000).toISOString()
-  const [open, history] = await Promise.all([
-    run('carregar lista de compras', supabase.from('shopping_items').select(SHOP_COLS).eq('household_id', householdId).is('done_at', null).order('created_at')),
-    run('carregar compras anteriores', supabase.from('shopping_items').select(SHOP_COLS).eq('household_id', householdId).gte('done_at', since).order('done_at', { ascending: false }).limit(400)),
+  const q = (cols: string) => Promise.all([
+    supabase.from('shopping_items').select(cols).eq('household_id', householdId).is('done_at', null).order('created_at'),
+    supabase.from('shopping_items').select(cols).eq('household_id', householdId).gte('done_at', since).order('done_at', { ascending: false }).limit(400),
   ])
-  return { open: open as ShoppingItem[], history: history as ShoppingItem[] }
+  let [open, history] = await q(casa019 === false ? SHOP_COLS_OLD : SHOP_COLS)
+  if (casa019 !== false && (missingColumn(open.error) || missingColumn(history.error))) {
+    casa019 = false;[open, history] = await q(SHOP_COLS_OLD)
+  } else if (!open.error) casa019 = true
+  const o = await run('carregar lista de compras', Promise.resolve(open as any)), h = await run('carregar compras anteriores', Promise.resolve(history as any))
+  return { open: o as ShoppingItem[], history: h as ShoppingItem[], extras: casa019 === true }
 }
 
 export async function addShoppingItem(householdId: string, title: string, qty: string | null, category: string, by: Who | null) {
@@ -54,7 +67,7 @@ export async function setShoppingChecked(id: string, by: Who | null, checked: bo
   await run(checked ? 'riscar item' : 'desmarcar item', supabase.from('shopping_items').update(checked ? { checked_at: new Date().toISOString(), checked_by: by } : { checked_at: null, checked_by: null }).eq('id', id).select('id'))
 }
 
-export async function updateShoppingItem(id: string, patch: Partial<Pick<ShoppingItem, 'title' | 'qty' | 'category' | 'note'>>) {
+export async function updateShoppingItem(id: string, patch: Partial<Pick<ShoppingItem, 'title' | 'qty' | 'category' | 'note' | 'unit' | 'priority' | 'assigned_to' | 'running_low' | 'recur_days'>>) {
   await run('atualizar item', supabase.from('shopping_items').update(patch).eq('id', id).select('id'))
 }
 
@@ -77,17 +90,23 @@ export async function reopenShopping(ids: string[]) {
 
 // ── Manutenção ─────────────────────────────────────────────────────────
 
-const MAINT_COLS = 'id,household_id,title,category,every_months,every_days,last_done,next_due,assigned_to,notes,active'
+const MAINT_COLS_OLD = 'id,household_id,title,category,every_months,every_days,last_done,next_due,assigned_to,notes,active'
+const MAINT_COLS = MAINT_COLS_OLD + ',provider,warranty_until,cost,link'
+let maint019: boolean | null = null
 
-export async function loadMaintenance(householdId: string): Promise<{ items: MaintenanceItem[], log: MaintenanceLog[] }> {
+export async function loadMaintenance(householdId: string): Promise<{ items: MaintenanceItem[], log: MaintenanceLog[], extras: boolean }> {
+  const sel = (cols: string) => supabase.from('maintenance_items').select(cols).eq('household_id', householdId).eq('active', true).order('next_due')
+  let first = await sel(maint019 === false ? MAINT_COLS_OLD : MAINT_COLS)
+  if (maint019 !== false && missingColumn(first.error)) { maint019 = false; first = await sel(MAINT_COLS_OLD) }
+  else if (!first.error) maint019 = true
   const [items, log] = await Promise.all([
-    run('carregar manutenções', supabase.from('maintenance_items').select(MAINT_COLS).eq('household_id', householdId).eq('active', true).order('next_due')),
+    run('carregar manutenções', Promise.resolve(first as any)),
     run('carregar histórico de manutenção', supabase.from('maintenance_log').select('id,item_id,done_on,done_by').eq('household_id', householdId).order('done_on', { ascending: false }).limit(100)),
   ])
-  return { items: items as MaintenanceItem[], log: log as MaintenanceLog[] }
+  return { items: items as MaintenanceItem[], log: log as MaintenanceLog[], extras: maint019 === true }
 }
 
-export type MaintenanceInput = Pick<MaintenanceItem, 'title' | 'category' | 'every_months' | 'every_days' | 'last_done' | 'next_due' | 'assigned_to' | 'notes'>
+export type MaintenanceInput = Pick<MaintenanceItem, 'title' | 'category' | 'every_months' | 'every_days' | 'last_done' | 'next_due' | 'assigned_to' | 'notes' | 'provider' | 'warranty_until' | 'cost' | 'link'>
 
 export async function saveMaintenance(householdId: string, data: MaintenanceInput, id?: string) {
   if (id) await run('atualizar manutenção', supabase.from('maintenance_items').update(data).eq('id', id).select('id'))

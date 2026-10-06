@@ -44,6 +44,12 @@ export interface Task extends CompletionState {
   weekdays?: number[] | null
   /** Pontual: aparece a partir desta data. */
   due_date?: string | null
+  /** Migration 019: prioridade, observações, checklist e pedido de ajuda */
+  priority?: 'alta' | 'normal' | 'baixa'
+  notes?: string | null
+  checklist?: Array<{ t: string, d: boolean }>
+  help_by?: Who | null
+  help_at?: string | null
 }
 
 export interface DogRoutine extends CompletionState {

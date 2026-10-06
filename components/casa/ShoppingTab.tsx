@@ -5,12 +5,15 @@ import type { Names, Who } from '@/lib/types'
 import type { NinhoError } from '@/lib/errors'
 import { toNinhoError } from '@/lib/errors'
 import * as casa from '@/lib/services/casa'
-import { SHOP_CATS, buyAgain, groupOpen, guessCategory, parseEntry, shoppingCounts, type ShoppingItem } from '@/lib/shopping'
+import { SHOP_CATS, buyAgain, groupOpen, guessCategory, parseEntry, qtyLabel, shoppingCounts, type ShoppingItem } from '@/lib/shopping'
+import { Sheet } from '@/components/ui/Sheet'
 
 const first = (n: string) => (n || '').split(' ')[0]
 
-export function ShoppingTab({ householdId, me, names, items, history, state, error, setItems, onReload, requireMe, toast, fail, onFinished }: {
+export function ShoppingTab({ householdId, me, names, items, history, state, error, setItems, onReload, requireMe, toast, fail, onFinished, extras = false }: {
   householdId: string, me: Who | null, names: Names
+  /** Migration 019: unidade, prioridade, quem compra, acabando, recorrência */
+  extras?: boolean
   items: ShoppingItem[], history: ShoppingItem[], state: 'loading' | 'ready' | 'error', error: NinhoError | null
   setItems: (f: (l: ShoppingItem[]) => ShoppingItem[]) => void
   onReload: () => Promise<void>
@@ -23,6 +26,7 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   const [text, setText] = useState('')
   const [cat, setCat] = useState<string | null>(null)
   const [busy, setBusy] = useState<Set<string>>(new Set())
+  const [editing, setEditing] = useState<ShoppingItem | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
   const parsed = parseEntry(text)
   const guessed = parsed.title ? guessCategory(parsed.title) : 'outros'
@@ -105,7 +109,16 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
     }
   }
 
+  async function saveEdit(it: ShoppingItem, patch: Partial<ShoppingItem>) {
+    setItems(l => l.map(x => x.id === it.id ? { ...x, ...patch } : x))
+    setEditing(null)
+    try { await casa.updateShoppingItem(it.id, patch as any); await onReload() }
+    catch (e) { setItems(l => l.map(x => x.id === it.id ? it : x)); fail(toNinhoError(e, 'atualizar item')) }
+  }
+
+
   async function editQty(it: ShoppingItem) {
+    if (extras) { setEditing(it); return }
     const v = prompt(`Quantidade de ${it.title}`, it.qty || '')
     if (v === null) return
     const qty = v.trim().slice(0, 30) || null
@@ -157,11 +170,15 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
                   <div className="trb" onClick={() => toggle(it)}>
                     <div className="trt">{it.title}</div>
                     <div className="trm">
+                      {it.running_low && !it.checked_at && <span className="tag-low">⚠ acabando</span>}
+                      {it.priority === 'alta' && !it.checked_at && <span className="tag-pri">↑ prioridade</span>}
+                      {it.assigned_to && !it.checked_at && <span className="tag-by">🛒 {first(names[it.assigned_to])} compra</span>}
+                      {it.recur_days && <span className="tag-r" title="Volta sozinho para a lista">↻ {it.recur_days} dias</span>}
                       {it.checked_at ? <span className="tag-by">✓ {it.checked_by ? first(names[it.checked_by]) : 'riscado'}</span>
                         : it.added_by && <span className="tag-by">pedido por {first(names[it.added_by])}</span>}
                     </div>
                   </div>
-                  <button className="bdg bdg-n qb" onClick={() => editQty(it)} aria-label={`Quantidade de ${it.title}`}>{it.qty || '+ qtd'}</button>
+                  <button className="bdg bdg-n qb" onClick={() => editQty(it)} aria-label={extras ? `Editar ${it.title}` : `Quantidade de ${it.title}`}>{qtyLabel(it) || (extras ? '✎' : '+ qtd')}</button>
                   <button className="ib danger" onClick={() => remove(it)} aria-label={`Remover ${it.title}`}>✕</button>
                 </div>
               ))}
@@ -174,7 +191,47 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
           Toque no item para riscar. “Finalizar compra” tira os riscados da lista e guarda para o “comprar de novo”.
         </div>
       </>}
+      {editing && <ShopItemSheet item={editing} names={names} onClose={() => setEditing(null)} onSave={p => saveEdit(editing, p)} onRemove={() => { setEditing(null); remove(editing) }}/>}
     </div>
   )
 }
 
+
+const UNITS = ['un', 'kg', 'g', 'L', 'ml', 'pct', 'cx', 'dz']
+
+function ShopItemSheet({ item, names, onClose, onSave, onRemove }: { item: ShoppingItem, names: Names, onClose: () => void, onSave: (p: Partial<ShoppingItem>) => void, onRemove: () => void }) {
+  const [qty, setQty] = useState(item.qty || '')
+  const [unit, setUnit] = useState(item.unit || '')
+  const [category, setCategory] = useState(item.category)
+  const [priority, setPriority] = useState<'alta' | 'normal'>(item.priority || 'normal')
+  const [who, setWho] = useState<Who | null>(item.assigned_to || null)
+  const [low, setLow] = useState(!!item.running_low)
+  const [recur, setRecur] = useState(item.recur_days ? String(item.recur_days) : '')
+  const [note, setNote] = useState(item.note || '')
+  return (
+    <Sheet title={item.title} onClose={onClose} footer={<>
+      <button className="btn btn-danger" onClick={onRemove}>Remover</button>
+      <button className="btn btn-p" onClick={() => onSave({
+        qty: qty.trim().slice(0, 30) || null, unit: unit.trim().slice(0, 15) || null, category, priority, assigned_to: who, running_low: low,
+        recur_days: recur ? Math.min(365, Math.max(1, Number(recur) || 0)) || null : null, note: note.trim().slice(0, 200) || null,
+      })}>Salvar</button>
+    </>}>
+      <div className="onb-row">
+        <label className="onb-f"><span>Quantidade</span><input className="fi" value={qty} maxLength={30} onChange={e => setQty(e.target.value)} placeholder="2"/></label>
+        <label className="onb-f"><span>Unidade</span><input className="fi" value={unit} maxLength={15} list="shop-units" onChange={e => setUnit(e.target.value)} placeholder="kg"/></label>
+      </div>
+      <datalist id="shop-units">{UNITS.map(u => <option key={u} value={u}/>)}</datalist>
+      <label className="onb-f"><span>Categoria (corredor)</span>
+        <select className="fi" value={category} onChange={e => setCategory(e.target.value)}>{SHOP_CATS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
+      <label className="rt-toggle"><input type="checkbox" checked={low} onChange={e => setLow(e.target.checked)}/><span><b>⚠ Está acabando</b><small>Sobe para o topo do corredor</small></span></label>
+      <label className="rt-toggle"><input type="checkbox" checked={priority === 'alta'} onChange={e => setPriority(e.target.checked ? 'alta' : 'normal')}/><span><b>↑ Prioridade</b><small>Não dá para esquecer</small></span></label>
+      <div className="onb-q">Quem compra</div>
+      <div className="onb-days wrap" role="radiogroup" aria-label="Quem compra">
+        {([null, 'g', 's'] as const).map(w => <button key={String(w)} role="radio" aria-checked={who === w} className={`onb-day wide ${who === w ? 'on' : ''}`} onClick={() => setWho(w)}>{w ? first(names[w]) : 'Quem for'}</button>)}
+      </div>
+      <label className="onb-f" style={{ marginTop: 12 }}><span>Recorrência: volta para a lista depois de</span>
+        <span className="sh-recur"><input className="fi" type="number" min={1} max={365} value={recur} onChange={e => setRecur(e.target.value)} placeholder="—"/> dias <small>(vazio = não volta)</small></span></label>
+      <label className="onb-f"><span>Observação</span><input className="fi" value={note} maxLength={200} onChange={e => setNote(e.target.value)} placeholder="Ex.: a marca de sempre"/></label>
+    </Sheet>
+  )
+}

@@ -23,6 +23,8 @@ export function useCasa(householdId: string, today: string) {
   const [shopHistory, setShopHistory] = useState<ShoppingItem[]>([])
   const [shopState, setShopState] = useState<Part>('loading')
   const [shopError, setShopError] = useState<NinhoError | null>(null)
+  const [shopExtras, setShopExtras] = useState(false)
+  const [maintExtras, setMaintExtras] = useState(false)
   const [maint, setMaint] = useState<MaintenanceItem[]>([])
   const [maintLog, setMaintLog] = useState<MaintenanceLog[]>([])
   const [maintState, setMaintState] = useState<Part>('loading')
@@ -44,7 +46,7 @@ export function useCasa(householdId: string, today: string) {
   const reloadShopping = useCallback(async () => {
     try {
       const r = await casa.loadShopping(householdId)
-      setShop(r.open); setShopHistory(r.history); setShopState('ready'); setShopError(null)
+      setShop(r.open); setShopHistory(r.history); setShopState('ready'); setShopError(null); setShopExtras(r.extras)
       persist({ open: r.open, history: r.history })
     } catch (e) {
       const snap = readSnapshot<CasaSnap>(snapKey)
@@ -57,7 +59,7 @@ export function useCasa(householdId: string, today: string) {
   const reloadMaintenance = useCallback(async () => {
     try {
       const r = await casa.loadMaintenance(householdId)
-      setMaint(r.items); setMaintLog(r.log); setMaintState('ready'); setMaintError(null)
+      setMaint(r.items); setMaintLog(r.log); setMaintState('ready'); setMaintError(null); setMaintExtras(r.extras)
       persist({ items: r.items, log: r.log })
     } catch (e) {
       const snap = readSnapshot<CasaSnap>(snapKey)
@@ -126,7 +128,7 @@ export function useCasa(householdId: string, today: string) {
 
   return {
     split, setSplit, splitReady,
-    shop, setShop, shopHistory, shopState, shopError, reloadShopping,
-    maint, setMaint, maintLog, maintState, maintError, reloadMaintenance,
+    shop, setShop, shopHistory, shopState, shopError, shopExtras, reloadShopping,
+    maint, setMaint, maintLog, maintState, maintError, maintExtras, reloadMaintenance,
   }
 }

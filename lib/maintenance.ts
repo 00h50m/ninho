@@ -16,6 +16,11 @@ export interface MaintenanceItem {
   assigned_to: Who | null
   notes: string | null
   active: boolean
+  /** Migration 019 */
+  provider?: string | null
+  warranty_until?: string | null
+  cost?: number | null
+  link?: string | null
 }
 
 export interface MaintenanceLog { id: string, item_id: string, done_on: string, done_by: Who | null }
