@@ -24,6 +24,7 @@ const P: Record<string, ReactNode> = {
   energia: <><path d="M13 3 5 14h6l-1 7 8-11h-6Z"/></>,
   busca: <><circle cx="11" cy="11" r="6.5"/><path d="m20 20-4.2-4.2"/></>,
   sprint: <><circle cx="12" cy="13" r="7.5"/><path d="M12 9v4l2.5 2M10 2.5h4M19 6l-1.5 1.5"/></>,
+  agua: <><path d="M12 3.5s-6 6.6-6 11a6 6 0 0 0 12 0c0-4.4-6-11-6-11Z"/></>,
   escudo: <><path d="M12 3 5 6v5c0 4.5 3 8 7 10 4-2 7-5.5 7-10V6Z"/></>,
 }
 

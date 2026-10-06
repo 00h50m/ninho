@@ -50,17 +50,17 @@ describe('bom dia', () => {
 })
 
 describe('resumo de domingo', () => {
-  it('placar, quem paga a aposta, sequência e pendências', () => {
+  it('resumo do casal (sem placar nem aposta), sequência e pendências', () => {
     const m = weeklyMessage(names, { ...EMPTY_SCORES, g: { xp: 58, done: 30, on_time: 9 }, s: { xp: 51, done: 27, on_time: 4 } }, 'Quem perder escolhe o jantar', 12,
       [{ title: 'Limpar banheiro', frequency: 'weekly' }, { title: 'Faxina geral', frequency: 'monthly' }])
-    expect(m.body).toContain('Vocês fizeram 57 conclusões')
-    expect(m.body).toContain('Giovanna 58 × 51 Sabrina — Giovanna venceu! Sabrina paga: Quem perder escolhe o jantar.')
+    expect(m.body).toContain('Juntas, vocês fizeram 57 conclusões (+109 XP do casal)')
+    expect(m.body).not.toMatch(/venceu|paga|placar|×/i)
     expect(m.body).toContain('🔥 12 dias seguidos')
     expect(m.body).toContain('Ficou para trás: Limpar banheiro (semanal), Faxina geral (mensal)')
   })
-  it('empate e nada para trás', () => {
+  it('nada para trás', () => {
     const m = weeklyMessage(names, EMPTY_SCORES, null, 0, [])
-    expect(m.body).toContain('empate')
+    expect(m.url).toBe('/?ir=nos')
     expect(m.body).toContain('Nada ficou para trás')
   })
   it('teste', () => expect(testMessage('s', names).body).toContain('Sabrina'))

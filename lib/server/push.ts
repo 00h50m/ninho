@@ -41,7 +41,7 @@ export function createDeps(env = process.env): NotifyDeps {
   webpush.setVapidDetails(env.VAPID_SUBJECT!, env.NEXT_PUBLIC_VAPID_PUBLIC_KEY!, env.VAPID_PRIVATE_KEY!)
   const send: Sender = async (sub, payload) => {
     try {
-      await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 6 * 3600, urgency: 'normal', topic: payload.tag })
+      await webpush.sendNotification({ endpoint: sub.endpoint, keys: { p256dh: sub.p256dh, auth: sub.auth } }, JSON.stringify(payload), { TTL: 6 * 3600, urgency: 'normal', topic: payload.tag.replace(/[^A-Za-z0-9_-]/g, '-').slice(0, 32) })
       return { ok: true }
     } catch (e: any) {
       const code = e?.statusCode as number | undefined

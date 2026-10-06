@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useCallback, useEffect, useState, useRef } from 'react'
 import type { Accident, Dog, DogItem, DogRoutine, Energy, HistoryWeek, HItem, Meeting, Names, Task, Who } from '@/lib/types'
 import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, WPT } from '@/lib/constants'
 import { BottomNav, Icon, QuickActionsSheet, SideNav, SubTabs, legacyScreen, type CasaView, type QuickAction, type ScreenId } from '@/components/shell/Shell'
@@ -22,10 +22,8 @@ import { logError, toNinhoError, type NinhoError } from '@/lib/errors'
 import * as api from '@/lib/services/ninho'
 import { createPendingGuard } from '@/lib/pending'
 import { canEarnOnTime, evaluate, newlyUnlocked, xpWithBonus, TIER_NAMES, type AchievementState } from '@/lib/gamification'
-import { Scoreboard } from '@/components/gamification/Scoreboard'
 import { StreaksCard } from '@/components/gamification/StreaksCard'
 import { Achievements } from '@/components/gamification/Achievements'
-import { BetModal } from '@/components/gamification/BetModal'
 import { Ring } from '@/components/ui/Ring'
 import { Sheet } from '@/components/ui/Sheet'
 import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
@@ -58,6 +56,16 @@ import { useAgenda } from '@/hooks/useAgenda'
 import * as agApi from '@/lib/services/agenda'
 import { AgendaView, EventSheet } from '@/components/casa/Agenda'
 import { useCaes } from '@/hooks/useCaes'
+import { useMeuDia } from '@/hooks/useMeuDia'
+import { enqueue, flush as flushOutbox, newId, readOutbox, writeOutbox, type OutItem } from '@/lib/outbox'
+import { isOfflineError } from '@/lib/offline'
+import * as mdApi from '@/lib/services/meudia'
+import { MeuDiaView, MeuDiaCard } from '@/components/meudia/MeuDia'
+import { useNos } from '@/hooks/useNos'
+import * as nosApi from '@/lib/services/nos'
+import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as nosTimeline, type Agreement, type AgendaSection, type Challenge } from '@/lib/nos'
+import { ChallengeCard, ChallengesView, CheckinHistory, DayNoteCard, TimelineCard, TogetherCard } from '@/components/nos/NosViews'
+import { waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT } from '@/lib/meudia'
 import * as cApi from '@/lib/services/caes'
 import { DogAvatar, DogHealthBlock, DogProfileSheet, HealthSheet, PuppyPanel } from '@/components/caes/DogPanels'
 import { kindInfo, upcomingCare, type AccidentRow, type HealthKind, type HealthRecord } from '@/lib/caes'
@@ -308,20 +316,29 @@ function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>void,onP
   )
 }
 
-function MeetingModal({householdId,names,weekStart,saving,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,onClose:()=>void,onSave:(m:Meeting)=>void}){
-  const[form,setForm]=useState<Meeting>({what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''})
+function MeetingModal({householdId,names,weekStart,saving,initial,agenda,agreementsOk,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,initial?:Partial<Meeting>&{agreements?:Agreement[]}|null,agenda?:AgendaSection[],agreementsOk?:boolean,onClose:()=>void,onSave:(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null)=>void}){
+  const blank:Meeting={what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''}
+  const[form,setForm]=useState<Meeting>(()=>{const i:any=initial||{};return Object.fromEntries(Object.entries(blank).map(([k,v])=>[k,i[k]??v])) as Meeting})
+  const[agr,setAgr]=useState<Array<Agreement&{makeTask?:boolean}>>(initial?.agreements||[])
+  const[newAgr,setNewAgr]=useState<{text:string,who:Who|'both',makeTask:boolean}>({text:'',who:'both',makeTask:false})
+  const[showAgenda,setShowAgenda]=useState(true)
   const[ai,setAi]=useState<{state:'idle'|'busy'|'ok'|'err',tips?:string[],error?:string}>({state:'idle'})
   async function askAi(){setAi({state:'busy'});const r=await fetchAiTips(householdId);setAi(r.tips?{state:'ok',tips:r.tips}:{state:'err',error:r.error})}
   const useTip=(t:string)=>setForm(p=>({...p,adjustments:p.adjustments?`${p.adjustments}\n${t}`:t}))
   const set=(k:keyof Meeting,v:string)=>setForm(p=>({...p,[k]:v}))
+  const addAgr=()=>{if(!newAgr.text.trim()||agr.length>=20)return;setAgr(l=>[...l,{text:newAgr.text.trim().slice(0,140),who:newAgr.who,task_id:null,done:false,makeTask:newAgr.makeTask}]);setNewAgr(x=>({...x,text:''}))}
   const moods=[['😌 Bem','ok'],['😐 Ok','mid'],['😔 Difícil','hard']]
   const modes=[['🌿 Normal','normal'],['⚡ Boss Mode','boss'],['🛡 Sobrevivência','survival']]
   const area=(n:string,k:keyof Meeting,label:string,ph:string)=>(
     <div className="meet"><label className="fl">{n} — {label}</label><textarea className="fita" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={ph}/></div>
   )
   return(
-    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" disabled={saving} onClick={()=>onSave(form)}>{saving?'Salvando…':'Salvar reunião'}</button>}>
+    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" disabled={saving} onClick={()=>onSave(form,agreementsOk?agr:null)}>{saving?'Salvando…':'Salvar reunião'}</button>}>
       <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>Semana de {fmtDate(weekStart)} · 15 minutos · sem cobranças</div>
+      {agenda&&agenda.length>0&&<section className="mt-agenda" aria-labelledby="mt-ag">
+        <button className="mt-ag-h" id="mt-ag" aria-expanded={showAgenda} onClick={()=>setShowAgenda(v=>!v)}><span>📊 Pauta: o que aconteceu na semana</span><span aria-hidden="true">{showAgenda?'−':'+'}</span></button>
+        {showAgenda&&agenda.map(sec=>(<div key={sec.title} className="mt-sec"><div className="mt-sec-t">{sec.icon} {sec.title}</div><ul>{sec.lines.map((l,i)=><li key={i}>{l}</li>)}</ul></div>))}
+      </section>}
       <div className="aibox">
         {ai.state==='idle'&&<button className="btn btn-pur btn-w" onClick={askAi}>✦ Sugestões da IA para a semana</button>}
         {ai.state==='busy'&&<div className="ai-wait" role="status"><span className="spin" aria-hidden="true"/>A IA está lendo a semana de vocês…</div>}
@@ -346,12 +363,28 @@ function MeetingModal({householdId,names,weekStart,saving,onClose,onSave}:{house
         ))}
       </div>
       {area('06','wins','Pequenas vitórias 🎉','Qualquer coisa que valha celebrar...')}
+      {agreementsOk&&<div className="meet mt-agr">
+        <label className="fl">07 — Combinados da semana</label>
+        {agr.length===0&&<div className="row-s" style={{marginBottom:8}}>Combinados curtos e concretos. Se quiser, cada um vira uma tarefa.</div>}
+        <ul className="mt-agr-l">{agr.map((a,i)=>(
+          <li key={i}>
+            <button className={`mt-chk ${a.done?'on':''}`} role="checkbox" aria-checked={a.done} aria-label={`Cumprido: ${a.text}`} onClick={()=>setAgr(l=>l.map((x,j)=>j===i?{...x,done:!x.done}:x))}>{a.done?'✓':''}</button>
+            <span className="mt-agr-t">{a.text}<small>{a.who==='both'?'as duas':firstName(names[a.who])}{a.task_id?' · virou tarefa':a.makeTask?' · vai virar tarefa':''}</small></span>
+            <button className="ib" aria-label={`Remover ${a.text}`} onClick={()=>setAgr(l=>l.filter((_,j)=>j!==i))}>✕</button>
+          </li>))}</ul>
+        <div className="mt-agr-add">
+          <input className="fi" value={newAgr.text} maxLength={140} placeholder="Ex.: ligar para o encanador" aria-label="Novo combinado" onChange={e=>setNewAgr(x=>({...x,text:e.target.value}))} onKeyDown={e=>{if(e.key==='Enter')addAgr()}}/>
+          <div className="btng c3">{([['both','As duas'],['g',firstName(names.g)],['s',firstName(names.s)]] as Array<[Who|'both',string]>).map(([v,l])=><button key={v} className={`sbtn ${newAgr.who===v?'on':''}`} onClick={()=>setNewAgr(x=>({...x,who:v}))}>{l}</button>)}</div>
+          <label className="mt-mk"><input type="checkbox" checked={newAgr.makeTask} onChange={e=>setNewAgr(x=>({...x,makeTask:e.target.checked}))}/> Virar tarefa em Casa</label>
+          <button className="btn btn-g" disabled={!newAgr.text.trim()} onClick={addAgr}>+ Combinado</button>
+        </div>
+      </div>}
       <div className="meet">
-        <label className="fl">07 — Modo da próxima semana</label>
+        <label className="fl">{agreementsOk?'08':'07'} — Modo da próxima semana</label>
         <div className="btng c3">{modes.map(([l,v])=><button key={v} className={`sbtn ${form.next_mode===v?'on':''}`} onClick={()=>set('next_mode',v)}>{l}</button>)}</div>
       </div>
       <div className="meet">
-        <label className="fl">08 — Recompensa do casal <span className="hint">(se merecer)</span></label>
+        <label className="fl">{agreementsOk?'09':'08'} — Recompensa do casal <span className="hint">(se merecer)</span></label>
         <input className="fi" value={form.reward} onChange={e=>set('reward',e.target.value)} placeholder="Ex: jantar fora, noite de filme, delivery..."/>
       </div>
     </Sheet>
@@ -366,7 +399,8 @@ export interface Account { who:Who, email:string, onSignOut:()=>void }
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const [screen,setScreenState]=useState<ScreenId>('inicio')
   const [casaView,setCasaView]=useState<CasaView>('tarefas')
-  const [rotView,setRotView]=useState<'rotinas'|'habitos'>('rotinas')
+  const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'>('semana')
+  const [rotView,setRotView]=useState<'rotinas'|'habitos'|'meu'>('rotinas')
   const [theme,setThemeState]=useState<ThemeId>('aconchego')
   useEffect(()=>{setThemeState(readTheme(null,typeof matchMedia!=='undefined'&&matchMedia('(prefers-color-scheme: dark)').matches))},[])
   function pickTheme(t:ThemeId){saveTheme(t);applyTheme(t);setThemeState(t)}
@@ -409,6 +443,46 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const sp=useSprint(householdId)
   const ag=useAgenda(householdId,today)
   const cz=useCaes(householdId,today)
+  const md=useMeuDia(householdId,today)
+  // ── Fila sem internet ──
+  const [outbox,setOutbox]=useState<OutItem[]>(()=>readOutbox(householdId))
+  const flushing=useRef(false)
+  const queue=(it:OutItem)=>setOutbox(l=>{const n=enqueue(l,it);writeOutbox(householdId,n);return n})
+  const sendOutbox=useCallback(async()=>{
+    const list=readOutbox(householdId)
+    if(!list.length||flushing.current)return
+    flushing.current=true
+    try{
+      const r=await flushOutbox(list,{
+        task:async(id,date,by,done)=>{if(done)await api.completeTask(id,date,by);else await api.uncompleteTask(id,date)},
+        dogs:async(ids,date,by,done)=>{if(done)await api.completeDogRoutines(ids,date,by);else await api.uncompleteDogRoutines(ids,date)},
+        log:async it=>{try{await mdApi.addLog(householdId,it.who,it.date,it.logKind as any,it.value,it.data,it.logId)}catch(e:any){if(e?.code!=='23505'&&e?.original?.code!=='23505'&&!/duplicate|23505/i.test(String(e?.message)))throw e}},
+        isOffline:isOfflineError,
+      })
+      writeOutbox(householdId,r.left);setOutbox(r.left)
+      if(r.sent){showToast(`✓ ${r.sent} ação${r.sent>1?'ões':''} feita${r.sent>1?'s':''} sem internet ${r.sent>1?'foram enviadas':'foi enviada'}`);data.loadAll();md.reload()}
+      if(r.rejected.length)showError(toNinhoError(r.rejected[0].error,`enviar "${r.rejected[0].item.title}" (feito sem internet)`))
+    }finally{flushing.current=false}
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[householdId])
+  useEffect(()=>{
+    sendOutbox()
+    const on=()=>{sendOutbox()}
+    window.addEventListener('online',on)
+    const iv=setInterval(()=>{if(readOutbox(householdId).length)sendOutbox()},20000)
+    return()=>{window.removeEventListener('online',on);clearInterval(iv)}
+  },[sendOutbox,householdId])
+  /** +1 copo, autocuidado, remédio: sem internet fica na fila (com id fixo para não duplicar). */
+  const mdAdd=async(who:Who,k:any,v:number|null,d:Record<string,any>={})=>{
+    try{await md.add(who,k,v,d)}catch(e){
+      if(!isOfflineError(e)||!['agua','autocuidado','remedio'].includes(k))throw e
+      const logId=newId()
+      md.setData(x=>({...x,logs:[...x.logs,{id:logId,who,date:today,kind:k,value:v,data:d}]}))
+      queue({id:newId(),at:new Date().toISOString(),kind:'log',logId,who,date:today,logKind:k,value:v,data:d,title:k==='agua'?'água':k})
+      showToast('📴 Sem internet: guardado. Envia quando a conexão voltar.')
+    }
+  }
+  const nos=useNos(householdId,today)
   const [sprintOpen,setSprintOpen]=useState(false)
   const [spBusy,setSpBusy]=useState(false)
   const routines=rot.routines
@@ -457,6 +531,26 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   function setTab(t:string){const r=legacyScreen(t);setScreenState(r.screen);if(r.casa)setCasaView(r.casa);window.scrollTo({top:0})}
   const go=(sc:ScreenId)=>setTab(sc)
   const goCasa=(v:CasaView)=>{setTab('casa');setCasaView(v)}
+  // Links das notificações (?ir=meudia, desafios, sprint…): abre a tela certa e limpa o endereço
+  const [wantSprint,setWantSprint]=useState(false)
+  useEffect(()=>{
+    if(typeof window==='undefined')return
+    const u=new URL(window.location.href),ir=u.searchParams.get('ir')
+    if(!ir)return
+    u.searchParams.delete('ir');window.history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)
+    switch(ir){
+      case 'meudia':setTab('rotinas');setRotView('meu');break
+      case 'rotinas':setTab('rotinas');setRotView('rotinas');break
+      case 'caes':setTab('caes');break
+      case 'agenda':setTab('casa');setCasaView('agenda');break
+      case 'desafios':setTab('nos');setNosView('desafios');break
+      case 'nos':setTab('nos');setNosView('semana');break
+      case 'sprint':setTab('inicio');setWantSprint(true);break
+      case 'checkin':setTab('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),900);break
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[])
+  useEffect(()=>{if(wantSprint&&sp.available){setWantSprint(false);if(sp.active)setSprintOpen(true)}},[wantSprint,sp.available,sp.active])
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
   // Histórico da semana (só na aba Semana; recarrega quando alguém salva uma reunião)
@@ -512,6 +606,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           else showToast(`Já estava concluída por ${completedByLabel(r.completed_by,names)}`)
         }
       }catch(e){
+        if(isOfflineError(e)){queue({id:newId(),at:new Date().toISOString(),kind:'task',done:!was,taskId:t.id,date:today,by,title:t.title});showToast(`📴 Sem internet: ${was?'desmarcada':'feita'} no aparelho. Envia quando a conexão voltar.`);return}
         patchTask(t.id,before);setXp(v=>v-delta)
         showError(toNinhoError(e,'concluir tarefa'),()=>toggleTask(t))
       }finally{refreshStats()}
@@ -542,6 +637,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           showToast(`Desmarcada · ${label||list[0].title}`)
         }
       }catch(e){
+        if(isOfflineError(e)){queue({id:newId(),at:new Date().toISOString(),kind:'dogs',done,ids,date:today,by,title:label||list[0].title});showToast(`📴 Sem internet: ${label||list[0].title} guardado. Envia quando a conexão voltar.`);return}
         patchRoutines(before);setXp(v=>v-(done?ids.length:-ids.length))
         showError(toNinhoError(e,'concluir rotina'),()=>markDogs(rs,done,label))
       }finally{refreshStats()}
@@ -709,13 +805,38 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     catch(e){setNames(n=>({...n,[role]:prev}));showError(toNinhoError(e,'atualizar nome'),()=>updateName(role,v))}
   }
 
-  function saveBet(bet:string){
-    save('salvar aposta',async()=>{await api.saveBet(householdId,weekStart,bet);setSettings(p=>({...p,bet}))},'Aposta da semana salva!')
-  }
 
-  function saveMeeting(m:Meeting){
-    save('salvar reunião',async()=>{await api.saveMeeting(householdId,weekStart,m);if(screen==='nos')await loadHistory()},'Reunião salva!')
+  function saveMeeting(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null){
+    save('salvar reunião',async()=>{
+      await api.saveMeeting(householdId,weekStart,m)
+      if(agreements){
+        const out:Agreement[]=[]
+        for(const a of agreements){
+          let task_id=a.task_id
+          if(a.makeTask&&!task_id)task_id=await nosApi.taskFromAgreement(householdId,a.text,a.who)
+          out.push({text:a.text,who:a.who,task_id,done:a.done})
+        }
+        await nosApi.saveAgreements(householdId,weekStart,out)
+        if(out.some(a=>a.task_id&&!agreements.find(x=>x.text===a.text)?.task_id))await data.reloadTasks()
+        await nos.reload()
+      }
+      if(screen==='nos')await loadHistory()
+    },'Reunião salva!')
   }
+  async function toggleAgreement(weekStartOf:string,list:Agreement[],i:number){
+    const next=list.map((a,j)=>j===i?{...a,done:!a.done}:a)
+    try{await nosApi.saveAgreements(householdId,weekStartOf,next);await nos.reload()}catch(e){showError(toNinhoError(e,'atualizar combinado'))}
+  }
+  async function createChallenge(v:Parameters<typeof nosApi.createChallenge>[1]){
+    try{await nosApi.createChallenge(householdId,v);await nos.reload();showToast('Desafio começou! 🤝')}catch(e){showError(toNinhoError(e,'criar desafio'));throw e}
+  }
+  async function markChallenge(c:Challenge,date:string,on:boolean){
+    const prev=nos.facts
+    nos.setData(d=>({...d,facts:{...d.facts,marks:on?[...d.facts.marks,{challenge_id:c.id,date,who:me}]:d.facts.marks.filter(m=>!(m.challenge_id===c.id&&m.date===date))}}))
+    try{await nosApi.markChallenge(householdId,c.id,date,me,on);await nos.reload()}catch(e){nos.setData(d=>({...d,facts:prev}));showError(toNinhoError(e,'marcar desafio'))}
+  }
+  async function challengeStatus(c:Challenge,st:Challenge['status']){try{await nosApi.setChallengeStatus(c.id,st);await nos.reload()}catch(e){showError(toNinhoError(e,'atualizar desafio'))}}
+  async function deleteChallenge(c:Challenge){try{await nosApi.deleteChallenge(c.id);await nos.reload()}catch(e){showError(toNinhoError(e,'apagar desafio'))}}
 
   // ── CASA: divisão, compras, manutenção ───────────────
   async function saveSplit(mode:SplitMode){
@@ -893,12 +1014,39 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   async function setSprintTasks(ids:string[]){if(!sp.active)return
     try{await spApi.updateSprintTasks(sp.active.id,ids);await sp.reload()}catch(e){showError(toNinhoError(e,'atualizar tarefas do sprint'))}}
 
+  // ── NÓS: dados derivados ──
+  const inWk=(d:string)=>d>=weekStart&&d<=addDays(weekStart,6)
+  const activeChs=nos.challenges.filter(c=>c.status==='active').map(c=>({c,p:chProgress(c,nos.facts,today)})).filter(x=>x.p.state==='active')
+  const activeCh=activeChs[0]||null
+  const thisMeetingRow=nos.meetings.find(m=>m.week_start===weekStart)
+  const histMeeting=historyData?.find(h=>h.week===weekStart)?.meeting||null
+  const thisMeeting=histMeeting||thisMeetingRow?{...(histMeeting||{}),agreements:thisMeetingRow?.agreements||[]} as any:null
+  const lastMeeting=nos.meetings.find(m=>m.week_start===addDays(weekStart,-7))
+  const sharedLines=(['g','s'] as Who[]).flatMap(w=>{
+    const st=md.settings.find(x=>x.who===w)||MD_DEFAULT(w);const out:string[]=[]
+    if(!md.available||!st.share)return out
+    if(st.share.agua){let n=0;for(let i=0;i<7;i++){const d=addDays(weekStart,i);if(d<=today&&waterOn(md.logs,w,d)>=st.water_goal_ml)n++}out.push(`${firstName(names[w])}: água na meta ${n} dia${n===1?'':'s'}`)}
+    if(st.share.treino){const k=workoutsWeek(md.logs,w,today);out.push(`${firstName(names[w])}: ${k.count} treino${k.count===1?'':'s'} (${k.minutes} min)`)}
+    return out
+  })
+  const agenda:AgendaSection[]=nos.available?meetingAgenda({
+    weekStart,today,completions:nos.completions,helpAsked:tasks.filter(t=>t.help_by).length,
+    runs:nos.facts.runs,habitLogs:nos.facts.habitLogs,sprints:nos.sprints,checkins:nos.checkins,
+    dogNext:dogCareAgenda.map(d=>({title:d.title,date:d.date})),
+    events:ag.events.map((e:any)=>({title:e.title,date:e.date,kind:e.kind})),
+    challenges:nos.challenges.filter(c=>c.status==='active'||(c.ended_at||'').slice(0,10)>=weekStart).map(c=>{const p=chProgress(c,nos.facts,today);return{title:c.title,hits:p.hits,goal:c.goal,state:c.status==='active'?p.state:c.status}}),
+    shared:sharedLines,lastAgreements:lastMeeting?.agreements||[],
+  },names):[]
+  const nosTl=nos.available?nosTimeline({challenges:nos.challenges,meetings:nos.meetings,sprints:nos.sprints}):[]
+  const together={done:nos.completions.filter(c=>inWk(c.date)).length,runs:nos.facts.runs.filter(r=>inWk(r.date)).length,habits:nos.facts.habitLogs.filter(h=>inWk(h.date)).length,sprints:nos.sprints.filter(x=>inWk(x.date)&&x.status==='done').length}
+
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
     ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),
     {id:'routine',icon:'rotinas',label:'Iniciar rotina',sub:rn.now?rn.now.title:rn.next?`Próxima: ${rn.next.title}`:'Ver as rotinas',run:()=>go('rotinas')},
+    ...(md.available&&me?[{id:'meudia',icon:'agua',label:'Meu dia',sub:'Água, sono, remédios e treino',run:()=>{go('rotinas');setRotView('meu')}}]:[]),
     {id:'dogs',icon:'caes',label:'Cuidado dos cães',sub:'Comida, passeio, acidente',run:()=>go('caes')},
     {id:'checkin',icon:'nos',label:'Check-in do dia',sub:'Humor e energia',run:()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}},
     ...(ag.available?[{id:'event',icon:'reuniao',label:'Agenda da casa',sub:'Consulta, visita, entrega, vencimento',run:()=>{goCasa('agenda');openModal('event',{event:null,kind:'compromisso' as EventKind})}}]:[]),
@@ -1120,6 +1268,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         </div>}
         {data.status==='ready'&&data.offline&&<div className="banner low" role="status">📴 <span>Sem internet. Mostrando os dados de {timeOfInstant(data.offline.savedAt)}. Marcar e editar voltam quando a conexão voltar.</span>
           <button className="lnk" onClick={()=>data.loadAll()}>Tentar agora</button></div>}
+        {outbox.length>0&&<div className="banner low" role="status">📤 <span>{outbox.length} aç{outbox.length>1?'ões feitas':'ão feita'} sem internet guardada{outbox.length>1?'s':''} neste aparelho. Envia sozinho quando a conexão voltar.</span>
+          <button className="lnk" onClick={()=>sendOutbox()}>Enviar agora</button></div>}
         {data.status==='ready'&&<>
         {/* ── HOJE ── */}
         {screen==='inicio'&&<div className="scr">
@@ -1160,11 +1310,16 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
               <div className="stat-v">🔥 {streak}<small>dia{streak!==1?'s':''}</small></div>
               <div className="week-dots">{weekDots(todayIndex,streak,doneToday>0).map((c,i)=><div key={i} className={`wd ${c}`}/>)}</div>
             </div>
-            <button className="stat stat-ch" onClick={()=>challenge?go('nos'):setOnb(setup?.completed?'redo':'open')}>
-              <div className="stat-l">Desafio{challenge?' sugerido':''}</div>
-              <div className="stat-v stat-txt">{challenge?challenge.title:'Nenhum ainda'}</div>
-              <div className="stat-s">{challenge?`${challenge.days} dias, as duas juntas`:setup?.available?'Sugerido na configuração':'Em breve'}</div>
+            {activeCh?<button className="stat stat-ch" onClick={()=>{go('nos');setNosView('desafios')}}>
+              <div className="stat-l">Desafio em dupla</div>
+              <div className="stat-v stat-txt">{activeCh.c.title}</div>
+              <div className="stat-s">{activeCh.p.hits}/{activeCh.c.goal} dias{activeCh.p.todayHit?' · hoje ✓':''}</div>
             </button>
+            :<button className="stat stat-ch" onClick={()=>nos.available?(go('nos'),setNosView('desafios')):challenge?go('nos'):setOnb(setup?.completed?'redo':'open')}>
+              <div className="stat-l">Desafio{challenge?' sugerido':''}</div>
+              <div className="stat-v stat-txt">{challenge?challenge.title:nos.available?'Escolher um':'Nenhum ainda'}</div>
+              <div className="stat-s">{challenge?`${challenge.days} dias, as duas juntas`:nos.available?'As duas do mesmo lado':setup?.available?'Sugerido na configuração':'Em breve'}</div>
+            </button>}
           </div>
 
           {week.available&&<WeekStrip days={weekInfo} names={names}/>}
@@ -1202,6 +1357,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {personCard('s')}
             <aside className="side">
               {week.available&&me&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
+              {md.available&&me&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} today={today} nowHM={nowHM}
+                onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>{go('rotinas');setRotView('meu')}}/>}
               {setup?.available&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
                 turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
               <div className="card">
@@ -1263,8 +1420,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── ROTINAS ── */}
         {screen==='rotinas'&&<div className="scr">
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
-          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length]]}/>
-          {rotView==='rotinas'?<>
+          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],['meu','Meu dia']]}/>
+          {rotView==='meu'?(me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds}
+            onAdd={(k,v,d)=>mdAdd(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
+            onRemove={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'apagar registro'));throw e})}
+            onSaveSettings={x=>mdApi.saveSettings(householdId,me,x).then(md.reload).then(()=>showToast('Salvo')).catch(e=>{showError(toNinhoError(e,'salvar'));throw e})}
+            onSaveMed={m=>mdApi.saveMed(householdId,me,m).then(md.reload).then(()=>showToast('Remédio salvo')).catch(e=>{showError(toNinhoError(e,'salvar remédio'));throw e})}
+            onStopMed={m=>mdApi.stopMed(m.id).then(md.reload).then(()=>showToast('Remédio encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar remédio'));throw e})}/>
+            :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>)
+          :rotView==='rotinas'?<>
             {!rot.routinesOk&&rot.ready?<div className="card empty"><span className="empty-icon">🔁</span>Rotinas com passos precisam da atualização do banco (migration 014).</div>
             :<>
               {routines.length===0&&rot.ready&&<div className="card intro">
@@ -1387,16 +1551,69 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <div><h2>Nós</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
             <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button><button className="btn btn-g" onClick={()=>go('ajustes')}>⚙️ Ajustes</button></div>
           </div>
-          <div className="wgrid" style={{marginBottom:14}}>
+          <SubTabs label="Nós" value={nosView} onChange={v=>setNosView(v)} options={[['semana','Semana'],['desafios','Desafios',activeChs.length],['historico','Histórico'],['equilibrio','Equilíbrio']]}/>
+          {nosView==='semana'&&<div className="wgrid">
             <div className="col">
-              <Scoreboard scores={game.scores} lastWeek={game.lastWeek} lastWeekBet={game.lastWeekBet} bet={settings.bet} names={names} me={me} onEditBet={()=>openModal('bet')}/>
-              <StreaksCard streaks={game.streaks} names={names} me={me}/>
+              <TogetherCard {...together} xp={game.scores.g.xp+game.scores.s.xp} streak={nos.available?bothCheckinStreak(nos.facts.checkins,today):0} meetingDone={!!thisMeeting&&!!(thisMeeting.what_worked||thisMeeting.wins||thisMeeting.adjustments||(thisMeeting.agreements||[]).length)} onOpenMeeting={()=>openModal('meeting')}/>
+              {nos.available&&me&&<DayNoteCard me={me} names={names} today={today} rows={nos.checkins} onSave={v=>nosApi.saveDayNote(householdId,today,me,v).then(()=>nos.reload()).then(()=>showToast('Registro salvo 📝')).catch(e=>{showError(toNinhoError(e,'salvar registro do dia'));throw e})}/>}
+              {!nos.available&&nos.ready&&<div className="card empty"><span className="empty-icon">🤝</span>Registro do dia, desafios em dupla e combinados precisam da atualização do banco (migration 022).{nos.reason&&<div className="row-s" style={{marginTop:6}}>Detalhe: {nos.reason}</div>}</div>}
             </div>
             <div className="col">
+              {nos.available&&<section className="card" aria-labelledby="ag-h">
+                <div className="slbl" id="ag-h">Combinados {(thisMeetingRow?.agreements||[]).length>0?'desta semana':lastMeeting?.agreements?.length?'da semana passada':''}</div>
+                {(()=>{const ws=(thisMeetingRow?.agreements||[]).length?weekStart:addDays(weekStart,-7);const list=(thisMeetingRow?.agreements||[]).length?thisMeetingRow!.agreements:(lastMeeting?.agreements||[])
+                  return list.length===0?<div className="row-s">Nenhum combinado ainda. Eles nascem na reunião semanal.</div>
+                  :<ul className="mt-agr-l">{list.map((a,i)=><li key={i}>
+                    <button className={`mt-chk ${a.done?'on':''}`} role="checkbox" aria-checked={a.done} aria-label={`Cumprido: ${a.text}`} onClick={()=>toggleAgreement(ws,list,i)}>{a.done?'✓':''}</button>
+                    <span className="mt-agr-t">{a.text}<small>{a.who==='both'?'as duas':firstName(names[a.who])}{a.task_id?' · é uma tarefa':''}</small></span></li>)}</ul>})()}
+              </section>}
+              {nos.available&&<section className="card" aria-labelledby="dc-h">
+                <div className="slbl" id="dc-h">Desafios em dupla<button className="lnk" onClick={()=>setNosView('desafios')}>{activeChs.length?'Ver →':'Escolher →'}</button></div>
+                {activeChs.length===0?<div className="row-s">Nenhum desafio agora. Que tal um de 7 dias?</div>
+                  :activeChs.slice(0,2).map(({c})=><ChallengeCard key={c.id} c={c} facts={nos.facts} today={today} names={names} compact onMark={markChallenge}/>)}
+              </section>}
+              {nos.available&&agenda.length>0&&<section className="card" aria-labelledby="pa-h">
+                <div className="slbl" id="pa-h">Pauta da reunião<button className="lnk" onClick={()=>openModal('meeting')}>Abrir →</button></div>
+                {agenda.slice(0,3).map(sec=><div key={sec.title} className="mt-sec"><div className="mt-sec-t">{sec.icon} {sec.title}</div><ul>{sec.lines.slice(0,3).map((l,i)=><li key={i}>{l}</li>)}</ul></div>)}
+              </section>}
+            </div>
+          </div>}
+          {nosView==='desafios'&&(nos.available?<ChallengesView challenges={nos.challenges} facts={nos.facts} today={today} names={names}
+            routines={routines.map(r=>({id:r.id,title:r.title}))} habits={rot.habits.filter((h:any)=>!h.archived_at).map(h=>({id:h.id,title:h.title}))}
+            suggestion={challenge||null} onCreate={v=>createChallenge({...v,created_by:me})} onMark={markChallenge} onStatus={challengeStatus} onDelete={deleteChallenge}/>
+            :<div className="card empty"><span className="empty-icon">🤝</span>Desafios em dupla precisam da atualização do banco (migration 022).</div>)}
+          {nosView==='historico'&&<div className="wgrid">
+            <div className="col">
+              {nos.available&&<CheckinHistory rows={nos.checkins} names={names} today={today}/>}
+              <div className="card">
+                <div className="slbl">Últimas 4 semanas</div>
+                {historyError?<div className="inline-err">Não foi possível carregar o histórico. <button className="lnk" onClick={loadHistory}>Tentar novamente</button></div>
+                :!historyData?<div style={{fontSize:13,color:'var(--sub)',padding:'8px 0'}}>Carregando...</div>:
+                  historyData.map((w,i)=>(
+                    <div key={w.week} className="hist">
+                      <div className="hist-h">
+                        <span style={{fontSize:14,fontWeight:500}}>{i===0?'Esta semana':'Semana de '+fmtDate(w.week)}</span>
+                        <span style={{fontSize:12,color:'var(--sub)'}}>{w.meeting&&<span className="bdg bdg-l" style={{marginRight:6}}>reunião ✓</span>}<span className="mono">{w.completions}</span> feitas</span>
+                      </div>
+                      <div className="bar" style={{marginTop:8}}><div className="barf" style={{width:(w.completions/maxHist*100)+'%',background:i===0?'var(--gdk)':'var(--faint)'}}/></div>
+                      {w.meeting&&(w.meeting.wins||w.meeting.what_worked)&&(
+                        <div className="hist-note">
+                          {w.meeting.wins&&<div>🎉 {w.meeting.wins}</div>}
+                          {w.meeting.what_worked&&<div>✓ {w.meeting.what_worked}</div>}
+                        </div>
+                      )}
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+            <div className="col">
+              {nos.available&&<TimelineCard items={nosTl}/>}
+              <StreaksCard streaks={game.streaks} names={names} me={me}/>
               <Achievements stats={game.stats} names={names} me={me}/>
             </div>
-          </div>
-          <div className="wgrid">
+          </div>}
+          {nosView==='equilibrio'&&<div className="wgrid">
             <div className="col">
               <div className="card">
                 <div className="slbl">Divisão da carga</div>
@@ -1446,29 +1663,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                 <div className="bar"><div className="barf" style={{width:xpPct+'%',background:'var(--pur)'}}/></div>
                 <div style={{fontSize:12,color:'var(--sub)',marginTop:8}}>{lv.l<LEVELS.length?`Faltam ${lv.max-xp} XP para ${LEVELS[lv.l].n}`:'Nível máximo 🏆'}</div>
               </div>
-              <div className="card">
-                <div className="slbl">Últimas 4 semanas</div>
-                {historyError?<div className="inline-err">Não foi possível carregar o histórico. <button className="lnk" onClick={loadHistory}>Tentar novamente</button></div>
-                :!historyData?<div style={{fontSize:13,color:'var(--sub)',padding:'8px 0'}}>Carregando...</div>:
-                  historyData.map((w,i)=>(
-                    <div key={w.week} className="hist">
-                      <div className="hist-h">
-                        <span style={{fontSize:14,fontWeight:500}}>{i===0?'Esta semana':'Semana de '+fmtDate(w.week)}</span>
-                        <span style={{fontSize:12,color:'var(--sub)'}}>{w.meeting&&<span className="bdg bdg-l" style={{marginRight:6}}>reunião ✓</span>}<span className="mono">{w.completions}</span> feitas</span>
-                      </div>
-                      <div className="bar" style={{marginTop:8}}><div className="barf" style={{width:(w.completions/maxHist*100)+'%',background:i===0?'var(--gdk)':'var(--faint)'}}/></div>
-                      {w.meeting&&(w.meeting.wins||w.meeting.what_worked)&&(
-                        <div className="hist-note">
-                          {w.meeting.wins&&<div>🎉 {w.meeting.wins}</div>}
-                          {w.meeting.what_worked&&<div>✓ {w.meeting.what_worked}</div>}
-                        </div>
-                      )}
-                    </div>
-                  ))
-                }
-              </div>
             </div>
-          </div>
+          </div>}
         </div>}
 
         {/* ── CÃES ── */}
@@ -1733,7 +1929,6 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {device.ready&&!account&&(!me||modal==='device')&&<DeviceIdentityModal names={names} current={me} required={!me}
         onPick={w=>{device.setWho(w);if(modal==='device')closeModal();showToast(`Este aparelho agora é da ${firstName(names[w])}`)}}
         onClose={closeModal}/>}
-      {modal==='bet'&&<BetModal current={settings.bet} saving={saving} onClose={closeModal} onSave={saveBet}/>}
       {modal==='maint'&&<MaintenanceForm extras={casa.maintExtras} item={modalData} today={today} names={names} saving={saving} onClose={closeModal} onSave={saveMaint} onDelete={removeMaint}/>}
       {sprintOpen&&sp.available&&<SprintPanel active={sp.active} recent={sp.recent} now={sp.now} tasks={tasks} today={today} me={me} names={names} busy={spBusy}
         onStart={startSprint} onPause={pauseSprint} onFinish={finishSprint} onToggleTask={toggleTask} onSetTasks={setSprintTasks} onClose={()=>setSprintOpen(false)}/>}
@@ -1745,7 +1940,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {modal==='rttpl'&&<TemplatesSheet existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)} existingTitles={routines.map(r=>r.title)} house={rot.templates} busy={tplBusy} onAdd={addRoutineTemplate} onAddHouse={addHouseTemplate} onDeleteHouse={deleteHouseTemplate} onClose={closeModal}/>}
       {modal==='hbedit'&&<HabitEditor habit={modalData?.habit??null} preset={modalData?.preset} names={names} saving={saving} onSave={saveHabitDraft} onArchive={archiveHabit} onClose={closeModal}/>}
       {modal==='mainttpl'&&<MaintTemplatesSheet existing={casa.maint} today={today} saving={saving} onClose={closeModal} onAdd={addMaintTemplates}/>}
-      {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} onClose={closeModal} onSave={saveMeeting}/>}
+      {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} initial={thisMeeting} agenda={nos.available?agenda:undefined} agreementsOk={nos.available} onClose={closeModal} onSave={saveMeeting}/>}
     </>
   )
 }

@@ -47,7 +47,9 @@ begin
     -- Casa completa (migration 019)
     ('tasks','checklist'), ('tasks','help_by'), ('shopping_items','running_low'), ('maintenance_items','provider'), ('house_events','paid'), ('households','sobrou_url'),
     -- Cães (migration 020)
-    ('dogs','food_g_day'), ('dog_health','next_date'), ('puppy_accidents','notes')
+    ('dogs','food_g_day'), ('dog_health','next_date'), ('puppy_accidents','notes'),
+    -- Meu dia (migration 021)
+    ('personal_settings','share'), ('personal_logs','kind'), ('personal_meds','times'), ('daily_checkins','thanks'), ('weekly_meetings','agreements'), ('couple_challenges','goal'), ('challenge_marks','date'), ('push_subscriptions','quiet_start'), ('push_log','ref')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,
@@ -79,7 +81,7 @@ begin
                                -- Sprint (migration 018)
                                'ninho_finish_sprint','ninho_sprint_pause',
                                -- Casa completa (migration 019)
-                               'ninho_shopping_recur']) as f loop
+                               'ninho_shopping_recur','ninho_day_note']) as f loop
     insert into ninho_check("check", status, detalhe)
     select 'função ' || r.f,
            case when exists (select 1 from pg_proc p join pg_namespace s on s.oid = p.pronamespace where s.nspname = 'public' and p.proname = r.f) then 'ok' else 'FALHA' end, '';
@@ -167,7 +169,7 @@ begin
     for r in select unnest(array['tasks','task_completions','dogs','dog_routines','dog_completions','weekly_settings',
                                  'weekly_meetings','profiles','xp_history','puppy_accidents',
                                  'shopping_items','maintenance_items','maintenance_log','households','task_skips',
-                                 'household_setup','routines','routine_steps','daily_checkins','household_days','routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs']) as t loop
+                                 'household_setup','routines','routine_steps','daily_checkins','household_days','routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs','couple_challenges','challenge_marks']) as t loop
       insert into ninho_check("check", status, detalhe)
       select 'realtime ' || r.t,
              case when exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = r.t) then 'ok' else 'FALHA' end, '';

@@ -2,7 +2,7 @@
 // Funções puras: recebem os dados já calculados e devolvem título e corpo.
 import type { HItem, Names, Who } from './types'
 import { hhmm } from './dates'
-import { canEarnOnTime, leaderOf, DEFAULT_BET, type WeeklyScores } from './gamification'
+import { canEarnOnTime, type WeeklyScores } from './gamification'
 import { FPT } from './constants'
 
 export interface PushPayload { title: string, body: string, tag: string, url: string }
@@ -50,25 +50,21 @@ function maintText(m: MaintNote[]): string {
  * Resumo de domingo: placar da semana, quem paga a aposta e o que ficou pendente do período.
  * `pending` = títulos de tarefas semanais/quinzenais/mensais ainda devidas no domingo.
  */
-export function weeklyMessage(names: Names, scores: WeeklyScores, bet: string | null | undefined, streak: number, pending: Array<{ title: string, frequency: string }>, nextMaint: string[] = []): PushPayload {
-  const g = first(names.g), s = first(names.s)
+export function weeklyMessage(names: Names, scores: WeeklyScores, _bet: string | null | undefined, streak: number, pending: Array<{ title: string, frequency: string }>, nextMaint: string[] = []): PushPayload {
+  // Resumo do casal (sem placar nem aposta: as duas do mesmo lado)
   const done = scores.g.done + scores.s.done + scores.unknown.done
-  const lead = leaderOf(scores)
-  let body = `Vocês fizeram ${plural(done, 'conclusão', 'conclusões')}. Placar: ${g} ${scores.g.xp} × ${scores.s.xp} ${s}`
-  if (lead === 'tie') body += ' — empate!'
-  else {
-    const loser = lead === 'g' ? s : g
-    body += ` — ${first(names[lead])} venceu! ${loser} paga: ${bet || DEFAULT_BET}.`
-  }
+  const xp = scores.g.xp + scores.s.xp + scores.unknown.xp
+  let body = `Juntas, vocês fizeram ${plural(done, 'conclusão', 'conclusões')}${xp ? ` (+${xp} XP do casal)` : ''}.`
   if (streak > 1) body += ` 🔥 ${streak} dias seguidos.`
   if (pending.length) {
     const list = pending.slice(0, 3).map(p => `${p.title} (${(FPT[p.frequency] || p.frequency).toLowerCase()})`).join(', ')
     body += ` Ficou para trás: ${list}${pending.length > 3 ? ` e mais ${pending.length - 3}` : ''}.`
   } else body += ' Nada ficou para trás. 👏'
   if (nextMaint.length) body += ` 🔧 Na próxima semana: ${nextMaint.slice(0, 2).join(', ')}${nextMaint.length > 2 ? ` e mais ${nextMaint.length - 2}` : ''}.`
-  return { title: 'Resumo da semana 🏆', body, tag: 'weekly', url: '/' }
+  body += ' Hora da reunião de 15 minutos?'
+  return { title: 'Resumo da semana 🏡', body, tag: 'weekly', url: '/?ir=nos' }
 }
 
 export function testMessage(who: Who | null, names: Names): PushPayload {
-  return { title: 'Notificações do Ninho ativadas ✅', body: `${who ? first(names[who]) + ', você' : 'Você'} vai receber o bom dia com as tarefas e o resumo de domingo.`, tag: 'test', url: '/' }
+  return { title: 'Notificações do Ninho ativadas ✅', body: `${who ? first(names[who]) + ', você' : 'Você'} vai receber o bom dia, os lembretes que escolher e o resumo de domingo.`, tag: 'test', url: '/' }
 }

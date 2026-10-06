@@ -71,7 +71,7 @@ async function claim(db: SupabaseClient, subId: string, kind: string, day: strin
   return (r.data as any)?.id ?? null
 }
 
-async function deliver(deps: NotifyDeps, sub: Subscription, logId: string, payload: PushPayload, report: Report) {
+export async function deliver(deps: NotifyDeps, sub: Subscription, logId: string, payload: PushPayload, report: Report) {
   const res = await deps.send(sub, payload)
   if (res.ok) {
     report.sent++
