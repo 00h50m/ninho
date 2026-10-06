@@ -26,7 +26,7 @@ export interface AgendaEntry {
   time: string | null
   title: string
   icon: string
-  source: 'event' | 'maint'
+  source: 'event' | 'maint' | 'dog'
   event?: HouseEvent
   maintId?: string
   late: boolean
@@ -36,7 +36,8 @@ export interface AgendaEntry {
  * Próximos dias: eventos (menos vencimentos, que têm a própria lista) e manutenções que vencem.
  * Eventos passados que não foram marcados como feitos ficam em "atrasados".
  */
-export function agendaEntries(events: HouseEvent[], maint: Array<{ id: string, title: string, next_due: string, category: string }>, today: string, days = 60): AgendaEntry[] {
+export function agendaEntries(events: HouseEvent[], maint: Array<{ id: string, title: string, next_due: string, category: string }>, today: string, days = 60,
+  dogCare: Array<{ id: string, title: string, date: string, icon: string }> = []): AgendaEntry[] {
   const until = addDays(today, days)
   const ev: AgendaEntry[] = events
     .filter(e => e.kind !== 'vencimento' && !e.done_at && e.date <= until)
@@ -44,7 +45,10 @@ export function agendaEntries(events: HouseEvent[], maint: Array<{ id: string, t
   const mt: AgendaEntry[] = maint
     .filter(m => m.next_due <= until)
     .map(m => ({ key: 'm:' + m.id, date: m.next_due, time: null, title: m.title, icon: m.category === 'caes' ? '🐾' : '🔧', source: 'maint' as const, maintId: m.id, late: m.next_due < today }))
-  return [...ev, ...mt].sort((a, b) => a.date.localeCompare(b.date) || (a.time || '99').localeCompare(b.time || '99') || a.title.localeCompare(b.title))
+  const dg: AgendaEntry[] = dogCare
+    .filter(c => c.date <= until)
+    .map(c => ({ key: 'd:' + c.id, date: c.date, time: null, title: c.title, icon: c.icon, source: 'dog' as const, late: c.date < today }))
+  return [...ev, ...mt, ...dg].sort((a, b) => a.date.localeCompare(b.date) || (a.time || '99').localeCompare(b.time || '99') || a.title.localeCompare(b.title))
 }
 
 /** Agrupa por dia: "Atrasados", "Hoje", "Amanhã", "sex, 09/10"… */

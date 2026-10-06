@@ -45,7 +45,9 @@ begin
     -- Sprint do Ninho (migration 018)
     ('sprints','paused_ms'),
     -- Casa completa (migration 019)
-    ('tasks','checklist'), ('tasks','help_by'), ('shopping_items','running_low'), ('maintenance_items','provider'), ('house_events','paid'), ('households','sobrou_url')
+    ('tasks','checklist'), ('tasks','help_by'), ('shopping_items','running_low'), ('maintenance_items','provider'), ('house_events','paid'), ('households','sobrou_url'),
+    -- Cães (migration 020)
+    ('dogs','food_g_day'), ('dog_health','next_date'), ('puppy_accidents','notes')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,

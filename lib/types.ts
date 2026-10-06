@@ -70,6 +70,16 @@ export interface Dog {
   is_puppy: boolean
   active?: boolean
   routines: DogRoutine[]
+  /** Migration 020 */
+  birth_date?: string | null
+  sex?: 'f' | 'm' | null
+  photo?: string | null
+  food_brand?: string | null
+  food_g_day?: number | null
+  meals_day?: number | null
+  food_stock_kg?: number | null
+  food_stock_on?: string | null
+  notes?: string | null
 }
 
 export interface Settings { energy: Energy; survival: boolean; bet?: string | null }

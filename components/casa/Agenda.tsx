@@ -10,8 +10,9 @@ import type { EventInput } from '@/lib/services/agenda'
 
 const first = (n: string) => (n || '').split(' ')[0]
 
-export function AgendaView({ available, events, maint, today, names, sobrouUrl, onNew, onEdit, onDone, onPaid, onOpenMaint, onSaveSobrou }: {
+export function AgendaView({ available, events, maint, dogCare = [], today, names, sobrouUrl, onNew, onEdit, onDone, onPaid, onOpenMaint, onOpenDogs, onSaveSobrou }: {
   available: boolean, events: HouseEvent[], maint: Array<{ id: string, title: string, next_due: string, category: string }>
+  dogCare?: Array<{ id: string, title: string, date: string, icon: string }>, onOpenDogs?: () => void
   today: string, names: Names, sobrouUrl: string | null
   onNew: (kind: EventKind) => void, onEdit: (e: HouseEvent) => void, onDone: (e: HouseEvent, done: boolean) => void
   onPaid: (e: HouseEvent, paid: boolean) => void, onOpenMaint: () => void, onSaveSobrou: (url: string | null) => void
@@ -19,7 +20,7 @@ export function AgendaView({ available, events, maint, today, names, sobrouUrl, 
   const [editUrl, setEditUrl] = useState(false)
   const [url, setUrl] = useState(sobrouUrl || '')
   if (!available) return <div className="card empty"><span className="empty-icon">📅</span>A agenda da casa precisa da atualização do banco (migration 019).</div>
-  const groups = groupByDay(agendaEntries(events, maint, today), today)
+  const groups = groupByDay(agendaEntries(events, maint, today, 60, dogCare), today)
   const b = bills(events, today)
   const who = (w: HouseEvent['who']) => w === 'both' ? 'as duas' : w ? first(names[w as Who]) : null
   const urlOk = !url.trim() || /^https?:\/\//i.test(url.trim())
@@ -44,9 +45,9 @@ export function AgendaView({ available, events, maint, today, names, sobrouUrl, 
           ) : (
             <div key={it.key} className="ag-row">
               <span className="ag-ic" aria-hidden="true">{it.icon}</span>
-              <button className="ag-b" onClick={onOpenMaint}>
+              <button className="ag-b" onClick={it.source === 'dog' ? onOpenDogs : onOpenMaint}>
                 <span className="ag-t">{it.title}</span>
-                <span className="ag-m">Manutenção{it.late ? ` · venceu ${fmtDate(it.date)}` : ''} · abrir em Manutenção</span>
+                <span className="ag-m">{it.source === 'dog' ? 'Cuidado dos cães' : 'Manutenção'}{it.late ? ` · venceu ${fmtDate(it.date)}` : ''} · abrir em {it.source === 'dog' ? 'Cães' : 'Manutenção'}</span>
               </button>
             </div>
           ))}
