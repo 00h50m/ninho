@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next'
 import '@/styles/tokens.css'
 import '@/styles/app.css'
 import { THEME_BOOT } from '@/lib/theme'
+import { A11Y_BOOT } from '@/lib/a11y'
 
 export const metadata: Metadata = {
   title: 'Ninho',
@@ -26,6 +27,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" suppressHydrationWarning>
       <head>
         <script dangerouslySetInnerHTML={{ __html: THEME_BOOT }} />
+        <script dangerouslySetInnerHTML={{ __html: A11Y_BOOT }} />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
       </head>

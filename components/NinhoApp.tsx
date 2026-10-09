@@ -4,6 +4,7 @@ import type { Accident, Dog, DogItem, DogRoutine, Energy, HistoryWeek, HItem, Me
 import { ACCIDENT_PLACES, CAT, DR_DEF, DR_PUP, ENERGY, FEFF, FPT, RFREQ, ROLE, SUGG, WPT } from '@/lib/constants'
 import { BottomNav, Icon, QuickActionsSheet, SideNav, SubTabs, legacyScreen, type CasaView, type QuickAction, type ScreenId } from '@/components/shell/Shell'
 import { THEMES, applyTheme, readTheme, saveTheme, type ThemeId } from '@/lib/theme'
+import { DEFAULT_A11Y, HOME_CARDS, TEXT_SIZES, applyA11y, effectiveTheme, isDarkTheme, readA11y, saveA11y, setupSnoozed, type A11yPrefs } from '@/lib/a11y'
 import { dogKey } from '@/lib/rotation'
 import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '@/lib/dates'
 import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, weekdaysLabel, WEEKDAY_SHORT } from '@/lib/frequency'
@@ -402,8 +403,22 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'>('semana')
   const [rotView,setRotView]=useState<'rotinas'|'habitos'|'meu'>('rotinas')
   const [theme,setThemeState]=useState<ThemeId>('aconchego')
-  useEffect(()=>{setThemeState(readTheme(null,typeof matchMedia!=='undefined'&&matchMedia('(prefers-color-scheme: dark)').matches))},[])
-  function pickTheme(t:ThemeId){saveTheme(t);applyTheme(t);setThemeState(t)}
+  // Conforto do aparelho (Fase 9): tamanho, contraste, movimento, tema automático, cartões do Início
+  const [a11y,setA11yState]=useState<A11yPrefs>(DEFAULT_A11Y)
+  const [darkNow,setDarkNow]=useState(false)
+  useEffect(()=>{
+    const mq=typeof matchMedia!=='undefined'?matchMedia('(prefers-color-scheme: dark)'):null
+    setThemeState(readTheme(null,!!mq?.matches));setA11yState(readA11y());setDarkNow(!!mq?.matches)
+    const on=(e:MediaQueryListEvent)=>setDarkNow(e.matches)
+    mq?.addEventListener?.('change',on)
+    return()=>mq?.removeEventListener?.('change',on)
+  },[])
+  const shownTheme=effectiveTheme(a11y,theme,darkNow)
+  useEffect(()=>{applyTheme(shownTheme)},[shownTheme])
+  useEffect(()=>{applyA11y(a11y)},[a11y])
+  const setA11y=(patch:Partial<A11yPrefs>)=>setA11yState(p=>{const n={...p,...patch};saveA11y(n);return n})
+  const showCard=(k:string)=>!a11y.hidden.includes(k)
+  function pickTheme(t:ThemeId){saveTheme(t);setThemeState(t);if(a11y.autoTheme)setA11y({autoTheme:false})}
   const [modal,setModal]=useState<string|null>(null)
   const [modalData,setModalData]=useState<any>(null)
   const [saving,setSaving]=useState(false)
@@ -1283,13 +1298,14 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             </div>
             <div className="sh-a desk-only"><button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button></div>
           </div>
-          {setup?.available&&!setup.completed&&!onb&&<div className="setup-cta">
+          {setup?.available&&!setup.completed&&!onb&&!setupSnoozed(a11y,today)&&<div className="setup-cta">
             <span aria-hidden="true" style={{fontSize:24}}>🪺</span>
             <div><b>Configurar o Ninho</b><small>{(setup.progress?.step||1)>1?`Você parou na etapa ${setup.progress!.step} de ${LAST_STEP}. As respostas estão guardadas.`:'Uns 3 minutos para ajustar rotinas, essenciais e a aparência.'}</small></div>
             <button className="btn btn-p" onClick={()=>setOnb('open')}>{(setup.progress?.step||1)>1?'Continuar':'Começar'}</button>
+            <button className="lnk-inline" onClick={()=>{setA11y({setupSnooze:addDays(today,14)});showToast('Ok! O aviso volta em 2 semanas. Dá para configurar a qualquer hora em Ajustes.')}}>Agora não</button>
           </div>}
 
-          <div className="stats">
+          {showCard('resumo')&&<div className="stats">
             <div className="stat">
               <div className="stat-l">Hoje</div>
               <div className="stat-v">{dayPct}%<small>{doneToday}/{allToday.length}</small></div>
@@ -1320,9 +1336,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
               <div className="stat-v stat-txt">{challenge?challenge.title:nos.available?'Escolher um':'Nenhum ainda'}</div>
               <div className="stat-s">{challenge?`${challenge.days} dias, as duas juntas`:nos.available?'As duas do mesmo lado':setup?.available?'Sugerido na configuração':'Em breve'}</div>
             </button>}
-          </div>
+          </div>}
 
-          {week.available&&<WeekStrip days={weekInfo} names={names}/>}
+          {week.available&&showCard('semana')&&<WeekStrip days={weekInfo} names={names}/>}
 
           {settings.survival?(
             <div className="banner surv">🛡 <span>Modo sobrevivência — {showAllToday?'mostrando todas as tarefas':`só essenciais${hiddenCount>0?` · ${hiddenCount} ocultas`:''}`}</span>
@@ -1356,12 +1372,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {personCard('g')}
             {personCard('s')}
             <aside className="side">
-              {week.available&&me&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
-              {md.available&&me&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} today={today} nowHM={nowHM}
+              {week.available&&me&&showCard('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
+              {md.available&&me&&showCard('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} today={today} nowHM={nowHM}
                 onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>{go('rotinas');setRotView('meu')}}/>}
-              {setup?.available&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
+              {setup?.available&&showCard('rotina')&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
                 turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
-              <div className="card">
+              {showCard('caes')&&<div className="card">
                 <div className="slbl">🐾 Cães hoje {dogDaily.length>0&&<span className="mono" style={{color:'var(--faint)'}}>{dogDone}/{dogDaily.length}</span>}<button className="lnk" onClick={()=>setTab('pets')}>Ver →</button></div>
                 {dogs.length===0?(
                   <div className="empty" style={{padding:'12px 0'}}>Nenhum pet ainda<div><button className="btn btn-s" onClick={()=>openModal('pet')}>+ Cadastrar pet</button></div></div>
@@ -1388,22 +1404,22 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                   {care.slice(0,3).map(c=><button key={c.id} className="care-i" onClick={()=>goCasa('manutencao')}><span>{c.title}</span><span className={`mono ${c.next_due<today?'late':''}`}>{c.next_due<today?'atrasado':c.next_due===today?'hoje':fmtDate(c.next_due)}</span></button>)}
                 </div>}
                 {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
-              </div>
-              {ag.available&&(()=>{const soon=agendaEntries(ag.events,[],today,1).filter(e=>!e.late);const due=agBills(ag.events,today).pending.filter(b=>b.date<=addDays(today,3));return (soon.length>0||due.length>0)&&(
+              </div>}
+              {ag.available&&showCard('agenda')&&(()=>{const soon=agendaEntries(ag.events,[],today,1).filter(e=>!e.late);const due=agBills(ag.events,today).pending.filter(b=>b.date<=addDays(today,3));return (soon.length>0||due.length>0)&&(
                 <div className="card ag-home">
                   <div className="slbl">📅 Agenda<button className="lnk" onClick={()=>goCasa('agenda')}>Ver →</button></div>
                   {soon.map(e=><div key={e.key} className="ag-home-i"><span>{e.icon} {e.title}</span><span className="mono">{e.date===today?'hoje':'amanhã'}{e.time?` ${e.time}`:''}</span></div>)}
                   {due.map(b=><div key={b.id} className={`ag-home-i ${b.date<today?'late':''}`}><span>{kindIcon('vencimento')} {b.title}</span><span className="mono">{b.date<today?'atrasado':b.date===today?'vence hoje':`vence ${fmtDate(b.date)}`}</span></div>)}
                 </div>)})()}
-              <MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>
-              {(()=>{const sc=shoppingCounts(casa.shop);return casa.shopState==='ready'&&sc.toBuy>0&&(
+              {showCard('manutencao')&&<MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>}
+              {showCard('compras')&&(()=>{const sc=shoppingCounts(casa.shop);return casa.shopState==='ready'&&sc.toBuy>0&&(
                 <button className="card dsum shop-sum" onClick={()=>setTab('shop')}>
                   <span className="dav" style={{width:36,height:36,fontSize:18}}>🛒</span>
                   <span style={{flex:1,minWidth:0,textAlign:'left'}}><b>{sc.toBuy} ite{sc.toBuy===1?'m':'ns'} na lista de compras</b>
                     <span className="dsum-s">{casa.shop.filter(i=>!i.checked_at).slice(0,4).map(i=>i.title).join(', ')}{sc.toBuy>4?'…':''}</span></span>
                   <span className="chev">›</span>
                 </button>)})()}
-              <div className="card">
+              {showCard('atalhos')&&<div className="card">
                 <div className="slbl">Atalhos</div>
                 <div className="acts">
                   {actionBtn('✦','Distribuir tarefas','Equilibra a carga entre vocês',autoDistribute,'var(--pbg)')}
@@ -1412,7 +1428,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                   {actionBtn('📋','Reunião semanal','15 minutos, sem cobranças',()=>openModal('meeting'))}
                   {sp.available&&actionBtn('⏱','Sprint do Ninho',sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão curto com cronômetro',()=>setSprintOpen(true))}
                 </div>
-              </div>
+              </div>}
             </aside>
           </div>
         </div>}
@@ -1714,13 +1730,37 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <div className="slbl">Aparência</div>
             <div className="themes" role="radiogroup" aria-label="Tema">
               {THEMES.map(t=>(
-                <button key={t.id} role="radio" aria-checked={theme===t.id} className={`theme-opt ${theme===t.id?'on':''}`} onClick={()=>pickTheme(t.id)}>
+                <button key={t.id} role="radio" aria-checked={!a11y.autoTheme&&theme===t.id} className={`theme-opt ${!a11y.autoTheme&&theme===t.id?'on':''}`} onClick={()=>pickTheme(t.id)}>
                   <span className="theme-sw" aria-hidden="true">{t.swatch.map((c,i)=><i key={i} style={{background:c}}/>)}</span>
                   <span><b>{t.name}</b><small>{t.desc}</small></span>
                 </button>
               ))}
             </div>
-            <div className="row-s" style={{marginTop:8}}>Vale só para este aparelho: cada uma escolhe o que é mais confortável.</div>
+            <div className="a11y-row">
+              <div><div className="row-t">🌗 Tema automático</div><div className="row-s">Segue o claro/escuro do celular{a11y.autoTheme?` · agora: ${THEMES.find(t=>t.id===shownTheme)?.name}`:''}</div></div>
+              <button className={`switch ${a11y.autoTheme?'on':''}`} role="switch" aria-checked={a11y.autoTheme} aria-label="Tema automático" onClick={()=>setA11y({autoTheme:!a11y.autoTheme})}/>
+            </div>
+            {a11y.autoTheme&&<div className="a11y-auto">
+              <label className="onb-f"><span>De dia (claro)</span><select className="fi" value={a11y.lightTheme} onChange={e=>setA11y({lightTheme:e.target.value as ThemeId})}>{THEMES.filter(t=>!isDarkTheme(t.id)).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+              <label className="onb-f"><span>À noite (escuro)</span><select className="fi" value={a11y.darkTheme} onChange={e=>setA11y({darkTheme:e.target.value as ThemeId})}>{THEMES.filter(t=>isDarkTheme(t.id)).map(t=><option key={t.id} value={t.id}>{t.name}</option>)}</select></label>
+            </div>}
+            <div className="a11y-row">
+              <div><div className="row-t">🔠 Tamanho do texto</div><div className="row-s">Aumenta textos, botões e áreas de toque juntos</div></div>
+              <div className="a11y-seg" role="radiogroup" aria-label="Tamanho do texto">{TEXT_SIZES.map(([k,l])=><button key={k} role="radio" aria-checked={a11y.size===k} className={`fc ${a11y.size===k?'on':''}`} onClick={()=>setA11y({size:k})}>{l}</button>)}</div>
+            </div>
+            <div className="a11y-row">
+              <div><div className="row-t">◐ Alto contraste</div><div className="row-s">Textos mais escuros, bordas visíveis e foco mais grosso</div></div>
+              <button className={`switch ${a11y.contrast?'on':''}`} role="switch" aria-checked={a11y.contrast} aria-label="Alto contraste" onClick={()=>setA11y({contrast:!a11y.contrast})}/>
+            </div>
+            <div className="a11y-row">
+              <div><div className="row-t">🐢 Menos animação</div><div className="row-s">Desliga transições e animações (o celular também pode pedir isso)</div></div>
+              <button className={`switch ${a11y.motion==='reduce'?'on':''}`} role="switch" aria-checked={a11y.motion==='reduce'} aria-label="Menos animação" onClick={()=>setA11y({motion:a11y.motion==='reduce'?'system':'reduce'})}/>
+            </div>
+            <div className="a11y-row" style={{display:'block'}}>
+              <div className="row-t">🏠 O que aparece no Início</div><div className="row-s">Desmarque o que não usa. O resto continua nas outras áreas.</div>
+              <div className="a11y-cards">{HOME_CARDS.map(([k,l])=><label key={k}><input type="checkbox" checked={showCard(k)} onChange={e=>setA11y({hidden:e.target.checked?a11y.hidden.filter(x=>x!==k):[...a11y.hidden,k]})}/>{l}</label>)}</div>
+            </div>
+            <div className="row-s" style={{marginTop:8}}>Tudo aqui vale só para este aparelho: cada uma escolhe o que é mais confortável.</div>
           </div>
           {setup?.available&&<div className="card" style={{marginBottom:14}}>
             <div className="slbl">Configuração do Ninho</div>

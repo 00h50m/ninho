@@ -182,7 +182,7 @@ export function PuppyPanel({ dog, accidents, today, busy, onAdd, onSave, onDelet
       {mine.slice(0, 6).map(a => (
         <div key={a.id} className="acc">
           <span>💧</span><span>{a.location}{a.notes ? ` · ${a.notes}` : ''}</span>
-          <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--sub)' }}>{a.date !== today && fmtDate(a.date) + ' · '}{timeOfInstant(a.occurred_at)}</span>
+          <span className="mono" style={{ marginLeft: 'auto', fontSize: 11, color: 'var(--mu)' }}>{a.date !== today && fmtDate(a.date) + ' · '}{timeOfInstant(a.occurred_at)}</span>
           <button className="ib" aria-label={`Corrigir registro de ${a.location}`} onClick={() => setEdit(a)}>✎</button>
         </div>
       ))}
