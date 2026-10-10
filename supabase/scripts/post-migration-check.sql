@@ -49,7 +49,7 @@ begin
     -- Cães (migration 020)
     ('dogs','food_g_day'), ('dog_health','next_date'), ('puppy_accidents','notes'),
     -- Meu dia (migration 021)
-    ('personal_settings','share'), ('personal_logs','kind'), ('personal_meds','times'), ('daily_checkins','thanks'), ('weekly_meetings','agreements'), ('couple_challenges','goal'), ('challenge_marks','date'), ('push_subscriptions','quiet_start'), ('push_log','ref'), ('telegram_pending','actions')
+    ('personal_settings','share'), ('personal_logs','kind'), ('personal_meds','times'), ('daily_checkins','thanks'), ('weekly_meetings','agreements'), ('couple_challenges','goal'), ('challenge_marks','date'), ('push_subscriptions','quiet_start'), ('push_log','ref'), ('telegram_pending','actions'), ('personal_quits','started_on')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,

@@ -1437,12 +1437,14 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {screen==='rotinas'&&<div className="scr">
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
           <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],['meu','Meu dia']]}/>
-          {rotView==='meu'?(me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds}
+          {rotView==='meu'?(me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady}
             onAdd={(k,v,d)=>mdAdd(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
             onRemove={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'apagar registro'));throw e})}
             onSaveSettings={x=>mdApi.saveSettings(householdId,me,x).then(md.reload).then(()=>showToast('Salvo')).catch(e=>{showError(toNinhoError(e,'salvar'));throw e})}
             onSaveMed={m=>mdApi.saveMed(householdId,me,m).then(md.reload).then(()=>showToast('Remédio salvo')).catch(e=>{showError(toNinhoError(e,'salvar remédio'));throw e})}
-            onStopMed={m=>mdApi.stopMed(m.id).then(md.reload).then(()=>showToast('Remédio encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar remédio'));throw e})}/>
+            onStopMed={m=>mdApi.stopMed(m.id).then(md.reload).then(()=>showToast('Remédio encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar remédio'));throw e})}
+            onSaveQuit={q=>mdApi.saveQuit(householdId,me,q).then(md.reload).then(()=>showToast(q.id?'Salvo':'Contador começou hoje')).catch(e=>{showError(toNinhoError(e,'salvar hábito'));throw e})}
+            onStopQuit={q=>mdApi.stopQuit(q.id).then(md.reload).then(()=>showToast('Encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar hábito'));throw e})}/>
             :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>)
           :rotView==='rotinas'?<>
             {!rot.routinesOk&&rot.ready?<div className="card empty"><span className="empty-icon">🔁</span>Rotinas com passos precisam da atualização do banco (migration 014).</div>

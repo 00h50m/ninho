@@ -12,7 +12,7 @@ begin
   foreach t in array array[
     'households','profiles','tasks','task_completions','dogs','dog_routines','dog_completions','weekly_settings',
     'weekly_meetings','xp_history','puppy_accidents','push_subscriptions','shopping_items','maintenance_items',
-    'maintenance_log','task_skips','telegram_links','household_setup','onboarding_progress','routines','routine_steps','daily_checkins','household_days','routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs','routine_templates','sprints','house_events','dog_health','personal_settings','personal_logs','personal_meds','couple_challenges','challenge_marks'] loop
+    'maintenance_log','task_skips','telegram_links','household_setup','onboarding_progress','routines','routine_steps','daily_checkins','household_days','routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs','routine_templates','sprints','house_events','dog_health','personal_settings','personal_logs','personal_meds','personal_quits','couple_challenges','challenge_marks'] loop
     if to_regclass('public.' || t) is null then continue; end if;
     execute format('drop policy if exists "household_member" on public.%I', t);
     execute format('drop policy if exists "household_member_update" on public.%I', t);
