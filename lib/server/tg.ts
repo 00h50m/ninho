@@ -2,6 +2,7 @@
 import type { TgCall, BotDeps } from './telegram'
 import { createDb } from './push'
 import { weeklyTips } from './ai'
+import { interpret } from './telegramAi'
 
 export function telegramConfigured(env = process.env): boolean {
   return !!env.TELEGRAM_BOT_TOKEN && !!env.TELEGRAM_WEBHOOK_SECRET && !!env.NEXT_PUBLIC_SUPABASE_URL && !!env.SUPABASE_SERVICE_ROLE_KEY
@@ -30,6 +31,8 @@ export function createBotDeps(env = process.env): BotDeps {
       const r = await weeklyTips(db, householdId, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL })
       return r.ok === true ? { ok: true as const, text: r.text } : { ok: false as const, message: (r as { message: string }).message }
     },
+    // Texto livre: só com a chave da IA configurada (sem ela, o bot entende só comandos)
+    ...(env.ANTHROPIC_API_KEY ? { understand: (link, text) => interpret(db, link, text, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }) } : {}),
   }
 }
 

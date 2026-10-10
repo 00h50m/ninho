@@ -13,6 +13,8 @@ import { hhmm } from '@/lib/dates'
 import { dueForPerson, type MaintenanceItem } from '@/lib/maintenance'
 import { SHOP_CATS, guessCategory, normalize, parseEntry } from '@/lib/shopping'
 import { loadHousehold, morningPayloads, must, weeklyPayload } from './notify'
+import { execute as executeAi, type Understood } from './telegramAi'
+import type { AiAction } from '@/lib/telegramAi'
 
 export type TgResponse = { ok: boolean, result?: any, description?: string, error_code?: number }
 export type TgCall = (method: string, body: Record<string, unknown>) => Promise<TgResponse>
@@ -23,6 +25,8 @@ export interface BotDeps {
   now?: Date
   /** Sugestões da IA (opcional: sem ANTHROPIC_API_KEY o comando /dicas avisa). */
   tips?: (householdId: string) => Promise<{ ok: true, text: string } | { ok: false, message: string }>
+  /** Texto livre interpretado pela IA (opcional: sem a chave, o bot só entende comandos). */
+  understand?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<Understood>
 }
 
 interface Link { id: string, household_id: string, who: Who, chat_id: number, morning: boolean, weekly: boolean, active: boolean }
@@ -57,7 +61,9 @@ export function menuCommand(text: string): string | null {
 export const ADD_PROMPT = 'O que vai na lista? Mande os itens separados por vírgula (ex.: leite, 2 kg arroz, café).'
 
 export const HELP = [
-  'Use o menu aqui embaixo ou os comandos:',
+  'Escreva do seu jeito, por exemplo: “comprei leite e café”, “a Zelda tomou a V10 hoje”, “lembra a Sabrina de pagar a internet sexta”, “bebi um copo de água”, “lavei a louça”. Eu mostro o que entendi e você confirma.',
+  '',
+  'Ou use o menu aqui embaixo e os comandos:',
   '/hoje — o que é seu hoje (com botões para concluir)',
   '/feito louça — conclui uma tarefa pelo nome',
   '/compras — a lista de compras',
@@ -260,7 +266,50 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
     await send(deps, chatId, 'Pronto, esta conversa foi desligada do Ninho. Para voltar, gere um código no app.')
   } else if (cmd === '/ajuda' || cmd === '/help') await send(deps, chatId, HELP, { reply_markup: MENU })
   else if (text.startsWith('+')) await shoppingAdd(deps, link, text.slice(1))
+  else if (!cmd.startsWith('/') && deps.understand) await freeText(deps, link, text)
   else await send(deps, chatId, `Não entendi. ${HELP}`, { reply_markup: MENU })
+}
+
+// ── Texto livre (IA): entende, mostra e só grava depois do "Confirmar" ──
+
+const PENDING_MIN = 30
+
+async function freeText(deps: BotDeps, link: Link, text: string) {
+  await deps.tg('sendChatAction', { chat_id: link.chat_id, action: 'typing' })
+  let u: Understood
+  try { u = await deps.understand!(link, text) }
+  catch (e: any) { console.error('[ninho] telegram ia', String(e?.message || e).slice(0, 200)); u = { ok: false, message: 'Não consegui entender agora. Tente de novo ou use /ajuda.' } }
+  if (u.ok === false) { await send(deps, link.chat_id, u.message); return }
+  if (!u.actions.length) {
+    await send(deps, link.chat_id, u.reply || 'Não achei nada para registrar nessa mensagem. Exemplos: “comprei leite”, “a Zelda tomou a V10”, “bebi um copo de água”. Ou use /ajuda.')
+    return
+  }
+  const r = await deps.db.from('telegram_pending').insert({ link_id: link.id, household_id: link.household_id, actions: u.actions }).select('id').single()
+  if (r.error) { await send(deps, link.chat_id, 'Não consegui guardar o pedido agora. Tente de novo em instantes.'); return }
+  const id = (r.data as any).id as string
+  await send(deps, link.chat_id, ['Entendi assim:', ...u.lines.map(l => `• ${l}`), u.reply ? `\n${u.reply}` : '', '', 'Posso registrar?'].filter((x, i, a) => x !== '' || a[i - 1] !== '').join('\n'), {
+    reply_markup: { inline_keyboard: [[{ text: '✅ Confirmar', callback_data: `ok:${id}` }, { text: '✖ Cancelar', callback_data: `no:${id}` }]] },
+  })
+}
+
+async function decide(deps: BotDeps, cq: any, link: Link, confirm: boolean, id: string) {
+  const chatId = link.chat_id, msgId = cq.message?.message_id
+  // Muda de "aberto" para a decisão numa única gravação: dois toques não gravam duas vezes
+  const since = new Date((deps.now ?? new Date()).getTime() - PENDING_MIN * 60000).toISOString()
+  const r = await deps.db.from('telegram_pending').update({ status: confirm ? 'done' : 'cancelled', decided_at: new Date().toISOString() })
+    .eq('id', id).eq('link_id', link.id).eq('status', 'open').gte('created_at', since).select('actions').maybeSingle()
+  const row = r.data as { actions: AiAction[] } | null
+  await deps.tg('answerCallbackQuery', { callback_query_id: cq.id, ...(row ? {} : { text: 'Esse pedido já foi decidido ou expirou.' }) })
+  if (!row) { if (msgId) await deps.tg('editMessageReplyMarkup', { chat_id: chatId, message_id: msgId, reply_markup: { inline_keyboard: [] } }); return }
+  const base = String(cq.message?.text || '').replace(/\n*Posso registrar\?$/, '')
+  if (!confirm) {
+    if (msgId) await deps.tg('editMessageText', { chat_id: chatId, message_id: msgId, text: `${base}\n\n✖ Cancelado. Nada foi registrado.` })
+    return
+  }
+  const results = await executeAi(deps.db, link, row.actions, deps.now ?? new Date(), completeItem)
+  const text = `${base}\n\n✅ Feito:\n${results.map(x => `• ${x}`).join('\n')}`
+  if (msgId) await deps.tg('editMessageText', { chat_id: chatId, message_id: msgId, text })
+  else await send(deps, chatId, text)
 }
 
 async function onCallback(deps: BotDeps, cq: any, date: string) {
@@ -273,6 +322,8 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
     await sendToday(deps, link, date)
     return
   }
+  const dm = data.match(/^(ok|no):([0-9a-f-]{36})$/)
+  if (dm) { await decide(deps, cq, link, dm[1] === 'ok', dm[2]); return }
   const m = data.match(/^([tdm]):([0-9a-f-]{36})$/)
   if (!m) { await deps.tg('answerCallbackQuery', { callback_query_id: cq.id }); return }
   const msgId = cq.message?.message_id

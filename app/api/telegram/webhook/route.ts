@@ -7,6 +7,8 @@ import { createBotDeps, telegramConfigured, webhookAuthorized } from '@/lib/serv
 export const dynamic = 'force-dynamic'
 export const fetchCache = 'force-no-store'
 export const runtime = 'nodejs'
+// Texto livre chama a IA (alguns segundos): dá folga além do padrão
+export const maxDuration = 60
 
 export async function POST(req: Request) {
   if (!telegramConfigured()) return NextResponse.json({ error: 'bot não configurado' }, { status: 503 })
