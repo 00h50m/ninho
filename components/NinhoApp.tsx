@@ -1373,7 +1373,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {personCard('s')}
             <aside className="side">
               {week.available&&me&&showCard('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
-              {md.available&&me&&showCard('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} today={today} nowHM={nowHM}
+              {md.available&&me&&showCard('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} profiles={md.profiles} today={today} nowHM={nowHM}
                 onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>{go('rotinas');setRotView('meu')}}/>}
               {setup?.available&&showCard('rotina')&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
                 turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
@@ -1437,14 +1437,17 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {screen==='rotinas'&&<div className="scr">
           <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
           <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],['meu','Meu dia']]}/>
-          {rotView==='meu'?(me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady}
+          {rotView==='meu'?(me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady}
             onAdd={(k,v,d)=>mdAdd(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
             onRemove={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'apagar registro'));throw e})}
             onSaveSettings={x=>mdApi.saveSettings(householdId,me,x).then(md.reload).then(()=>showToast('Salvo')).catch(e=>{showError(toNinhoError(e,'salvar'));throw e})}
             onSaveMed={m=>mdApi.saveMed(householdId,me,m).then(md.reload).then(()=>showToast('Remédio salvo')).catch(e=>{showError(toNinhoError(e,'salvar remédio'));throw e})}
             onStopMed={m=>mdApi.stopMed(m.id).then(md.reload).then(()=>showToast('Remédio encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar remédio'));throw e})}
             onSaveQuit={q=>mdApi.saveQuit(householdId,me,q).then(md.reload).then(()=>showToast(q.id?'Salvo':'Contador começou hoje')).catch(e=>{showError(toNinhoError(e,'salvar hábito'));throw e})}
-            onStopQuit={q=>mdApi.stopQuit(q.id).then(md.reload).then(()=>showToast('Encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar hábito'));throw e})}/>
+            onStopQuit={q=>mdApi.stopQuit(q.id).then(md.reload).then(()=>showToast('Encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar hábito'));throw e})}
+            onSaveProfile={x=>mdApi.saveFoodProfile(householdId,me,x).then(md.reload).then(()=>showToast('Meta salva')).catch(e=>{showError(toNinhoError(e,'salvar perfil'));throw e})}
+            onSaveFood={f=>mdApi.saveFood(householdId,me,f).then(md.reload).then(()=>showToast('Alimento salvo')).catch(e=>{showError(toNinhoError(e,'salvar alimento'));throw e})}
+            onStopFood={f=>mdApi.stopFood(f.id).then(md.reload).then(()=>showToast('Alimento removido')).catch(e=>{showError(toNinhoError(e,'remover alimento'));throw e})}/>
             :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>)
           :rotView==='rotinas'?<>
             {!rot.routinesOk&&rot.ready?<div className="card empty"><span className="empty-icon">🔁</span>Rotinas com passos precisam da atualização do banco (migration 014).</div>

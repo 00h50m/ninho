@@ -952,6 +952,25 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .qt-t{flex:1 1 140px;min-width:0;display:flex;flex-direction:column;font-size:13.5px}
 .qt-t small{color:var(--sub);font-size:12px;margin-top:2px;overflow-wrap:anywhere}
 .qt-r{font-style:italic}
+.al-big{display:flex;flex-direction:column;gap:2px;margin:2px 0 10px}
+.al-big b{font-size:26px;font-weight:600;letter-spacing:-.02em;color:var(--tx)}
+.al-big span{font-size:13px;color:var(--sub)}
+.al-stats{margin-top:12px}
+.sl-stats dd b.al-mac{font-size:15px}
+.al-warn{color:var(--cor-tx);margin-top:6px}
+.al-prev{font-size:13.5px;margin:10px 0 4px;color:var(--mu)}
+.al-opts{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(200px,100%),1fr));gap:6px}
+.al-opts .opt span{display:block}
+.al-text{resize:vertical;min-height:58px;font:inherit}
+.al-items{list-style:none;margin:10px 0 0;padding:0}
+.al-item{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.al-item:last-child{border-bottom:none}
+.al-item>.fi:first-child{flex:1 1 180px;min-width:0}
+.al-q{width:76px;flex:0 0 auto}
+.al-u{width:auto;flex:0 1 140px;min-width:0}
+.al-k{font-size:12.5px;color:var(--mu);flex:1 0 auto}
+.al-miss{font-size:12.5px;color:var(--cor-tx);flex:1 1 160px}
+.al-proj{list-style:none;margin:8px 0 10px;padding:0;font-size:13.5px;color:var(--mu);display:flex;flex-direction:column;gap:4px}
 .md-card .rt-step .mono{margin-left:auto;font-size:12px;color:var(--sub)}
 .md-card .rt-step .mono.md-late{color:var(--cor-tx)}
 .md-other-g{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13.5px}
@@ -974,6 +993,8 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .lc-grid{stroke:var(--bd);stroke-width:1}
 .lc-ax{font-size:11px;fill:var(--sub);font-family:'DM Mono',monospace}
 .lc-line{fill:none;stroke:var(--pri);stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.lc-proj{stroke:var(--pri);stroke-width:2;stroke-dasharray:5 5;opacity:.7}
+.lc-goal{stroke:var(--sub);stroke-width:1.5;stroke-dasharray:3 4}
 .lc-hit{fill:transparent;cursor:pointer}
 .lc-dot{fill:var(--pri);stroke:var(--sf);stroke-width:2;transition:r .12s}
 .lc-dot.on{r:6}

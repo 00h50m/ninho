@@ -10,7 +10,7 @@ import type { Who } from '@/lib/types'
 import type { PKind, PLog } from '@/lib/meudia'
 
 export function useMeuDia(householdId: string, today: string) {
-  const [data, setData] = useState<api.MeuDiaData>({ available: false, settings: [], logs: [], meds: [], quits: [] })
+  const [data, setData] = useState<api.MeuDiaData>({ available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [] })
   const from = addDays(today, -180)
   const reload = useCallback(async () => {
     try { setData(await api.loadMeuDia(householdId, from)) } catch (e: any) { logError('carregar Meu dia', e); setData(d => d.available ? d : { ...d, reason: [e?.code, e?.message].filter(Boolean).join(' · ') || 'erro ao carregar' }) }
@@ -23,6 +23,8 @@ export function useMeuDia(householdId: string, today: string) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_logs', filter: f }, () => { reload() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_settings', filter: f }, () => { reload() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_quits', filter: f }, () => { reload() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_food_profile', filter: f }, () => { reload() })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_foods', filter: f }, () => { reload() })
       .subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [householdId, data.available, reload])

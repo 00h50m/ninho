@@ -26,6 +26,9 @@ create index if not exists personal_quits_who on public.personal_quits (househol
 do $$
 declare c text;
 begin
+  -- já aceita 'parar' (esta ou uma migration mais nova)? nada a fazer
+  if exists (select 1 from pg_constraint where conrelid = 'public.personal_logs'::regclass and contype = 'c'
+             and pg_get_constraintdef(oid) like '%kind%' and pg_get_constraintdef(oid) like '%''parar''%') then return; end if;
   for c in select conname from pg_constraint
            where conrelid = 'public.personal_logs'::regclass and contype = 'c'
              and pg_get_constraintdef(oid) like '%kind%' and pg_get_constraintdef(oid) like '%agua%'
