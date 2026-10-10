@@ -1,16 +1,18 @@
 // Meu dia: água, sono, autocuidado, remédio pessoal, treinos e evolução física.
-// Puro (sem React/Supabase). Sem dieta e sem calorias.
-import { addDays, weekStartOf } from './dates'
+// Puro (sem React/Supabase).
+import { addDays, dayNum, weekStartOf } from './dates'
 import type { Who } from './types'
 
-export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo'
+export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo' | 'parar'
 export const PKINDS: Array<[PKind, string, string]> = [
   ['agua', '💧', 'Água'], ['sono', '😴', 'Sono'], ['autocuidado', '🌿', 'Autocuidado'],
   ['remedio', '💊', 'Remédios'], ['treino', '🏋️', 'Treinos'], ['corpo', '📏', 'Evolução física'],
+  ['parar', '🚭', 'Parar de…'],
 ]
 
 export interface PSettings { who: Who, water_goal_ml: number, cup_ml: number, sleep_goal_h: number, share: Partial<Record<PKind, boolean>>, selfcare: string[] }
 export interface PLog { id: string, who: Who, date: string, kind: PKind, value: number | null, data: Record<string, any>, created_at?: string }
+export interface PQuit { id: string, who: Who, title: string, reason: string | null, started_on: string, active: boolean }
 export interface PMed { id: string, who: Who, name: string, dose: string | null, times: string[], active: boolean }
 
 export const DEFAULT_SETTINGS = (who: Who): PSettings => ({ who, water_goal_ml: 2000, cup_ml: 250, sleep_goal_h: 8, share: {}, selfcare: ['Pausa de 5 minutos', 'Alongar', 'Tomar sol', 'Skincare', 'Ler 10 minutos'] })
@@ -102,4 +104,37 @@ export function bodySeries(logs: PLog[], who: Who, field: string): Array<{ date:
 }
 export function change(series: Array<{ v: number }>): number | null {
   return series.length >= 2 ? Math.round((series[series.length - 1].v - series[0].v) * 10) / 10 : null
+}
+
+// ── Sono: painel da semana ───────────────────────────────────────────
+export interface SleepWeek {
+  days: Array<{ date: string, h: number | null }>   // últimos 7 dias (mais antigo → hoje)
+  avg: number | null, best: { date: string, h: number } | null
+  onGoal: number        // noites na meta seguidas (hoje conta se já registrou; senão desde ontem)
+  debt: number          // horas que faltaram para a meta nas noites registradas da semana
+  logged: number
+}
+const sleepOn = (logs: PLog[], who: Who, date: string) => { const l = mine(logs, who, 'sono').find(x => x.date === date && x.value != null); return l ? Number(l.value) : null }
+export function sleepWeek(logs: PLog[], who: Who, today: string, goal: number): SleepWeek {
+  const days = Array.from({ length: 7 }, (_, i) => { const date = addDays(today, i - 6); return { date, h: sleepOn(logs, who, date) } })
+  const got = days.filter(d => d.h != null) as Array<{ date: string, h: number }>
+  const avg = got.length ? Math.round(got.reduce((a, d) => a + d.h, 0) / got.length * 10) / 10 : null
+  const best = got.reduce<{ date: string, h: number } | null>((b, d) => !b || d.h > b.h ? d : b, null)
+  let d = sleepOn(logs, who, today) != null ? today : addDays(today, -1), onGoal = 0
+  for (let i = 0; i < 400; i++) { const h = sleepOn(logs, who, d); if (h == null || h < goal) break; onGoal++; d = addDays(d, -1) }
+  const debt = Math.round(got.reduce((a, x) => a + Math.max(0, goal - x.h), 0) * 4) / 4
+  return { days, avg, best, onGoal, debt, logged: got.length }
+}
+
+// ── "Parar de…" ─────────────────────────────────────────────────────
+export interface QuitStats { days: number, record: number, since: string, relapses30: number, lastRelapse: string | null }
+/** Dias desde a última recaída (ou desde o começo) e o maior trecho já feito. */
+export function quitStats(q: PQuit, logs: PLog[], today: string): QuitStats {
+  const rel = mine(logs, q.who, 'parar').filter(l => l.data?.quit_id === q.id && l.date >= q.started_on && l.date <= today).map(l => l.date).sort()
+  const marks = [q.started_on, ...rel]
+  const since = marks[marks.length - 1]
+  const days = Math.max(0, dayNum(today) - dayNum(since))
+  let record = days
+  for (let i = 1; i < marks.length; i++) record = Math.max(record, dayNum(marks[i]) - dayNum(marks[i - 1]))
+  return { days, record, since, relapses30: rel.filter(d => d > addDays(today, -30)).length, lastRelapse: rel.length ? rel[rel.length - 1] : null }
 }

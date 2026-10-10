@@ -71,4 +71,15 @@ begin
     using (who = public.ninho_my_who(household_id) or (public.ninho_is_member(household_id) and public.ninho_personal_shared(household_id, who, 'remedio')));
   create policy "personal_write" on public.personal_meds for all to authenticated
     using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
+  -- "Parar de…" (025)
+  if to_regclass('public.personal_quits') is not null then
+    drop policy if exists "allow_all_auth" on public.personal_quits;
+    drop policy if exists "household_member" on public.personal_quits;
+    drop policy if exists "personal_read" on public.personal_quits;
+    drop policy if exists "personal_write" on public.personal_quits;
+    create policy "personal_read" on public.personal_quits for select to authenticated
+      using (who = public.ninho_my_who(household_id) or (public.ninho_is_member(household_id) and public.ninho_personal_shared(household_id, who, 'parar')));
+    create policy "personal_write" on public.personal_quits for all to authenticated
+      using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
+  end if;
 end $$;

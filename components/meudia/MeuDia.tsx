@@ -7,9 +7,10 @@ import { Sheet } from '@/components/ui/Sheet'
 import { fmtDate } from '@/lib/dates'
 import {
   BODY_FIELDS, DEFAULT_SETTINGS, PKINDS, WORKOUT_TYPES, bodySeries, change, dosesToday, exerciseNames, loadSeries, selfcareDone,
-  sleepAvg, sleepHours, waterOn, waterStreak, workoutLabel, workoutsWeek, type Exercise, type PKind, type PLog, type PMed, type PSettings,
+  quitStats, sleepHours, sleepWeek, waterOn, waterStreak, workoutLabel, workoutsWeek, type Exercise, type PKind, type PLog, type PMed, type PQuit, type PSettings,
 } from '@/lib/meudia'
 import { LineChart } from './LineChart'
+import { SleepBars } from './SleepBars'
 
 const first = (n: string) => (n || '').split(' ')[0]
 const fmtN = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
@@ -17,12 +18,14 @@ type Tab = 'hoje' | 'treinos' | 'corpo' | 'ajustes'
 
 export interface MeuDiaProps {
   available: boolean, reason?: string, me: Who, names: Names, today: string, nowHM: string
-  settings: PSettings[], logs: PLog[], meds: PMed[]
+  settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
   onSaveSettings: (s: Partial<Omit<PSettings, 'who'>>) => Promise<void>
   onSaveMed: (m: { id?: string, name: string, dose: string | null, times: string[] }) => Promise<void>
   onStopMed: (m: PMed) => Promise<void>
+  onSaveQuit: (q: { id?: string, title: string, reason: string | null }) => Promise<void>
+  onStopQuit: (q: PQuit) => Promise<void>
 }
 
 export function MeuDiaView(p: MeuDiaProps) {
@@ -49,12 +52,9 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
   const { me, today, logs, s } = p
   const water = waterOn(logs, me, today), pct = Math.min(100, Math.round(water / s.water_goal_ml * 100))
   const streak = waterStreak(logs, me, s.water_goal_ml, today)
-  const sleepToday = logs.find(l => l.who === me && l.kind === 'sono' && l.date === today)
-  const avg = sleepAvg(logs, me, today)
   const done = selfcareDone(logs, me, today)
   const doses = dosesToday(p.meds, logs, me, today, p.nowHM)
   const wk = workoutsWeek(logs, me, today)
-  const [bed, setBed] = useState('23:00'), [wake, setWake] = useState('07:00'), [quality, setQuality] = useState<'boa' | 'ok' | 'ruim'>('ok')
   const [workout, setWorkout] = useState(false)
   const lastCup = [...logs].reverse().find(l => l.who === me && l.kind === 'agua' && l.date === today)
   const run = (f: () => Promise<void>) => { f().catch(() => {}) }
@@ -75,22 +75,7 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           </div>
         </section>
 
-        <section className="card md-card" aria-labelledby="md-sono">
-          <div className="slbl" id="md-sono">😴 Sono {avg != null && <span className="mono" style={{ color: 'var(--faint)' }}>média 7 dias {fmtN(avg)} h</span>}</div>
-          {sleepToday ? <div className="md-sleep"><b>{fmtN(Number(sleepToday.value))} h</b> · {sleepToday.data.bed}–{sleepToday.data.wake} · {sleepToday.data.quality === 'boa' ? '😊 boa' : sleepToday.data.quality === 'ruim' ? '😣 ruim' : '😐 ok'}
-            {Number(sleepToday.value) < s.sleep_goal_h && <span className="row-s"> (meta {fmtN(s.sleep_goal_h)} h)</span>}
-            <button className="lnk-inline" onClick={() => run(() => p.onRemove(sleepToday))}>refazer</button></div>
-          : <>
-            <div className="onb-row">
-              <label className="onb-f"><span>Dormi</span><input className="fi" type="time" value={bed} onChange={e => setBed(e.target.value)}/></label>
-              <label className="onb-f"><span>Acordei</span><input className="fi" type="time" value={wake} onChange={e => setWake(e.target.value)}/></label>
-            </div>
-            <div className="onb-days" role="radiogroup" aria-label="Qualidade do sono">
-              {([['boa', '😊 Boa'], ['ok', '😐 Ok'], ['ruim', '😣 Ruim']] as const).map(([k, l]) => <button key={k} role="radio" aria-checked={quality === k} className={`onb-day wide ${quality === k ? 'on' : ''}`} onClick={() => setQuality(k)}>{l}</button>)}
-            </div>
-            <button className="btn btn-s" style={{ marginTop: 8 }} disabled={!bed || !wake} onClick={() => run(() => p.onAdd('sono', sleepHours(bed, wake), { bed, wake, quality }))}>Registrar {fmtN(sleepHours(bed || '00:00', wake || '00:00'))} h</button>
-          </>}
-        </section>
+        <SleepCard {...p} run={run}/>
 
         <section className="card md-card" aria-labelledby="md-cuidado">
           <div className="slbl" id="md-cuidado">🌿 Autocuidado <span className="mono" style={{ color: 'var(--faint)' }}>{done.size}/{s.selfcare.length}</span></div>
@@ -117,6 +102,8 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           <div className="md-water"><b className="mono">{wk.count}</b><span>treino{wk.count === 1 ? '' : 's'} nesta semana · {wk.minutes} min</span></div>
           <button className="btn btn-s" onClick={() => setWorkout(true)}>+ Registrar treino</button>
         </section>
+
+        {p.quitsReady !== false && <QuitCard {...p} run={run}/>}
       </div>
 
       <section className="card md-other" aria-labelledby="md-outra">
@@ -128,10 +115,98 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           {sh.remedio && (() => { const d = dosesToday(p.meds, logs, p.other, today, p.nowHM); return <span>💊 {d.filter(x => x.taken).length}/{d.length} doses</span> })()}
           {sh.treino && (() => { const w = workoutsWeek(logs, p.other, today); return <span>🏋️ {w.count} treino(s) na semana</span> })()}
           {sh.corpo && <span>📏 evolução compartilhada</span>}
+          {sh.parar && p.quits.filter(q => q.who === p.other).map(q => <span key={q.id}>🚭 {q.title}: {quitStats(q, logs, today).days} dia(s)</span>)}
         </div>}
       </section>
       {workout && <WorkoutSheet {...p} onClose={() => setWorkout(false)}/>}
     </>
+  )
+}
+
+function SleepCard(p: MeuDiaProps & { s: PSettings, run: (f: () => Promise<void>) => void }) {
+  const { me, today, logs, s, run } = p
+  const [bed, setBed] = useState('23:00'), [wake, setWake] = useState('07:00'), [quality, setQuality] = useState<'boa' | 'ok' | 'ruim'>('ok')
+  const night = logs.find(l => l.who === me && l.kind === 'sono' && l.date === today)
+  const w = sleepWeek(logs, me, today, s.sleep_goal_h)
+  const h = night ? Number(night.value) : 0, pct = Math.round(h / s.sleep_goal_h * 100)
+  const R = 34, C = 2 * Math.PI * R
+  return (
+    <section className="card md-card md-wide" aria-labelledby="md-sono">
+      <div className="slbl" id="md-sono">😴 Sono {w.onGoal > 0 && <span className="chip amber">🌙 {w.onGoal} noite{w.onGoal > 1 ? 's' : ''} na meta</span>}</div>
+      <div className="sl-top">
+        {night ? <div className="sl-night">
+          <svg className="sl-ring" viewBox="0 0 80 80" role="img" aria-label={`${fmtN(h)} horas, ${pct}% da meta de ${fmtN(s.sleep_goal_h)} h`}>
+            <circle className="sl-ring-bg" cx="40" cy="40" r={R}/>
+            <circle className="sl-ring-f" cx="40" cy="40" r={R} strokeDasharray={`${Math.min(1, h / s.sleep_goal_h) * C} ${C}`} transform="rotate(-90 40 40)"/>
+            <text x="40" y="40" textAnchor="middle" className="sl-ring-h">{fmtN(h)} h</text>
+            <text x="40" y="54" textAnchor="middle" className="sl-ring-p">{pct}%</text>
+          </svg>
+          <div className="sl-det">
+            <b>Noite de hoje</b>
+            <span className="mono">{night.data.bed}–{night.data.wake}</span>
+            <span>{night.data.quality === 'boa' ? '😊 boa' : night.data.quality === 'ruim' ? '😣 ruim' : '😐 ok'} · meta {fmtN(s.sleep_goal_h)} h</span>
+            <button className="lnk-inline" onClick={() => run(() => p.onRemove(night))}>refazer</button>
+          </div>
+        </div> : <div className="sl-form">
+          <div className="onb-q" style={{ marginTop: 0 }}>Registrar minha noite</div>
+          <div className="onb-row">
+            <label className="onb-f"><span>Dormi</span><input className="fi" type="time" value={bed} onChange={e => setBed(e.target.value)}/></label>
+            <label className="onb-f"><span>Acordei</span><input className="fi" type="time" value={wake} onChange={e => setWake(e.target.value)}/></label>
+          </div>
+          <div className="onb-days" role="radiogroup" aria-label="Qualidade do sono">
+            {([['boa', '😊 Boa'], ['ok', '😐 Ok'], ['ruim', '😣 Ruim']] as const).map(([k, l]) => <button key={k} role="radio" aria-checked={quality === k} className={`onb-day wide ${quality === k ? 'on' : ''}`} onClick={() => setQuality(k)}>{l}</button>)}
+          </div>
+          <button className="btn btn-s" style={{ marginTop: 8 }} disabled={!bed || !wake} onClick={() => run(() => p.onAdd('sono', sleepHours(bed, wake), { bed, wake, quality }))}>Registrar {fmtN(sleepHours(bed || '00:00', wake || '00:00'))} h</button>
+        </div>}
+        <dl className="sl-stats">
+          <div><dt>Média da semana</dt><dd><b className="mono">{w.avg != null ? `${fmtN(w.avg)} h` : '—'}</b></dd></div>
+          <div><dt>Melhor noite</dt><dd><b className="mono">{w.best ? `${fmtN(w.best.h)} h` : '—'}</b>{w.best && <small>{w.best.date === today ? 'hoje' : fmtDate(w.best.date)}</small>}</dd></div>
+          <div><dt>Noites na meta</dt><dd><b className="mono">{w.onGoal}</b><small>seguidas</small></dd></div>
+          <div><dt>Dívida de sono</dt><dd><b className="mono">{w.debt > 0 ? `${fmtN(w.debt)} h` : '0 h'}</b><small>na semana</small></dd></div>
+        </dl>
+      </div>
+      {w.logged > 0 ? <SleepBars days={w.days} goal={s.sleep_goal_h} today={today}/> : <div className="lc-empty">Registre suas noites para ver a semana.</div>}
+      {w.debt >= 3 && <p className="row-s">A semana ficou curta de sono. Dormir um pouco mais cedo nas próximas noites ajuda a recuperar.</p>}
+    </section>
+  )
+}
+
+function QuitCard(p: MeuDiaProps & { run: (f: () => Promise<void>) => void }) {
+  const mine = p.quits.filter(q => q.who === p.me)
+  const [relapse, setRelapse] = useState<PQuit | null>(null)
+  return (
+    <section className="card md-card" aria-labelledby="md-parar">
+      <div className="slbl" id="md-parar">🚭 Parar de…</div>
+      {mine.length === 0 ? <div className="row-s">Quer largar algum hábito? Cadastre em “Metas e privacidade” e acompanhe os dias aqui.</div> :
+        <ul className="qt-list">{mine.map(q => {
+          const st = quitStats(q, p.logs, p.today)
+          return <li key={q.id} className="qt">
+            <div className="qt-n"><b className="mono">{st.days}</b><span>dia{st.days === 1 ? '' : 's'}</span></div>
+            <div className="qt-t">
+              <b>{q.title}</b>
+              <small>{st.record > st.days ? `Recorde: ${st.record} dias` : st.days > 0 ? 'Seu recorde é agora' : `Desde ${st.since === p.today ? 'hoje' : fmtDate(st.since)}`}{st.relapses30 > 0 ? ` · ${st.relapses30} recaída${st.relapses30 > 1 ? 's' : ''} em 30 dias` : ''}</small>
+              {q.reason && <small className="qt-r">“{q.reason}”</small>}
+            </div>
+            <button className="lnk-inline" onClick={() => setRelapse(q)}>Tive uma recaída</button>
+          </li>
+        })}</ul>}
+      {relapse && <RelapseSheet q={relapse} onClose={() => setRelapse(null)} onSave={note => p.onAdd('parar', null, { quit_id: relapse.id, title: relapse.title, note })}/>}
+    </section>
+  )
+}
+
+function RelapseSheet({ q, onClose, onSave }: { q: PQuit, onClose: () => void, onSave: (note: string | null) => Promise<void> }) {
+  const [note, setNote] = useState(''), [busy, setBusy] = useState(false)
+  async function save() {
+    setBusy(true)
+    try { await onSave(note.trim() || null); onClose() } catch { /* aviso já mostrado */ } finally { setBusy(false) }
+  }
+  return (
+    <Sheet title={`Recaída · ${q.title}`} onClose={onClose} footer={<button className="btn btn-p" disabled={busy} onClick={save}>{busy ? 'Salvando…' : 'Registrar e recomeçar'}</button>}>
+      <p className="row-s" style={{ marginBottom: 10 }}>Acontece. O contador recomeça hoje e o seu recorde continua guardado. Cada dia conta.</p>
+      <label className="onb-f"><span>O que aconteceu? (opcional)</span><input className="fi" value={note} maxLength={200} onChange={e => setNote(e.target.value)} placeholder="Ex.: dia estressante no trabalho"/></label>
+      <p className="row-s" style={{ marginTop: 6 }}>Se você compartilhar “Parar de…”, a outra pessoa vê os dias e as recaídas.</p>
+    </Sheet>
   )
 }
 
@@ -240,6 +315,8 @@ function Settings(p: MeuDiaProps & { s: PSettings }) {
   const [share, setShare] = useState(p.s.share), [care, setCare] = useState(p.s.selfcare), [newCare, setNewCare] = useState('')
   const [med, setMed] = useState<{ id?: string, name: string, dose: string, times: string }>({ name: '', dose: '', times: '08:00' })
   const myMeds = p.meds.filter(m => m.who === p.me)
+  const [quit, setQuit] = useState<{ id?: string, title: string, reason: string }>({ title: '', reason: '' })
+  const myQuits = p.quits.filter(q => q.who === p.me)
   const other: Who = p.me === 'g' ? 's' : 'g'
   const save = () => p.onSaveSettings({
     water_goal_ml: Math.min(8000, Math.max(250, Number(goal) || 2000)), cup_ml: Math.min(1500, Math.max(50, Number(cup) || 250)),
@@ -278,6 +355,18 @@ function Settings(p: MeuDiaProps & { s: PSettings }) {
         </div>
         <button className="btn btn-s" disabled={!med.name.trim()} onClick={() => p.onSaveMed({ id: med.id, name: med.name, dose: med.dose || null, times: med.times.split(/[,\s]+/).map(t => t.trim()).filter(t => /^([01]\d|2[0-3]):[0-5]\d$/.test(t)) }).then(() => setMed({ name: '', dose: '', times: '08:00' })).catch(() => {})}>{med.id ? 'Salvar remédio' : '+ Cadastrar'}</button>
       </section>
+      {p.quitsReady !== false && <section className="card" aria-labelledby="md-quits">
+        <div className="slbl" id="md-quits">🚭 Parar de…</div>
+        <p className="row-s" style={{ marginBottom: 8 }}>Um hábito que você quer largar. O contador começa hoje; se tiver uma recaída, ele recomeça e o recorde fica.</p>
+        {myQuits.map(q => <div key={q.id} className="md-row"><span className="md-t"><b>{q.title}</b><small>desde {fmtDate(q.started_on)}{q.reason ? ` · ${q.reason}` : ''}</small></span>
+          <button className="lnk-inline" onClick={() => setQuit({ id: q.id, title: q.title, reason: q.reason || '' })}>editar</button>
+          <button className="lnk-inline" onClick={() => { if (confirm(`Encerrar “${q.title}”? O histórico fica.`)) p.onStopQuit(q).catch(() => {}) }}>encerrar</button></div>)}
+        <div className="onb-row" style={{ marginTop: 8 }}>
+          <label className="onb-f"><span>Parar de</span><input className="fi" value={quit.title} maxLength={60} onChange={e => setQuit(x => ({ ...x, title: e.target.value }))} placeholder="Refrigerante"/></label>
+          <label className="onb-f"><span>Por quê? (opcional)</span><input className="fi" value={quit.reason} maxLength={200} onChange={e => setQuit(x => ({ ...x, reason: e.target.value }))} placeholder="Dormir melhor"/></label>
+        </div>
+        <button className="btn btn-s" disabled={!quit.title.trim()} onClick={() => p.onSaveQuit({ id: quit.id, title: quit.title, reason: quit.reason || null }).then(() => setQuit({ title: '', reason: '' })).catch(() => {})}>{quit.id ? 'Salvar' : '+ Começar'}</button>
+      </section>}
     </>
   )
 }

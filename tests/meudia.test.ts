@@ -57,3 +57,32 @@ describe('treinos e evolução', () => {
     expect(change(bodySeries(b, 'g', 'weight'))).toBe(-2)
   })
 })
+
+import { quitStats, sleepWeek, type PQuit } from '@/lib/meudia'
+describe('sono: painel da semana', () => {
+  const S = (date: string, h: number) => ({ id: date, who: 'g' as const, date, kind: 'sono' as const, value: h, data: {} })
+  const T = '2026-10-10'
+  it('média, melhor noite, noites na meta seguidas e dívida', () => {
+    const logs = [S('2026-10-04', 6), S('2026-10-06', 7.5), S('2026-10-07', 8), S('2026-10-08', 8.5), S('2026-10-09', 8), S('2026-10-10', 8.25)]
+    const w = sleepWeek(logs, 'g', T, 8)
+    expect(w.days.map(d => d.h)).toEqual([6, null, 7.5, 8, 8.5, 8, 8.25])
+    expect(w.avg).toBe(7.7); expect(w.best).toEqual({ date: '2026-10-08', h: 8.5 })
+    expect(w.onGoal).toBe(4); expect(w.debt).toBe(2.5); expect(w.logged).toBe(6)
+  })
+  it('hoje sem registro: a sequência conta até ontem; sem dados não quebra', () => {
+    expect(sleepWeek([S('2026-10-09', 9)], 'g', T, 8).onGoal).toBe(1)
+    expect(sleepWeek([], 'g', T, 8)).toEqual({ days: expect.any(Array), avg: null, best: null, onGoal: 0, debt: 0, logged: 0 })
+  })
+})
+
+describe('"Parar de…"', () => {
+  const q: PQuit = { id: 'q1', who: 'g', title: 'Refrigerante', reason: null, started_on: '2026-09-01', active: true }
+  const R = (date: string, quit = 'q1') => ({ id: date + quit, who: 'g' as const, date, kind: 'parar' as const, value: null, data: { quit_id: quit } })
+  it('sem recaída: dias desde o começo', () => {
+    expect(quitStats(q, [], '2026-09-11')).toEqual({ days: 10, record: 10, since: '2026-09-01', relapses30: 0, lastRelapse: null })
+  })
+  it('recaída recomeça o contador e o recorde fica', () => {
+    const s = quitStats(q, [R('2026-09-21'), R('2026-09-25'), R('2026-09-23', 'outro')], '2026-10-01')
+    expect(s.days).toBe(6); expect(s.record).toBe(20); expect(s.since).toBe('2026-09-25'); expect(s.relapses30).toBe(2); expect(s.lastRelapse).toBe('2026-09-25')
+  })
+})
