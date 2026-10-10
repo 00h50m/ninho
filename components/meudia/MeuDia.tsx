@@ -11,14 +11,17 @@ import {
 } from '@/lib/meudia'
 import { LineChart } from './LineChart'
 import { SleepBars } from './SleepBars'
+import { FoodTab, foodLine } from './Alimentacao'
+import type { CustomFood, FoodProfile } from '@/lib/nutricao'
 
 const first = (n: string) => (n || '').split(' ')[0]
 const fmtN = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
-type Tab = 'hoje' | 'treinos' | 'corpo' | 'ajustes'
+type Tab = 'hoje' | 'comida' | 'treinos' | 'corpo' | 'ajustes'
 
 export interface MeuDiaProps {
   available: boolean, reason?: string, me: Who, names: Names, today: string, nowHM: string
   settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean
+  profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
   onSaveSettings: (s: Partial<Omit<PSettings, 'who'>>) => Promise<void>
@@ -26,6 +29,9 @@ export interface MeuDiaProps {
   onStopMed: (m: PMed) => Promise<void>
   onSaveQuit: (q: { id?: string, title: string, reason: string | null }) => Promise<void>
   onStopQuit: (q: PQuit) => Promise<void>
+  onSaveProfile: (p: Omit<FoodProfile, 'who'>) => Promise<void>
+  onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
+  onStopFood: (f: CustomFood) => Promise<void>
 }
 
 export function MeuDiaView(p: MeuDiaProps) {
@@ -37,10 +43,11 @@ export function MeuDiaView(p: MeuDiaProps) {
   return (
     <div className="md">
       <div className="md-tabs" role="tablist" aria-label="Meu dia">
-        {([['hoje', 'Hoje'], ['treinos', 'Treinos'], ['corpo', 'Evolução'], ['ajustes', 'Metas e privacidade']] as Array<[Tab, string]>).map(([k, l]) =>
+        {([['hoje', 'Hoje'], ['comida', 'Alimentação'], ['treinos', 'Treinos'], ['corpo', 'Evolução'], ['ajustes', 'Metas e privacidade']] as Array<[Tab, string]>).map(([k, l]) =>
           <button key={k} role="tab" aria-selected={tab === k} className={`fc ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{l}</button>)}
       </div>
       {tab === 'hoje' && <Today {...p} s={mine} other={other} theirs={theirs}/>}
+      {tab === 'comida' && <FoodTab {...p}/>}
       {tab === 'treinos' && <Workouts {...p}/>}
       {tab === 'corpo' && <Body {...p}/>}
       {tab === 'ajustes' && <Settings {...p} s={mine}/>}
@@ -115,6 +122,7 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           {sh.remedio && (() => { const d = dosesToday(p.meds, logs, p.other, today, p.nowHM); return <span>💊 {d.filter(x => x.taken).length}/{d.length} doses</span> })()}
           {sh.treino && (() => { const w = workoutsWeek(logs, p.other, today); return <span>🏋️ {w.count} treino(s) na semana</span> })()}
           {sh.corpo && <span>📏 evolução compartilhada</span>}
+          {sh.refeicao && (() => { const l = foodLine(logs, p.profiles, p.other, today); return <span>{l || '🍽️ sem refeições hoje'}</span> })()}
           {sh.parar && p.quits.filter(q => q.who === p.other).map(q => <span key={q.id}>🚭 {q.title}: {quitStats(q, logs, today).days} dia(s)</span>)}
         </div>}
       </section>
@@ -372,18 +380,20 @@ function Settings(p: MeuDiaProps & { s: PSettings }) {
 }
 
 /** Resumo no Início: água com +1 copo, sono e remédios pendentes. */
-export function MeuDiaCard({ me, settings, logs, meds, today, nowHM, onAdd, onOpen }: { me: Who, settings: PSettings[], logs: PLog[], meds: PMed[], today: string, nowHM: string, onAdd: (k: PKind, v: number) => void, onOpen: () => void }) {
+export function MeuDiaCard({ me, settings, logs, meds, profiles = [], today, nowHM, onAdd, onOpen }: { me: Who, settings: PSettings[], logs: PLog[], meds: PMed[], profiles?: FoodProfile[], today: string, nowHM: string, onAdd: (k: PKind, v: number) => void, onOpen: () => void }) {
   const s = settings.find(x => x.who === me) || DEFAULT_SETTINGS(me)
   const water = waterOn(logs, me, today), pct = Math.min(100, Math.round(water / s.water_goal_ml * 100))
   const pend = dosesToday(meds, logs, me, today, nowHM).filter(d => !d.taken)
   const slept = logs.find(l => l.who === me && l.kind === 'sono' && l.date === today)
+  const food = foodLine(logs, profiles, me, today)
   return (
     <section className="card md-home" aria-labelledby="md-home">
       <div className="slbl" id="md-home">💧 Meu dia<button className="lnk" onClick={onOpen}>Abrir →</button></div>
       <div className="md-home-w"><span className="mono">{fmtN(water / 1000)} / {fmtN(s.water_goal_ml / 1000)} L</span><button className="btn btn-s" onClick={() => onAdd('agua', s.cup_ml)}>+1 copo</button></div>
       <div className="bar" aria-hidden="true"><div className="barf" style={{ width: `${pct}%`, background: 'var(--pri)' }}/></div>
       <div className="md-home-s">{slept ? `😴 ${fmtN(Number(slept.value))} h de sono` : <button className="lnk-inline" onClick={onOpen}>😴 Como dormiu?</button>}
-        {pend.length > 0 && <span className={pend.some(d => d.late) ? 'md-late' : ''}> · 💊 {pend.length} dose{pend.length > 1 ? 's' : ''} {pend.some(d => d.late) ? 'atrasada(s)' : 'hoje'}</span>}</div>
+        {pend.length > 0 && <span className={pend.some(d => d.late) ? 'md-late' : ''}> · 💊 {pend.length} dose{pend.length > 1 ? 's' : ''} {pend.some(d => d.late) ? 'atrasada(s)' : 'hoje'}</span>}
+        {food && <span> · {food}</span>}</div>
     </section>
   )
 }

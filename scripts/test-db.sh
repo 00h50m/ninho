@@ -67,7 +67,7 @@ echo "› migrations (1ª vez)"; psql_run fresh "${MIGRATIONS[@]}"
 echo "› migrations (2ª vez, devem ser idempotentes)"; psql_run fresh "${MIGRATIONS[@]}"
 psql_run fresh "$T/10-rpc-and-constraints.test.sql" "$T/20-gamification.test.sql" "$T/30-push.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql" "$T/70-telegram-ia.test.sql"
 echo "› segurança por casa (011), 2x"; psql_run fresh "$RLS" "$RLS"
-psql_run fresh "$T/80-login.test.sql" "$T/90-onboarding.test.sql" "$T/95-checkin.test.sql" "$T/97-rotinas-habitos.test.sql" "$T/98-sprint.test.sql" "$T/99-casa.test.sql" "$T/99b-caes.test.sql" "$T/99c-meudia.test.sql" "$T/99d-nos.test.sql" "$T/99e-lembretes.test.sql" "$T/99f-telegram-texto.test.sql" "$T/99g-parar.test.sql"
+psql_run fresh "$T/80-login.test.sql" "$T/90-onboarding.test.sql" "$T/95-checkin.test.sql" "$T/97-rotinas-habitos.test.sql" "$T/98-sprint.test.sql" "$T/99-casa.test.sql" "$T/99b-caes.test.sql" "$T/99c-meudia.test.sql" "$T/99d-nos.test.sql" "$T/99e-lembretes.test.sql" "$T/99f-telegram-texto.test.sql" "$T/99g-parar.test.sql" "$T/99h-alimentacao.test.sql"
 
 echo
 echo "══ Cenário B: produção antiga simulada ══"
@@ -92,7 +92,7 @@ psql_run legacy "$ROOT/supabase/scripts/rollback-fase-0.sql" "${MIGRATIONS[@]}"
 check_report legacy "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 echo "  ok - rollback e reaplicação sem erro"
 echo "› segurança por casa (011) + desfazer + reaplicar"
-psql_run legacy "$RLS" "$ROOT/supabase/scripts/rollback-rls-por-casa.sql" "$RLS" "$T/90-onboarding.test.sql" "$T/95-checkin.test.sql" "$T/97-rotinas-habitos.test.sql" "$T/98-sprint.test.sql" "$T/99-casa.test.sql" "$T/99b-caes.test.sql" "$T/99c-meudia.test.sql" "$T/99d-nos.test.sql" "$T/99e-lembretes.test.sql" "$T/99f-telegram-texto.test.sql" "$T/99g-parar.test.sql"
+psql_run legacy "$RLS" "$ROOT/supabase/scripts/rollback-rls-por-casa.sql" "$RLS" "$T/90-onboarding.test.sql" "$T/95-checkin.test.sql" "$T/97-rotinas-habitos.test.sql" "$T/98-sprint.test.sql" "$T/99-casa.test.sql" "$T/99b-caes.test.sql" "$T/99c-meudia.test.sql" "$T/99d-nos.test.sql" "$T/99e-lembretes.test.sql" "$T/99f-telegram-texto.test.sql" "$T/99g-parar.test.sql" "$T/99h-alimentacao.test.sql"
 check_report legacy "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 
 echo
@@ -102,7 +102,7 @@ psql_run prod "${MIGRATIONS[0]}"
 echo "› migrations 002–006 (1ª vez)"; psql_run prod "${MIGRATIONS[@]:1}"
 echo "› migrations 001–006 (2ª vez)"; psql_run prod "${MIGRATIONS[@]}"
 psql_run prod "$T/40-prod-schema.test.sql" "$T/50-casa.test.sql" "$T/60-rotina-flexivel.test.sql" "$T/70-telegram-ia.test.sql"
-psql_run prod "$RLS" "$T/80-login.test.sql" "$T/90-onboarding.test.sql" "$T/95-checkin.test.sql" "$T/97-rotinas-habitos.test.sql" "$T/98-sprint.test.sql" "$T/99-casa.test.sql" "$T/99b-caes.test.sql" "$T/99c-meudia.test.sql" "$T/99d-nos.test.sql" "$T/99e-lembretes.test.sql" "$T/99f-telegram-texto.test.sql" "$T/99g-parar.test.sql"
+psql_run prod "$RLS" "$T/80-login.test.sql" "$T/90-onboarding.test.sql" "$T/95-checkin.test.sql" "$T/97-rotinas-habitos.test.sql" "$T/98-sprint.test.sql" "$T/99-casa.test.sql" "$T/99b-caes.test.sql" "$T/99c-meudia.test.sql" "$T/99d-nos.test.sql" "$T/99e-lembretes.test.sql" "$T/99f-telegram-texto.test.sql" "$T/99g-parar.test.sql" "$T/99h-alimentacao.test.sql"
 check_report prod "$ROOT/supabase/scripts/post-migration-check.sql" >/dev/null
 echo "  ok - pós-checagem sem FALHA no schema real"
 

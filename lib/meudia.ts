@@ -3,11 +3,11 @@
 import { addDays, dayNum, weekStartOf } from './dates'
 import type { Who } from './types'
 
-export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo' | 'parar'
+export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo' | 'parar' | 'refeicao'
 export const PKINDS: Array<[PKind, string, string]> = [
   ['agua', '💧', 'Água'], ['sono', '😴', 'Sono'], ['autocuidado', '🌿', 'Autocuidado'],
   ['remedio', '💊', 'Remédios'], ['treino', '🏋️', 'Treinos'], ['corpo', '📏', 'Evolução física'],
-  ['parar', '🚭', 'Parar de…'],
+  ['parar', '🚭', 'Parar de…'], ['refeicao', '🍽️', 'Alimentação'],
 ]
 
 export interface PSettings { who: Who, water_goal_ml: number, cup_ml: number, sleep_goal_h: number, share: Partial<Record<PKind, boolean>>, selfcare: string[] }

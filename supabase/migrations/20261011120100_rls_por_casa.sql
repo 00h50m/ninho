@@ -82,4 +82,15 @@ begin
     create policy "personal_write" on public.personal_quits for all to authenticated
       using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
   end if;
+  -- Alimentação (026)
+  for t in select unnest(array['personal_food_profile','personal_foods']) loop
+    if to_regclass('public.' || t) is not null then
+      execute format('drop policy if exists "allow_all_auth" on public.%I', t);
+      execute format('drop policy if exists "household_member" on public.%I', t);
+      execute format('drop policy if exists "personal_read" on public.%I', t);
+      execute format('drop policy if exists "personal_write" on public.%I', t);
+      execute format('create policy "personal_read" on public.%I for select to authenticated using (who = public.ninho_my_who(household_id) or (public.ninho_is_member(household_id) and public.ninho_personal_shared(household_id, who, %L)))', t, 'refeicao');
+      execute format('create policy "personal_write" on public.%I for all to authenticated using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id))', t);
+    end if;
+  end loop;
 end $$;
