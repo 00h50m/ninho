@@ -1,12 +1,13 @@
 // Áreas do app e telas. Sem JSX, para ser usado também em testes e no servidor.
-// Cinco áreas: Início, Rotinas, Casa, Cães, Nós. Ajustes fica no perfil e em Nós.
+// Seis áreas: Início, Meu dia, Rotinas, Casa, Cães, Nós. Ajustes fica no perfil e em Nós.
 
-export type ModuleId = 'inicio' | 'rotinas' | 'casa' | 'caes' | 'nos'
+export type ModuleId = 'inicio' | 'eu' | 'rotinas' | 'casa' | 'caes' | 'nos'
 export type ScreenId = ModuleId | 'ajustes'
 export type CasaView = 'tarefas' | 'compras' | 'manutencao' | 'agenda'
 
 export const MODULES: Array<{ id: ModuleId, label: string, hint: string }> = [
   { id: 'inicio', label: 'Início', hint: 'O dia de hoje' },
+  { id: 'eu', label: 'Meu dia', hint: 'Água, sono, comida e corpo' },
   { id: 'rotinas', label: 'Rotinas', hint: 'Rotinas e hábitos' },
   { id: 'casa', label: 'Casa', hint: 'Tarefas, compras e manutenção' },
   { id: 'caes', label: 'Cães', hint: 'Penélope e Zelda' },
@@ -30,3 +31,13 @@ export function legacyScreen(tab: string): { screen: ScreenId, casa?: CasaView }
     default: return { screen: (MODULES.some(m => m.id === tab) || tab === 'ajustes') ? tab as ScreenId : 'inicio' }
   }
 }
+
+/** Partes do Meu dia (aparecem no menu lateral quando o Meu dia está aberto e na barra do topo). */
+export type MdTab = 'hoje' | 'comida' | 'treinos' | 'corpo' | 'ajustes'
+export const MD_TABS: Array<{ id: MdTab, icon: string, label: string, short: string }> = [
+  { id: 'hoje', icon: '☀️', label: 'Hoje', short: 'Hoje' },
+  { id: 'comida', icon: '🍽️', label: 'Alimentação', short: 'Comida' },
+  { id: 'treinos', icon: '🏋️', label: 'Treinos', short: 'Treinos' },
+  { id: 'corpo', icon: '📏', label: 'Evolução', short: 'Corpo' },
+  { id: 'ajustes', icon: '⚙️', label: 'Metas e privacidade', short: 'Ajustes' },
+]

@@ -66,8 +66,8 @@ describe('temas', () => {
 })
 
 describe('navegação', () => {
-  it('cinco áreas no menu principal', () => {
-    expect(MODULES.map(m => m.label)).toEqual(['Início', 'Rotinas', 'Casa', 'Cães', 'Nós'])
+  it('seis áreas no menu principal (Meu dia tem a sua)', () => {
+    expect(MODULES.map(m => m.label)).toEqual(['Início', 'Meu dia', 'Rotinas', 'Casa', 'Cães', 'Nós'])
   })
   it('abas antigas continuam levando ao lugar certo', () => {
     expect(legacyScreen('today')).toEqual({ screen: 'inicio' })

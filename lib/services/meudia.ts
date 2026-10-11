@@ -4,26 +4,28 @@ import { NinhoError, isMissingTable, logError } from '@/lib/errors'
 import type { Who } from '@/lib/types'
 import type { PKind, PLog, PMed, PQuit, PSettings } from '@/lib/meudia'
 import type { CustomFood, FoodProfile } from '@/lib/nutricao'
+import { validatePlan, type DietPlan, type PlanRow } from '@/lib/dietPlan'
 
 function must<T>(r: { data: T | null, error: any }, ctx: string): T {
   if (r.error) { logError(ctx, r.error); throw new NinhoError(r.error, ctx) }
   return r.data as T
 }
 
-export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, reason?: string }
+export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, reason?: string }
 
 export async function loadMeuDia(householdId: string, from: string): Promise<MeuDiaData> {
-  const [s, l, m, q, fp, ff] = await Promise.all([
+  const [s, l, m, q, fp, ff, dp] = await Promise.all([
     supabase.from('personal_settings').select('who,water_goal_ml,cup_ml,sleep_goal_h,share,selfcare').eq('household_id', householdId),
     supabase.from('personal_logs').select('id,who,date,kind,value,data,created_at').eq('household_id', householdId).gte('date', from).order('date').limit(4000),
     supabase.from('personal_meds').select('id,who,name,dose,times,active').eq('household_id', householdId).eq('active', true).order('name'),
     supabase.from('personal_quits').select('id,who,title,reason,started_on,active').eq('household_id', householdId).eq('active', true).order('created_at'),
     supabase.from('personal_food_profile').select('who,sex,birth_year,height_cm,activity,goal,pace_kg_week,target_kg,kcal_override,hide_numbers').eq('household_id', householdId),
     supabase.from('personal_foods').select('id,who,name,portion,portion_g,kcal,protein,carb,fat').eq('household_id', householdId).eq('active', true).order('name'),
+    supabase.from('personal_diet_plans').select('id,who,title,plan,source,remind').eq('household_id', householdId).eq('active', true),
   ])
   const e = s.error || l.error || m.error
   if (e) {
-    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
+    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
     must({ data: null, error: e }, 'carregar Meu dia')
   }
   // "Parar de…" (migration 025) é opcional: sem a tabela, o resto do Meu dia segue normal
@@ -32,12 +34,16 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
   const fe = fp.error || ff.error
   if (fe && !isMissingTable(fe)) must({ data: null, error: fe }, 'carregar Alimentação')
   const n = (v: any) => v == null ? null : Number(v)
+  // Plano alimentar (migration 027) também é opcional
+  if (dp.error && !isMissingTable(dp.error)) must({ data: null, error: dp.error }, 'carregar plano alimentar')
   return {
     available: true, settings: (s.data || []) as PSettings[], logs: ((l.data || []) as any[]).map(x => ({ ...x, value: x.value == null ? null : Number(x.value) })), meds: (m.data || []) as PMed[],
     quits: q.error ? [] : (q.data || []) as PQuit[], quitsReady: !q.error,
     profiles: fe ? [] : ((fp.data || []) as any[]).map(x => ({ ...x, height_cm: Number(x.height_cm), pace_kg_week: Number(x.pace_kg_week), target_kg: n(x.target_kg) })) as FoodProfile[],
     foods: fe ? [] : ((ff.data || []) as any[]).map(x => ({ ...x, portion_g: Number(x.portion_g), kcal: Number(x.kcal), protein: n(x.protein), carb: n(x.carb), fat: n(x.fat) })) as CustomFood[],
     foodReady: !fe,
+    plans: dp.error ? [] : ((dp.data || []) as any[]).flatMap(x => { const plan = validatePlan(x.plan); return plan ? [{ ...x, plan }] : [] }) as PlanRow[],
+    plansReady: !dp.error,
   }
 }
 
@@ -89,4 +95,40 @@ export async function saveFood(householdId: string, who: Who, f: Omit<CustomFood
 
 export async function stopFood(id: string): Promise<void> {
   must(await supabase.from('personal_foods').update({ active: false }).eq('id', id).select('id'), 'remover alimento')
+}
+
+/** Salva o plano conferido (o anterior fica guardado como inativo). */
+export async function savePlan(householdId: string, who: Who, plan: DietPlan, source: string | null): Promise<void> {
+  must(await supabase.from('personal_diet_plans').update({ active: false }).eq('household_id', householdId).eq('who', who).eq('active', true).select('id'), 'trocar plano')
+  must(await supabase.from('personal_diet_plans').insert({ household_id: householdId, who, title: plan.title.slice(0, 80), plan, source: source?.slice(0, 120) || null }).select('id'), 'salvar plano')
+}
+
+export async function setPlanRemind(id: string, remind: boolean): Promise<void> {
+  must(await supabase.from('personal_diet_plans').update({ remind }).eq('id', id).select('id'), 'lembretes do plano')
+}
+
+export async function stopPlan(id: string): Promise<void> {
+  must(await supabase.from('personal_diet_plans').update({ active: false }).eq('id', id).select('id'), 'remover plano')
+}
+
+// ── Fotos de evolução (migration 028) ─────────────────────────────────
+export interface PPhoto { id: string, who: Who, date: string, pose: 'frente' | 'lado' | 'costas' | 'outra', note: string | null, thumb: string }
+
+/** Lista com as miniaturas (a foto inteira só é buscada para ver ou comparar). null = sem a migration. */
+export async function listPhotos(householdId: string): Promise<PPhoto[] | null> {
+  const r = await supabase.from('personal_photos').select('id,who,date,pose,note,thumb').eq('household_id', householdId).order('date', { ascending: false }).order('created_at', { ascending: false }).limit(300)
+  if (r.error) { if (isMissingTable(r.error)) return null; must(r, 'carregar fotos') }
+  return (r.data || []) as PPhoto[]
+}
+
+export async function photoData(id: string): Promise<string> {
+  return (must(await supabase.from('personal_photos').select('data').eq('id', id).single(), 'abrir foto') as any).data
+}
+
+export async function addPhoto(householdId: string, who: Who, p: { date: string, pose: PPhoto['pose'], note: string | null, thumb: string, data: string }): Promise<void> {
+  must(await supabase.from('personal_photos').insert({ household_id: householdId, who, ...p }).select('id'), 'guardar foto')
+}
+
+export async function deletePhoto(id: string): Promise<void> {
+  must(await supabase.from('personal_photos').delete().eq('id', id).select('id'), 'apagar foto')
 }

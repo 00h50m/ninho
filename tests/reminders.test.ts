@@ -84,3 +84,11 @@ describe('rotina com aviso antes', () => {
     expect(dueReminders(base({ hm: '20:00', routines: [{ ...routines[0], reminder_min: null }] }))).toEqual([]) // sem lembrete escolhido
   })
 })
+
+describe('refeições do plano', () => {
+  it('no horário, só para a dona e só se ainda não marcou', () => {
+    const s = base({ hm: '12:05', planMeals: [{ who: 'g', id: 'm2', name: 'Almoço', time: '12:00' }, { who: 'g', id: 'm3', name: 'Lanche', time: '16:00' }, { who: 's', id: 'm1', name: 'Almoço', time: '12:00' }], planDone: [{ who: 's', meal_id: 'm1' }] })
+    expect(kinds(dueReminders(s))).toEqual(['g:refeicao:refeicao:m2'])
+    expect(dueReminders(s)[0].url).toBe('/?ir=alimentacao')
+  })
+})

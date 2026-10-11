@@ -61,7 +61,8 @@ import { useMeuDia } from '@/hooks/useMeuDia'
 import { enqueue, flush as flushOutbox, newId, readOutbox, writeOutbox, type OutItem } from '@/lib/outbox'
 import { isOfflineError } from '@/lib/offline'
 import * as mdApi from '@/lib/services/meudia'
-import { MeuDiaView, MeuDiaCard } from '@/components/meudia/MeuDia'
+import { MeuDiaView, MeuDiaCard, type MdFocus } from '@/components/meudia/MeuDia'
+import type { MdTab } from '@/lib/nav'
 import { useNos } from '@/hooks/useNos'
 import * as nosApi from '@/lib/services/nos'
 import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as nosTimeline, type Agreement, type AgendaSection, type Challenge } from '@/lib/nos'
@@ -401,7 +402,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const [screen,setScreenState]=useState<ScreenId>('inicio')
   const [casaView,setCasaView]=useState<CasaView>('tarefas')
   const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'>('semana')
-  const [rotView,setRotView]=useState<'rotinas'|'habitos'|'meu'>('rotinas')
+  const [rotView,setRotView]=useState<'rotinas'|'habitos'>('rotinas')
   const [theme,setThemeState]=useState<ThemeId>('aconchego')
   // Conforto do aparelho (Fase 9): tamanho, contraste, movimento, tema automático, cartões do Início
   const [a11y,setA11yState]=useState<A11yPrefs>(DEFAULT_A11Y)
@@ -488,8 +489,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     return()=>{window.removeEventListener('online',on);clearInterval(iv)}
   },[sendOutbox,householdId])
   /** +1 copo, autocuidado, remédio: sem internet fica na fila (com id fixo para não duplicar). */
-  const mdAdd=async(who:Who,k:any,v:number|null,d:Record<string,any>={})=>{
-    try{await md.add(who,k,v,d)}catch(e){
+  const mdAdd=async(who:Who,k:any,v:number|null,d:Record<string,any>={},date?:string)=>{
+    try{await md.add(who,k,v,d,date)}catch(e){
       if(!isOfflineError(e)||!['agua','autocuidado','remedio'].includes(k))throw e
       const logId=newId()
       md.setData(x=>({...x,logs:[...x.logs,{id:logId,who,date:today,kind:k,value:v,data:d}]}))
@@ -548,13 +549,17 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const goCasa=(v:CasaView)=>{setTab('casa');setCasaView(v)}
   // Links das notificações (?ir=meudia, desafios, sprint…): abre a tela certa e limpa o endereço
   const [wantSprint,setWantSprint]=useState(false)
+  const [mdTab,setMdTab]=useState<MdTab>('hoje'),[mdFocus,setMdFocus]=useState<MdFocus>(null)
+  /** Abre uma parte do Meu dia (e, se pedido, rola até um cartão). */
+  const goMd=(t:MdTab,what?:NonNullable<MdFocus>['what'])=>{setTab('eu');setMdTab(t);if(what)setMdFocus({what,n:Date.now()})}
   useEffect(()=>{
     if(typeof window==='undefined')return
     const u=new URL(window.location.href),ir=u.searchParams.get('ir')
     if(!ir)return
     u.searchParams.delete('ir');window.history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)
     switch(ir){
-      case 'meudia':setTab('rotinas');setRotView('meu');break
+      case 'meudia':goMd('hoje');break
+      case 'alimentacao':goMd('comida','plano');break
       case 'rotinas':setTab('rotinas');setRotView('rotinas');break
       case 'caes':setTab('caes');break
       case 'agenda':setTab('casa');setCasaView('agenda');break
@@ -1061,7 +1066,13 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
     ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),
     {id:'routine',icon:'rotinas',label:'Iniciar rotina',sub:rn.now?rn.now.title:rn.next?`Próxima: ${rn.next.title}`:'Ver as rotinas',run:()=>go('rotinas')},
-    ...(md.available&&me?[{id:'meudia',icon:'agua',label:'Meu dia',sub:'Água, sono, remédios e treino',run:()=>{go('rotinas');setRotView('meu')}}]:[]),
+    ...(md.available&&me?[
+      {id:'comi',icon:'tarefa',label:'Comi',sub:'Próxima refeição do plano',run:()=>goMd('comida','comi')},
+      {id:'refeicao',icon:'compra',label:'Registrar refeição',sub:'Escrevendo ou pela foto do prato',run:()=>goMd('comida','refeicao')},
+      {id:'meudia',icon:'agua',label:'Meu dia',sub:'Água, sono, remédios e treino',run:()=>goMd('hoje')},
+      {id:'peso',icon:'energia',label:'Peso e medidas',sub:'Ou ler a bioimpedância',run:()=>goMd('corpo','peso')},
+      {id:'foto',icon:'eu',label:'Foto de evolução',sub:'Frente, lado ou costas',run:()=>goMd('corpo','foto')},
+    ]:[]),
     {id:'dogs',icon:'caes',label:'Cuidado dos cães',sub:'Comida, passeio, acidente',run:()=>go('caes')},
     {id:'checkin',icon:'nos',label:'Check-in do dia',sub:'Humor e energia',run:()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),250)}},
     ...(ag.available?[{id:'event',icon:'reuniao',label:'Agenda da casa',sub:'Consulta, visita, entrega, vencimento',run:()=>{goCasa('agenda');openModal('event',{event:null,kind:'compromisso' as EventKind})}}]:[]),
@@ -1254,7 +1265,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   return(
     <>
 
-      <SideNav current={screen} onGo={go} onQuick={()=>openModal('quick')}
+      <SideNav current={screen} onGo={go} onQuick={()=>openModal('quick')} sub={md.available&&me?{current:mdTab,onGo:(t:string)=>goMd(t as MdTab)}:undefined}
         profile={{initials:initials(names[me||'g']),name:me?firstName(names[me]):'Ninho',sub:account?.email||'Perfil e ajustes',cls:`av-${me||'g'}`}}/>
       <div className="app-main">
       {/* CABEÇALHO */}
@@ -1374,7 +1385,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <aside className="side">
               {week.available&&me&&showCard('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
               {md.available&&me&&showCard('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} profiles={md.profiles} today={today} nowHM={nowHM}
-                onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>{go('rotinas');setRotView('meu')}}/>}
+                onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>goMd('hoje')}/>}
               {setup?.available&&showCard('rotina')&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
                 turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
               {showCard('caes')&&<div className="card">
@@ -1434,11 +1445,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         </div>}
 
         {/* ── ROTINAS ── */}
-        {screen==='rotinas'&&<div className="scr">
-          <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
-          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length],['meu','Meu dia']]}/>
-          {rotView==='meu'?(me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady}
-            onAdd={(k,v,d)=>mdAdd(me,k,v,d).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
+        {/* ── MEU DIA (de cada uma) ── */}
+        {screen==='eu'&&<div className="scr">
+          <div className="sh"><div><h2>Meu dia</h2><p>Água, sono, alimentação, treinos e corpo · só você vê o que não compartilhar</p></div></div>
+          {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} householdId={householdId}
+            onAdd={(k,v,d,dt)=>mdAdd(me,k,v,d,dt).catch(e=>{showError(toNinhoError(e,'registrar'));throw e})}
             onRemove={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'apagar registro'));throw e})}
             onSaveSettings={x=>mdApi.saveSettings(householdId,me,x).then(md.reload).then(()=>showToast('Salvo')).catch(e=>{showError(toNinhoError(e,'salvar'));throw e})}
             onSaveMed={m=>mdApi.saveMed(householdId,me,m).then(md.reload).then(()=>showToast('Remédio salvo')).catch(e=>{showError(toNinhoError(e,'salvar remédio'));throw e})}
@@ -1447,9 +1458,17 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             onStopQuit={q=>mdApi.stopQuit(q.id).then(md.reload).then(()=>showToast('Encerrado')).catch(e=>{showError(toNinhoError(e,'encerrar hábito'));throw e})}
             onSaveProfile={x=>mdApi.saveFoodProfile(householdId,me,x).then(md.reload).then(()=>showToast('Meta salva')).catch(e=>{showError(toNinhoError(e,'salvar perfil'));throw e})}
             onSaveFood={f=>mdApi.saveFood(householdId,me,f).then(md.reload).then(()=>showToast('Alimento salvo')).catch(e=>{showError(toNinhoError(e,'salvar alimento'));throw e})}
-            onStopFood={f=>mdApi.stopFood(f.id).then(md.reload).then(()=>showToast('Alimento removido')).catch(e=>{showError(toNinhoError(e,'remover alimento'));throw e})}/>
-            :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>)
-          :rotView==='rotinas'?<>
+            onStopFood={f=>mdApi.stopFood(f.id).then(md.reload).then(()=>showToast('Alimento removido')).catch(e=>{showError(toNinhoError(e,'remover alimento'));throw e})}
+            onSavePlan={(pl,src)=>mdApi.savePlan(householdId,me,pl,src).then(md.reload).then(()=>showToast('Plano salvo')).catch(e=>{showError(toNinhoError(e,'salvar plano'));throw e})}
+            onPlanRemind={(r,on)=>mdApi.setPlanRemind(r.id,on).then(md.reload).then(()=>showToast(on?'Lembretes das refeições ligados':'Lembretes desligados')).catch(e=>{showError(toNinhoError(e,'lembretes do plano'));throw e})}
+            onStopPlan={r=>mdApi.stopPlan(r.id).then(md.reload).then(()=>showToast('Plano removido')).catch(e=>{showError(toNinhoError(e,'remover plano'));throw e})}/>
+            :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>}
+        </div>}
+
+        {screen==='rotinas'&&<div className="scr">
+          <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
+          <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length]]}/>
+          {rotView==='rotinas'?<>
             {!rot.routinesOk&&rot.ready?<div className="card empty"><span className="empty-icon">🔁</span>Rotinas com passos precisam da atualização do banco (migration 014).</div>
             :<>
               {routines.length===0&&rot.ready&&<div className="card intro">

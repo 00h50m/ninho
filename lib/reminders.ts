@@ -4,9 +4,10 @@
 import type { Names, Who } from './types'
 import { addDays, dowOf } from './dates'
 
-export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin'
+export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao'
 export const RKINDS: Array<[RKind, string, string, string]> = [
   ['remedio', '💊', 'Remédios e vitaminas', 'No horário de cada dose, se ainda não marcou'],
+  ['refeicao', '🍽️', 'Refeições do plano', 'No horário de cada refeição do plano alimentar (se ligou no plano), se ainda não marcou'],
   ['rotina', '🔁', 'Rotinas', 'Das rotinas com lembrete escolhido (Rotinas › editar), se ainda não foi feita'],
   ['sprint', '⏱', 'Fim do sprint', 'Quando o tempo do Sprint do Ninho acaba'],
   ['caes', '🐾', 'Saúde dos cães', 'Vacina, vermífugo e consulta: na véspera e no dia, às 9h'],
@@ -16,7 +17,7 @@ export const RKINDS: Array<[RKind, string, string, string]> = [
   ['checkin', '💬', 'Check-in da noite', 'Às 21h30, se ainda não fez o check-in'],
 ]
 export type RPrefs = Record<RKind, boolean>
-export const DEFAULT_RPREFS: RPrefs = { remedio: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false }
+export const DEFAULT_RPREFS: RPrefs = { remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false }
 export const prefsOf = (x: unknown): RPrefs => ({ ...DEFAULT_RPREFS, ...(x && typeof x === 'object' ? x as Partial<RPrefs> : {}) })
 
 export interface RemState {
@@ -31,6 +32,9 @@ export interface RemState {
   events: Array<{ id: string, title: string, date: string, time: string | null, who: string | null, kind: string, paid: boolean | null, done_at: string | null }>
   challenges: Array<{ id: string, title: string }>   // desafios "marcamos no app" ainda sem o dia de hoje
   checkins: Who[]                                     // quem já fez check-in hoje
+  /** refeições com horário dos planos com lembrete ligado (sem as só de treino) e as já marcadas hoje */
+  planMeals?: Array<{ who: Who, id: string, name: string, time: string }>
+  planDone?: Array<{ who: Who, meal_id: string }>
 }
 export interface Reminder { who: Who, kind: RKind, ref: string, title: string, body: string, url: string }
 
@@ -56,6 +60,11 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
     if (!due(t, s.hm, win)) continue
     if (s.medTaken.some(x => x.who === m.who && x.med_id === m.id && x.time === t)) continue
     push([m.who], 'remedio', `med:${m.id}:${t}`, `💊 ${m.name}`, `Hora da dose das ${t}${m.dose ? ` · ${m.dose}` : ''}. Toque para marcar no Meu dia.`, '/?ir=meudia')
+  }
+  // Refeições do plano alimentar, se ainda não marcadas
+  for (const m of s.planMeals || []) {
+    if (!due(m.time, s.hm, win) || (s.planDone || []).some(d => d.who === m.who && d.meal_id === m.id)) continue
+    push([m.who], 'refeicao', `refeicao:${m.id}`, `🍽️ ${m.name}`, 'Hora da refeição do seu plano. Toque para marcar no Meu dia.', '/?ir=alimentacao')
   }
   // Água: pontos do dia, se abaixo do esperado até ali
   for (const [t, frac] of [['11:00', 0.35], ['15:00', 0.6], ['19:00', 0.85]] as Array<[string, number]>) {

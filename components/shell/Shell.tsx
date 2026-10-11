@@ -4,13 +4,14 @@
 import type { ReactNode } from 'react'
 import { Sheet } from '@/components/ui/Sheet'
 
-import { MODULES, moduleOf, type ScreenId } from '@/lib/nav'
+import { MD_TABS, MODULES, moduleOf, type ScreenId } from '@/lib/nav'
 export { MODULES, moduleOf, legacyScreen } from '@/lib/nav'
 export type { ModuleId, ScreenId, CasaView } from '@/lib/nav'
 
 // ── Ícones (traço simples, herdam a cor do texto) ─────────────────────────
 const P: Record<string, ReactNode> = {
   inicio: <><path d="M4 10.5 12 4l8 6.5"/><path d="M6 9.5V20h12V9.5"/><path d="M10 20v-5h4v5"/></>,
+  eu: <><circle cx="12" cy="7.5" r="3.5"/><path d="M5 20c.8-3.9 3.6-6 7-6s6.2 2.1 7 6"/></>,
   rotinas: <><path d="M9 6h11M9 12h11M9 18h11"/><path d="m3.5 6 1.2 1.2L7 5M3.5 12l1.2 1.2L7 11M3.5 18l1.2 1.2L7 17"/></>,
   casa: <><path d="M3 21h18"/><path d="M5 21V8l7-4 7 4v13"/><path d="M9 21v-6h6v6"/><path d="M9 11h.01M15 11h.01"/></>,
   caes: <><circle cx="7" cy="8" r="1.8"/><circle cx="12" cy="5.5" r="1.8"/><circle cx="17" cy="8" r="1.8"/><path d="M12 11c-3 0-5.5 3.2-5.5 5.6 0 1.8 1.3 2.9 3 2.9 1.1 0 1.6-.6 2.5-.6s1.4.6 2.5.6c1.7 0 3-1.1 3-2.9C17.5 14.2 15 11 12 11Z"/></>,
@@ -36,8 +37,10 @@ export function Icon({ name, size = 22 }: { name: string, size?: number }) {
   )
 }
 
-export function SideNav({ current, onGo, onQuick, profile }: {
+export function SideNav({ current, onGo, onQuick, profile, sub }: {
   current: ScreenId, onGo: (s: ScreenId) => void, onQuick: () => void
+  /** Partes do Meu dia, mostradas embaixo dele quando está aberto */
+  sub?: { current: string, onGo: (t: string) => void }
   profile: { initials: string, name: string, sub: string, cls: string }
 }) {
   const active = moduleOf(current)
@@ -47,9 +50,14 @@ export function SideNav({ current, onGo, onQuick, profile }: {
       <button className="snav-quick" onClick={onQuick}><Icon name="plus" size={18}/>Ação rápida</button>
       <nav className="snav-list">
         {MODULES.map(m => (
-          <button key={m.id} className={`snav-i ${active === m.id ? 'on' : ''}`} onClick={() => onGo(m.id)} aria-current={active === m.id ? 'page' : undefined}>
-            <Icon name={m.id}/><span><b>{m.label}</b><small>{m.hint}</small></span>
-          </button>
+          <div key={m.id} className="snav-g">
+            <button className={`snav-i ${active === m.id ? 'on' : ''}`} onClick={() => onGo(m.id)} aria-current={active === m.id ? 'page' : undefined}>
+              <Icon name={m.id}/><span><b>{m.label}</b><small>{m.hint}</small></span>
+            </button>
+            {m.id === 'eu' && active === 'eu' && sub && <div className="snav-sub" role="group" aria-label="Partes do Meu dia">
+              {MD_TABS.map(t => <button key={t.id} className={`snav-s ${sub.current === t.id ? 'on' : ''}`} aria-current={sub.current === t.id ? 'true' : undefined} onClick={() => sub.onGo(t.id)}><span aria-hidden="true">{t.icon}</span>{t.label}</button>)}
+            </div>}
+          </div>
         ))}
       </nav>
       <button className={`snav-prof ${current === 'ajustes' ? 'on' : ''}`} onClick={() => onGo('ajustes')} aria-current={current === 'ajustes' ? 'page' : undefined} aria-label={`Perfil e ajustes de ${profile.name}`}>
