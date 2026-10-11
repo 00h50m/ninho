@@ -1126,6 +1126,27 @@ button.wc-cup:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 .od-main{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
 .od-main small{font-size:12px;color:var(--sub);overflow-wrap:anywhere}
 .od-time{width:auto;min-width:104px;padding:4px 6px}
+/* Linha do tempo do dia (Início) */
+.seg-mini{display:inline-flex;border:1px solid var(--bd);border-radius:999px;padding:2px;margin-left:auto}
+.seg-mini button{border:0;background:transparent;color:var(--sub);font:inherit;font-size:12.5px;padding:4px 12px;border-radius:999px;min-height:30px}
+.seg-mini button.on{background:var(--gdk);color:var(--on-green)}
+.tl-per{margin-bottom:4px}
+.tl-list{list-style:none;margin:0;padding:0 0 0 6px;border-left:2px solid var(--bd);margin-left:52px}
+.tl-e{display:flex;align-items:center;gap:10px;padding:7px 0;position:relative;margin-left:-58px}
+.tl-t{width:44px;flex-shrink:0;text-align:right;font-size:12px;color:var(--sub)}
+.tl-e .tl-chk,.tl-ic{position:relative;z-index:1;background:var(--sf)}
+.tl-e:not(.k-tarefa) .tl-chk:not(.ok){color:var(--sub);font-size:12px}
+.tl-ic{width:24px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:13px;border:1.5px dashed var(--bd)}
+.tl-b{flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+.tl-tt{display:block;font-size:14.5px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-s{display:block;font-size:11.5px;color:var(--sub);margin-top:1px}
+.tl-e.done .tl-tt{text-decoration:line-through;color:var(--sub)}
+.tl-e.late .tl-t,.tl-e.late .tl-s{color:var(--cor)}
+.tl-e.now{box-shadow:0 0 0 1.5px var(--green);border-radius:10px}
+.tl-now-tag{font-size:11px;font-weight:600;color:var(--green);margin-right:6px}
+.tl-line{display:flex;align-items:center;gap:8px;margin-left:-58px;font-size:11px;color:var(--cor);padding:2px 0}
+.tl-line .mono{width:44px;text-align:right}
+.tl-line-b{flex:1;height:2px;background:var(--cor);border-radius:2px}
 .co-date{max-width:220px}
 .co-add{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 12px;margin:10px 0}
 .co-add .onb-f{margin:0}

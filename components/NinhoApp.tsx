@@ -72,7 +72,9 @@ import { guessCategory } from '@/lib/shopping'
 import * as nosApi from '@/lib/services/nos'
 import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as nosTimeline, type Agreement, type AgendaSection, type Challenge } from '@/lib/nos'
 import { ChallengeCard, ChallengesView, CheckinHistory, DayNoteCard, TimelineCard, TogetherCard } from '@/components/nos/NosViews'
-import { waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT } from '@/lib/meudia'
+import { dosesToday, waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT, type Dose } from '@/lib/meudia'
+import { buildTimeline } from '@/lib/timeline'
+import { DayTimeline } from '@/components/DayTimeline'
 import * as cApi from '@/lib/services/caes'
 import { DogAvatar, DogHealthBlock, DogProfileSheet, HealthSheet, PuppyPanel } from '@/components/caes/DogPanels'
 import { kindInfo, upcomingCare, type AccidentRow, type HealthKind, type HealthRecord } from '@/lib/caes'
@@ -435,6 +437,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const [historyError,setHistoryError]=useState(false)
   const [person,setPerson]=useState<Who>('g')
   const [showDone,setShowDone]=useState<Record<Who,boolean>>({g:false,s:false})
+  /** Início: lista por grupos ou linha do tempo do dia (lembrado neste aparelho) */
+  const [homeView,setHomeView]=useState<'lista'|'tempo'>('lista')
+  useEffect(()=>{try{if(localStorage.getItem('ninho.homeView')==='tempo')setHomeView('tempo')}catch{}},[])
+  const pickHomeView=(v:'lista'|'tempo')=>{setHomeView(v);try{localStorage.setItem('ninho.homeView',v)}catch{}}
   const [showAllToday,setShowAllToday]=useState(false)
   // Itens com gravação em andamento (bloqueia clique duplo; o banco também é idempotente)
   const [pending,setPending]=useState<Set<string>>(new Set())
@@ -1173,6 +1179,13 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   }
   const itemRow=(i:HItem,o:{actions?:boolean,next?:boolean}={})=>i.task?taskRow(i.task,o):dogItemRow(i.dog!,o)
 
+  /** Linha do tempo de uma pessoa: tarefas e cães dela, agenda de hoje, rotinas com passos e (só para quem usa o aparelho) remédios. */
+  const timelineOf=(who:Who,items:HItem[])=>buildTimeline({who,nowHM,items,
+    events:ag.available?ag.events.filter(e=>e.date===today):[],
+    routines:routines.filter(r=>routineOnDay(r,today)).filter(r=>r.assign_mode==='shared'||(r.assign_mode==='rotation'?routineTurn(r):r.assign_mode)===who)
+      .map(r=>{const pr=rnRun(r)!;return{r,done:pr.complete,steps:pr.total?`${pr.done}/${pr.total} passos`:null}}),
+    doses:md.available&&who===me?dosesToday(md.meds,md.logs,who,today,nowHM):[]})
+  const toggleDose=(d:Dose)=>{if(!me)return;(d.taken?md.remove(d.taken):mdAdd(me,'remedio',null,{med_id:d.med.id,name:d.med.name,time:d.time})).then(()=>showToast(d.taken?'Desmarcado':`💊 ${d.med.name} tomado`)).catch(e=>showError(toNinhoError(e,'registrar remédio')))}
   const personCard=(who:Who)=>{
     const all=hItems.filter(i=>ownerOfItem(i)===who)
     const pend=all.filter(i=>!i.completed_today)
@@ -1197,6 +1210,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <div><button className="btn btn-s" onClick={()=>openModal('sugg')}>✦ Ver sugestões</button></div>
           </div>
         )):<>
+          {homeView==='tempo'?<DayTimeline tl={timelineOf(who,all)} nowHM={nowHM} busy={e=>e.item?(e.item.task?isPending('task:'+e.item.task.id):e.item.dog!.parts.some(x=>isPending('dog:'+x.r.id))):false}
+            onItem={i=>i.task?toggleTask(i.task):toggleDogItem(i.dog!)} onDose={toggleDose} onRoutine={()=>go('rotinas')} onAgenda={()=>goCasa('agenda')}/>:<>
           {pend.length===0&&<div className="alldone">🎉 Tudo feito por hoje!<small>+{doneXP} XP conquistados</small></div>}
           {(()=>{
             const groups=groupToday(pend,nowHM,today)
@@ -1214,6 +1229,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
               <span className="mono" style={{marginLeft:'auto',color:'var(--green)',fontSize:12}}>+{doneXP} XP</span>
             </button>
             {showDone[who]&&done.map(i=>itemRow(i,{actions:false}))}
+          </>}
           </>}
           {(()=>{const paused=homeTasks.filter(t=>pausedToday(t,today)&&ownerOfTask(t)===who);return paused.length>0&&<div className="paused">
             <div className="paused-h">⏸ Puladas ou para amanhã ({paused.length})</div>
@@ -1387,6 +1403,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
           <div className="now-h">
             <h2>Para agora</h2>
+            <div className="seg-mini" role="radiogroup" aria-label="Como ver o dia">
+              {([['lista','Lista'],['tempo','Linha do tempo']] as const).map(([k,l])=><button key={k} role="radio" aria-checked={homeView===k} className={homeView===k?'on':''} onClick={()=>pickHomeView(k)}>{l}</button>)}
+            </div>
             <div className="now-s" aria-live="polite">
               {nowSum.late>0&&<span className="chip coral">⚠ {nowSum.late} atrasada{nowSum.late>1?'s':''}</span>}
               {nowSum.essentials>0&&<span className="chip">● {nowSum.essentials} essencia{nowSum.essentials>1?'is':'l'} pendente{nowSum.essentials>1?'s':''}</span>}
