@@ -3,7 +3,7 @@
 
 export type ModuleId = 'inicio' | 'eu' | 'rotinas' | 'casa' | 'caes' | 'nos'
 export type ScreenId = ModuleId | 'ajustes'
-export type CasaView = 'tarefas' | 'compras' | 'manutencao' | 'agenda'
+export type CasaView = 'tarefas' | 'compras' | 'manutencao' | 'agenda' | 'faxinao'
 
 export const MODULES: Array<{ id: ModuleId, label: string, hint: string }> = [
   { id: 'inicio', label: 'Início', hint: 'O dia de hoje' },

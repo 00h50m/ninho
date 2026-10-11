@@ -29,6 +29,8 @@ export interface BotDeps {
   understand?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<Understood>
   /** Foto do prato (opcional: precisa da chave da IA). */
   plate?: (link: { id: string, household_id: string, who: Who, chat_id: number }, fileId: string, caption: string) => Promise<Understood>
+  /** "faxinão: …" vira rascunho no app (opcional: precisa da chave da IA). */
+  faxinao?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<string>
 }
 
 interface Link { id: string, household_id: string, who: Who, chat_id: number, morning: boolean, weekly: boolean, active: boolean }
@@ -65,6 +67,7 @@ export const ADD_PROMPT = 'O que vai na lista? Mande os itens separados por vír
 export const HELP = [
   'Escreva do seu jeito, por exemplo: “comprei leite e café”, “a Zelda tomou a V10 hoje”, “lembra a Sabrina de pagar a internet sexta”, “bebi um copo de água”, “lavei a louça”, “almocei arroz, feijão e frango”. Eu mostro o que entendi e você confirma.',
   '📷 Mande a foto do prato (com “almoço”, “jantar”… na legenda, se quiser) e eu estimo as calorias.',
+  '🧹 “faxinão: banheiro, cozinha, roupa de cama, quintal” — eu organizo na melhor ordem e divido entre vocês (fica no app para conferir).',
   '',
   'Ou use o menu aqui embaixo e os comandos:',
   '/hoje — o que é seu hoje (com botões para concluir)',
@@ -271,6 +274,10 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
     await send(deps, chatId, 'Pronto, esta conversa foi desligada do Ninho. Para voltar, gere um código no app.')
   } else if (cmd === '/ajuda' || cmd === '/help') await send(deps, chatId, HELP, { reply_markup: MENU })
   else if (text.startsWith('+')) await shoppingAdd(deps, link, text.slice(1))
+  else if (/^(faxin[aã]o|mutir[aã]o)\b/i.test(text) && deps.faxinao) {
+    await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
+    await send(deps, chatId, await deps.faxinao(link, text).catch(() => 'Não consegui organizar agora. Tente pelo app: Casa › Faxinão.'))
+  }
   else if (!cmd.startsWith('/') && deps.understand) await freeText(deps, link, text)
   else await send(deps, chatId, `Não entendi. ${HELP}`, { reply_markup: MENU })
 }

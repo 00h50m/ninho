@@ -47,7 +47,7 @@ function block(f: AiFile): Anthropic.Beta.BetaContentBlockParam {
 }
 
 /** Uma chamada com saída estruturada. Devolve o JSON já lido, ou a falha amigável. */
-async function ask(db: SupabaseClient, householdId: string, kind: string, opts: AiOpts, req: { system: string, schema: object, effort: 'low' | 'medium', maxTokens: number, content: Anthropic.Beta.BetaContentBlockParam[] }): Promise<{ ok: true, json: unknown } | Fail> {
+export async function ask(db: SupabaseClient, householdId: string, kind: string, opts: AiOpts, req: { system: string, schema: object, effort: 'low' | 'medium', maxTokens: number, content: Anthropic.Beta.BetaContentBlockParam[] }): Promise<{ ok: true, json: unknown } | Fail> {
   if (!opts.apiKey) return { ok: false, status: 503, message: 'A leitura com IA ainda não está configurada neste endereço do app.' }
   const client = new Anthropic({ apiKey: opts.apiKey, ...(opts.baseURL ? { baseURL: opts.baseURL } : {}) })
   let res: Anthropic.Beta.BetaMessage
@@ -68,7 +68,7 @@ async function ask(db: SupabaseClient, householdId: string, kind: string, opts: 
     throw e
   }
   await db.from('ai_log').insert({ household_id: householdId, kind, input_tokens: res.usage?.input_tokens ?? null, output_tokens: res.usage?.output_tokens ?? null })
-  if (res.stop_reason === 'refusal') return { ok: false, status: 422, message: 'A IA não conseguiu ler este arquivo.' }
+  if (res.stop_reason === 'refusal') return { ok: false, status: 422, message: 'A IA não conseguiu responder a este pedido. Tente de novo (com outras palavras ou outro arquivo).' }
   if (res.stop_reason === 'max_tokens') return { ok: false, status: 422, message: 'O arquivo é grande demais para ler de uma vez. Tente mandar em partes (fotos de cada página).' }
   const raw = res.content.filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === 'text').map(b => b.text).join('')
   try { return { ok: true, json: JSON.parse(raw) } } catch { return { ok: false, status: 502, message: 'A IA respondeu num formato inesperado. Tente de novo.' } }
