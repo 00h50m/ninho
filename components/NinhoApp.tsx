@@ -74,6 +74,8 @@ import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as n
 import { ChallengeCard, ChallengesView, CheckinHistory, DayNoteCard, TimelineCard, TogetherCard } from '@/components/nos/NosViews'
 import { dosesToday, waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT, type Dose } from '@/lib/meudia'
 import { buildTimeline } from '@/lib/timeline'
+import { mascotSay } from '@/lib/mascote'
+import { MascoteCard } from '@/components/Mascote'
 import { DayTimeline } from '@/components/DayTimeline'
 import * as cApi from '@/lib/services/caes'
 import { DogAvatar, DogHealthBlock, DogProfileSheet, HealthSheet, PuppyPanel } from '@/components/caes/DogPanels'
@@ -970,6 +972,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const care=dogCare(casa.maint,today)
   const challenge=(setup?.answers as any)?.challenge as {title:string,days:number,why:string}|undefined
   const itemTitle=(i:HItem)=>i.task?i.task.title:i.dog!.title
+  /** O que o Nino (mascote) diz agora */
+  const mascot=mascotSay({hour,total:allToday.length,done:doneToday,late:nowSum.late,chaos,survival:settings.survival,lowEnergy:settings.energy==='low',streak,level:lv.l,
+    next:nowSum.next?itemTitle(nowSum.next):null,me:me?firstName(names[me]):null,
+    dogsLate:Array.from(new Set(dogItems.filter(d=>(!me||d.owner===me)&&isLate(d,nowHM)).flatMap(d=>d.parts.filter(x=>!x.r.completed_today).map(x=>x.dog.name))))})
   async function saveCheckin(v:Parameters<typeof week.checkin>[2]){
     if(!me)return
     try{await week.checkin(today,me,v)}catch(e){showError(toNinhoError(e,'salvar check-in'));throw e}
@@ -1354,6 +1360,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <button className="btn btn-p" onClick={()=>setOnb('open')}>{(setup.progress?.step||1)>1?'Continuar':'Começar'}</button>
             <button className="lnk-inline" onClick={()=>{setA11y({setupSnooze:addDays(today,14)});showToast('Ok! O aviso volta em 2 semanas. Dá para configurar a qualquer hora em Ajustes.')}}>Agora não</button>
           </div>}
+
+          {showCard('mascote')&&<MascoteCard say={mascot} today={today}/>}
 
           {showCard('resumo')&&<div className="stats">
             <div className="stat">
