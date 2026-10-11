@@ -29,7 +29,8 @@ import { Ring } from '@/components/ui/Ring'
 import { Sheet } from '@/components/ui/Sheet'
 import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
 import { NotificationsCard } from '@/components/NotificationsCard'
-import { TelegramCard, fetchAiTips } from '@/components/TelegramCard'
+import { TelegramCard, fetchAiTips, fetchMeetDraft, sendMeetSummary } from '@/components/TelegramCard'
+import { applyDraft } from '@/lib/reuniao'
 import { useHomeClock } from '@/hooks/useHomeClock'
 import { useDeviceIdentity } from '@/hooks/useDeviceIdentity'
 import { useNinhoData } from '@/hooks/useNinhoData'
@@ -327,7 +328,7 @@ function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>void,onP
   )
 }
 
-function MeetingModal({householdId,names,weekStart,saving,initial,agenda,agreementsOk,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,initial?:Partial<Meeting>&{agreements?:Agreement[]}|null,agenda?:AgendaSection[],agreementsOk?:boolean,onClose:()=>void,onSave:(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null)=>void}){
+function MeetingModal({householdId,names,weekStart,saving,initial,agenda,agreementsOk,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,initial?:Partial<Meeting>&{agreements?:Agreement[]}|null,agenda?:AgendaSection[],agreementsOk?:boolean,onClose:()=>void,onSave:(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null,sendTg:boolean)=>void}){
   const blank:Meeting={what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''}
   const[form,setForm]=useState<Meeting>(()=>{const i:any=initial||{};return Object.fromEntries(Object.entries(blank).map(([k,v])=>[k,i[k]??v])) as Meeting})
   const[agr,setAgr]=useState<Array<Agreement&{makeTask?:boolean}>>(initial?.agreements||[])
@@ -335,6 +336,16 @@ function MeetingModal({householdId,names,weekStart,saving,initial,agenda,agreeme
   const[showAgenda,setShowAgenda]=useState(true)
   const[ai,setAi]=useState<{state:'idle'|'busy'|'ok'|'err',tips?:string[],error?:string}>({state:'idle'})
   async function askAi(){setAi({state:'busy'});const r=await fetchAiTips(householdId);setAi(r.tips?{state:'ok',tips:r.tips}:{state:'err',error:r.error})}
+  const[draft,setDraft]=useState<{state:'idle'|'busy'|'ok'|'err',summary?:string,filled?:number,error?:string,undo?:{form:Meeting,agr:Array<Agreement&{makeTask?:boolean}>}}>({state:'idle'})
+  const[sendTg,setSendTg]=useState(false)
+  async function askDraft(){
+    setDraft({state:'busy'})
+    const r=await fetchMeetDraft(householdId,(agenda||[]).flatMap(s=>s.lines.map(l=>`${s.title}: ${l}`)))
+    if(!r.draft){setDraft({state:'err',error:r.error});return}
+    const out=applyDraft(form,agr,r.draft)
+    setDraft({state:'ok',summary:r.draft.summary,filled:out.filled,undo:{form,agr}})
+    setForm(out.form);setAgr(out.agreements as any)
+  }
   const useTip=(t:string)=>setForm(p=>({...p,adjustments:p.adjustments?`${p.adjustments}\n${t}`:t}))
   const set=(k:keyof Meeting,v:string)=>setForm(p=>({...p,[k]:v}))
   const addAgr=()=>{if(!newAgr.text.trim()||agr.length>=20)return;setAgr(l=>[...l,{text:newAgr.text.trim().slice(0,140),who:newAgr.who,task_id:null,done:false,makeTask:newAgr.makeTask}]);setNewAgr(x=>({...x,text:''}))}
@@ -344,14 +355,25 @@ function MeetingModal({householdId,names,weekStart,saving,initial,agenda,agreeme
     <div className="meet"><label className="fl">{n} — {label}</label><textarea className="fita" value={form[k]} onChange={e=>set(k,e.target.value)} placeholder={ph}/></div>
   )
   return(
-    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<button className="btn btn-p" disabled={saving} onClick={()=>onSave(form,agreementsOk?agr:null)}>{saving?'Salvando…':'Salvar reunião'}</button>}>
+    <Sheet size="lg" title="📋 Reunião semanal" onClose={onClose} footer={<div className="mt-foot">
+      <label className="mt-mk"><input type="checkbox" checked={sendTg} onChange={e=>setSendTg(e.target.checked)}/> 📨 Mandar o resumo no Telegram das duas</label>
+      <button className="btn btn-p" disabled={saving} onClick={()=>onSave(form,agreementsOk?agr:null,sendTg)}>{saving?'Salvando…':'Salvar reunião'}</button></div>}>
       <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>Semana de {fmtDate(weekStart)} · 15 minutos · sem cobranças</div>
       {agenda&&agenda.length>0&&<section className="mt-agenda" aria-labelledby="mt-ag">
         <button className="mt-ag-h" id="mt-ag" aria-expanded={showAgenda} onClick={()=>setShowAgenda(v=>!v)}><span>📊 Pauta: o que aconteceu na semana</span><span aria-hidden="true">{showAgenda?'−':'+'}</span></button>
         {showAgenda&&agenda.map(sec=>(<div key={sec.title} className="mt-sec"><div className="mt-sec-t">{sec.icon} {sec.title}</div><ul>{sec.lines.map((l,i)=><li key={i}>{l}</li>)}</ul></div>))}
       </section>}
       <div className="aibox">
-        {ai.state==='idle'&&<button className="btn btn-pur btn-w" onClick={askAi}>✦ Sugestões da IA para a semana</button>}
+        {draft.state==='idle'&&<button className="btn btn-pur btn-w" onClick={askDraft}>✦ Rascunho da reunião com IA</button>}
+        {draft.state==='busy'&&<div className="ai-wait" role="status"><span className="spin" aria-hidden="true"/>A IA está montando o rascunho da reunião…</div>}
+        {draft.state==='err'&&<div className="inline-err" role="alert">{draft.error} <button className="lnk" onClick={askDraft}>Tentar de novo</button></div>}
+        {draft.state==='ok'&&<div className="mt-draft" role="status">
+          <div className="slbl">✦ Rascunho da IA</div>
+          {draft.summary&&<p className="mt-draft-s">{draft.summary}</p>}
+          <p className="row-s">{draft.filled?`Preenchi ${draft.filled} item(ns) que estavam vazios. O que vocês já tinham escrito não mudou. Confiram e editem à vontade.`:'Vocês já tinham preenchido tudo; nada foi trocado.'}</p>
+          {!!draft.filled&&<button className="lnk-inline" onClick={()=>{setForm(draft.undo!.form);setAgr(draft.undo!.agr);setDraft({state:'idle'})}}>Desfazer rascunho</button>}
+        </div>}
+        {ai.state==='idle'&&<button className="btn btn-g btn-w" style={{marginTop:8}} onClick={askAi}>✦ Só sugestões de ajuste</button>}
         {ai.state==='busy'&&<div className="ai-wait" role="status"><span className="spin" aria-hidden="true"/>A IA está lendo a semana de vocês…</div>}
         {ai.state==='err'&&<div className="inline-err">{ai.error} <button className="lnk" onClick={askAi}>Tentar de novo</button></div>}
         {ai.state==='ok'&&<>
@@ -767,10 +789,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   }
 
   // Operações de formulário: o modal só fecha se o banco aceitou
-  async function save(context:string,fn:()=>Promise<void>,okMsg:string){
+  async function save(context:string,fn:()=>Promise<void>,okMsg:string|(()=>string)){
     if(saving)return
     setSaving(true)
-    try{await fn();closeModal();showToast(okMsg)}
+    try{await fn();closeModal();showToast(typeof okMsg==='function'?okMsg():okMsg)}
     catch(e){showError(toNinhoError(e,context))}
     finally{setSaving(false)}
   }
@@ -854,7 +876,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   }
 
 
-  function saveMeeting(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null){
+  function saveMeeting(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null,sendTg=false){
+    let tgMsg=''
     save('salvar reunião',async()=>{
       await api.saveMeeting(householdId,weekStart,m)
       if(agreements){
@@ -869,7 +892,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         await nos.reload()
       }
       if(screen==='nos')await loadHistory()
-    },'Reunião salva!')
+      if(sendTg){const r=await sendMeetSummary(householdId,weekStart);tgMsg=r.error?`Reunião salva. O resumo não foi: ${r.error}`:`Reunião salva e resumo enviado no Telegram (${r.sent}) 📨`}
+    },()=>tgMsg||'Reunião salva!')
   }
   async function toggleAgreement(weekStartOf:string,list:Agreement[],i:number){
     const next=list.map((a,j)=>j===i?{...a,done:!a.done}:a)

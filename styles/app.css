@@ -1349,3 +1349,7 @@ html[data-size="xl"]{zoom:1.25}
 @keyframes ms-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.02,.98)}}
 @keyframes ms-hop{0%{transform:translateY(0)}40%{transform:translateY(-10px) scale(1.04,.96)}100%{transform:translateY(0)}}
 @keyframes ms-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+/* Reunião: rascunho da IA e rodapé com resumo no Telegram */
+.mt-draft{border:1px solid var(--pbdr);border-left:4px solid var(--pur);border-radius:12px;padding:10px 12px}
+.mt-draft-s{font-size:14px;color:var(--tx);margin:4px 0 6px;line-height:1.45}
+.mt-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;width:100%}

@@ -136,3 +136,21 @@ export async function fetchAiTips(householdId: string): Promise<{ tips?: string[
     return r.ok ? { tips: j.tips || [] } : { error: j.error || 'Não foi possível gerar as sugestões agora.' }
   } catch { return { error: 'Sem conexão com o servidor. Confira a internet e tente de novo.' } }
 }
+
+async function postAuth(url: string, body: object): Promise<{ ok: boolean, j: any }> {
+  const { data } = await supabase.auth.getSession()
+  const token = data.session?.access_token
+  if (!token) return { ok: false, j: { error: 'Sessão não encontrada. Recarregue o app.' } }
+  const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify(body) })
+  return { ok: r.ok, j: await r.json().catch(() => ({})) }
+}
+/** Rascunho da reunião semanal com IA (a pauta vai como texto). */
+export async function fetchMeetDraft(householdId: string, agenda: string[]): Promise<{ draft?: import('@/lib/reuniao').MeetDraft, error?: string }> {
+  try { const { ok, j } = await postAuth('/api/ai/reuniao', { householdId, agenda }); return ok ? { draft: j.draft } : { error: j.error || 'Não foi possível montar o rascunho agora.' } }
+  catch { return { error: 'Sem conexão com o servidor. Confira a internet e tente de novo.' } }
+}
+/** Manda o resumo da reunião salva no Telegram das duas. */
+export async function sendMeetSummary(householdId: string, weekStart: string): Promise<{ sent?: number, error?: string }> {
+  try { const { ok, j } = await postAuth('/api/reuniao/resumo', { householdId, weekStart }); return ok ? { sent: j.sent } : { error: j.error || 'Não foi possível mandar o resumo agora.' } }
+  catch { return { error: 'Sem conexão com o servidor. Confira a internet e tente de novo.' } }
+}
