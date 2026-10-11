@@ -64,6 +64,8 @@ import * as mdApi from '@/lib/services/meudia'
 import { MeuDiaView, MeuDiaCard, type MdFocus } from '@/components/meudia/MeuDia'
 import type { MdTab } from '@/lib/nav'
 import { useNos } from '@/hooks/useNos'
+import { useFaxinao } from '@/hooks/useFaxinao'
+import { FaxinaoView, FaxinaoHomeCard } from '@/components/casa/Faxinao'
 import * as nosApi from '@/lib/services/nos'
 import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as nosTimeline, type Agreement, type AgendaSection, type Challenge } from '@/lib/nos'
 import { ChallengeCard, ChallengesView, CheckinHistory, DayNoteCard, TimelineCard, TogetherCard } from '@/components/nos/NosViews'
@@ -460,6 +462,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const ag=useAgenda(householdId,today)
   const cz=useCaes(householdId,today)
   const md=useMeuDia(householdId,today)
+  const fx=useFaxinao(householdId)
+  const fxLive=fx.list.find(f=>f.status==='andamento')
   // ── Fila sem internet ──
   const [outbox,setOutbox]=useState<OutItem[]>(()=>readOutbox(householdId))
   const flushing=useRef(false)
@@ -563,6 +567,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       case 'rotinas':setTab('rotinas');setRotView('rotinas');break
       case 'caes':setTab('caes');break
       case 'agenda':setTab('casa');setCasaView('agenda');break
+      case 'faxinao':setTab('casa');setCasaView('faxinao');break
       case 'desafios':setTab('nos');setNosView('desafios');break
       case 'nos':setTab('nos');setNosView('semana');break
       case 'sprint':setTab('inicio');setWantSprint(true);break
@@ -1063,6 +1068,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
+    ...(fx.available?[{id:'faxinao',icon:'casa',label:fxLive?'Faxinão em andamento':'Faxinão com IA',sub:fxLive?'Ver o que é seu agora':'Fale tudo; a IA organiza a ordem',run:()=>goCasa('faxinao')}]:[]),
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
     ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),
     {id:'routine',icon:'rotinas',label:'Iniciar rotina',sub:rn.now?rn.now.title:rn.next?`Próxima: ${rn.next.title}`:'Ver as rotinas',run:()=>go('rotinas')},
@@ -1384,6 +1390,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {personCard('s')}
             <aside className="side">
               {week.available&&me&&showCard('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
+              {fxLive&&<FaxinaoHomeCard f={fxLive} me={me} names={names} onOpen={()=>goCasa('faxinao')}/>}
               {md.available&&me&&showCard('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} profiles={md.profiles} goals={md.goals}
                 onUndo={l=>{md.remove(l).catch(e=>showError(toNinhoError(e,'desfazer')))}} today={today} nowHM={nowHM}
                 onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>goMd('hoje')}/>}
@@ -1503,8 +1510,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
         {/* ── CASA ── */}
         {screen==='casa'&&<div className="scr">
-          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[])]}/>
-          {casaView==='compras'?<ShoppingTab householdId={householdId} me={me} names={names} items={casa.shop} history={casa.shopHistory} state={casa.shopState} error={casa.shopError}
+          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[])]}/>
+          {casaView==='faxinao'?<FaxinaoView householdId={householdId} me={me} names={names} list={fx.list} available={fx.available} ready={fx.ready} reload={fx.reload} setList={fx.setList}
+              onToast={m=>showToast(m)} onError={(e,c)=>showError(toNinhoError(e,c))}/>
+          :casaView==='compras'?<ShoppingTab householdId={householdId} me={me} names={names} items={casa.shop} history={casa.shopHistory} state={casa.shopState} error={casa.shopError}
             setItems={casa.setShop} onReload={casa.reloadShopping} extras={casa.shopExtras} requireMe={requireMe} toast={(m,u)=>showToast(m,u)} fail={(e,r)=>showError(e,r)} onFinished={onShoppingFinished}/>
           :casaView==='agenda'?<AgendaView available={ag.available} events={ag.events} maint={casa.maint} dogCare={dogCareAgenda} onOpenDogs={()=>go('caes')} today={today} names={names} sobrouUrl={ag.sobrouUrl}
             onNew={k=>openModal('event',{event:null,kind:k})} onEdit={e=>openModal('event',{event:e,kind:e.kind})} onDone={eventDone} onPaid={billPaid}
