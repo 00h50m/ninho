@@ -18,7 +18,7 @@ export function useRotinas(householdId: string, today: string) {
   }, [householdId, runsFrom, logsFrom])
   useEffect(() => { reload() }, [reload])
 
-  const timer = useRef<ReturnType<typeof setTimeout>>()
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
   useEffect(() => {
     if (!data.routinesOk) return
     const later = () => { clearTimeout(timer.current); timer.current = setTimeout(() => { reload() }, 300) }

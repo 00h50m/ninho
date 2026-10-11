@@ -1119,6 +1119,34 @@ button.wc-cup:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 .fx-all li.ok .rt-step-t{text-decoration:line-through;color:var(--sub)}
 .fx-all li.skip .rt-step-t{color:var(--sub)}
 .fx-all small{color:var(--sub);font-size:12px}
+.od-list{list-style:none;margin:8px 0 0;padding:0}
+.od{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.od.hi .od-ic{background:var(--cbg);color:var(--cor-tx)}
+.od-ic{width:28px;height:28px;border-radius:50%;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.od-main{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.od-main small{font-size:12px;color:var(--sub);overflow-wrap:anywhere}
+.od-time{width:auto;min-width:104px;padding:4px 6px}
+/* Linha do tempo do dia (Início) */
+.seg-mini{display:inline-flex;border:1px solid var(--bd);border-radius:999px;padding:2px;margin-left:auto}
+.seg-mini button{border:0;background:transparent;color:var(--sub);font:inherit;font-size:12.5px;padding:4px 12px;border-radius:999px;min-height:30px}
+.seg-mini button.on{background:var(--gdk);color:var(--on-green)}
+.tl-per{margin-bottom:4px}
+.tl-list{list-style:none;margin:0;padding:0 0 0 6px;border-left:2px solid var(--bd);margin-left:52px}
+.tl-e{display:flex;align-items:center;gap:10px;padding:7px 0;position:relative;margin-left:-58px}
+.tl-t{width:44px;flex-shrink:0;text-align:right;font-size:12px;color:var(--sub)}
+.tl-e .tl-chk,.tl-ic{position:relative;z-index:1;background:var(--sf)}
+.tl-e:not(.k-tarefa) .tl-chk:not(.ok){color:var(--sub);font-size:12px}
+.tl-ic{width:24px;height:24px;flex-shrink:0;display:flex;align-items:center;justify-content:center;border-radius:8px;font-size:13px;border:1.5px dashed var(--bd)}
+.tl-b{flex:1;min-width:0;text-align:left;background:transparent;border:0;padding:0;font:inherit;color:inherit;cursor:pointer}
+.tl-tt{display:block;font-size:14.5px;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tl-s{display:block;font-size:11.5px;color:var(--sub);margin-top:1px}
+.tl-e.done .tl-tt{text-decoration:line-through;color:var(--sub)}
+.tl-e.late .tl-t,.tl-e.late .tl-s{color:var(--cor)}
+.tl-e.now{box-shadow:0 0 0 1.5px var(--green);border-radius:10px}
+.tl-now-tag{font-size:11px;font-weight:600;color:var(--green);margin-right:6px}
+.tl-line{display:flex;align-items:center;gap:8px;margin-left:-58px;font-size:11px;color:var(--cor);padding:2px 0}
+.tl-line .mono{width:44px;text-align:right}
+.tl-line-b{flex:1;height:2px;background:var(--cor);border-radius:2px}
 .co-date{max-width:220px}
 .co-add{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 12px;margin:10px 0}
 .co-add .onb-f{margin:0}
@@ -1296,3 +1324,32 @@ html[data-size="xl"]{zoom:1.25}
 .md-card,.chl,.card{min-width:0}
 .onb-row{flex-wrap:wrap}
 .onb-row>.onb-f{min-width:min(130px,100%)}
+/* Nino, o mascote (Início) */
+.masc{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:12px}
+.masc-b{background:transparent;border:0;padding:0;border-radius:50%;flex-shrink:0;cursor:pointer;line-height:0}
+.masc-b:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+.masc-bubble{position:relative;flex:1;min-width:0;background:var(--abg);border:1px solid var(--abdr);border-radius:14px;padding:8px 12px;font-size:14px;color:var(--tx)}
+.masc-bubble::before{content:'';position:absolute;left:-7px;top:50%;width:12px;height:12px;background:var(--abg);border-left:1px solid var(--abdr);border-bottom:1px solid var(--abdr);transform:translateY(-50%) rotate(45deg)}
+.masc-bubble b{display:block;font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--amb);margin-bottom:1px}
+.ms-body{fill:var(--amb)}
+.ms-belly{fill:var(--abg);fill:light-dark(color-mix(in srgb,var(--amb) 22%,var(--sf)),color-mix(in srgb,var(--amb) 55%,var(--tx)))}
+.ms-wing{fill:var(--abdr);fill:light-dark(color-mix(in srgb,var(--amb) 70%,var(--tx)),color-mix(in srgb,var(--amb) 70%,var(--sf)))}
+.ms-eye{fill:var(--tx);fill:light-dark(var(--tx),var(--sf))}.ms-shine{fill:var(--sf);fill:light-dark(var(--sf),var(--tx))}.ms-blush{fill:var(--cbdr)}.ms-beak{fill:var(--cor)}
+.ms-line{fill:none;stroke:var(--tx);stroke:light-dark(var(--tx),var(--sf));stroke-width:2.6;stroke-linecap:round}
+.ms-feet{fill:none;stroke:var(--cor);stroke-width:2.4;stroke-linecap:round}
+.ms-shadow{fill:var(--bd);opacity:.5}
+.ms-tuft{fill:var(--amb)}.ms-scarf{fill:var(--green)}.ms-flower circle{fill:var(--pur)}.ms-flower .ms-flower-c{fill:var(--amb)}
+.ms-crown{fill:var(--amb);stroke:var(--tx);stroke-width:1.4;stroke-linejoin:round}
+.ms-z{fill:var(--sub);font:600 16px 'DM Mono',monospace}
+.ms-drop{fill:var(--pur)}.ms-confetti{fill:var(--pur)}.ms-confetti rect{fill:var(--green)}.ms-spark{fill:var(--amb)}
+.ms-hop{transform-origin:50% 90%;animation:ms-breathe 3.6s ease-in-out infinite}
+.m-sono .ms-hop{animation-duration:6s}
+.masc-b.hop .ms-hop{animation:ms-hop .45s ease-out}
+.m-festa .ms-confetti{animation:ms-float 1.8s ease-in-out infinite}
+@keyframes ms-breathe{0%,100%{transform:scale(1,1)}50%{transform:scale(1.02,.98)}}
+@keyframes ms-hop{0%{transform:translateY(0)}40%{transform:translateY(-10px) scale(1.04,.96)}100%{transform:translateY(0)}}
+@keyframes ms-float{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+/* Reunião: rascunho da IA e rodapé com resumo no Telegram */
+.mt-draft{border:1px solid var(--pbdr);border-left:4px solid var(--pur);border-radius:12px;padding:10px 12px}
+.mt-draft-s{font-size:14px;color:var(--tx);margin:4px 0 6px;line-height:1.45}
+.mt-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px 14px;width:100%}

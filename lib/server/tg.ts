@@ -2,7 +2,7 @@
 import type { TgCall, BotDeps } from './telegram'
 import { createDb } from './push'
 import { weeklyTips } from './ai'
-import { interpret, plateFromPhoto } from './telegramAi'
+import { dayFromTelegram, interpret, plateFromPhoto } from './telegramAi'
 import { faxFromTelegram } from './faxinaoAi'
 
 export function telegramConfigured(env = process.env): boolean {
@@ -35,6 +35,7 @@ export function createBotDeps(env = process.env): BotDeps {
     // Texto livre: só com a chave da IA configurada (sem ela, o bot entende só comandos)
     ...(env.ANTHROPIC_API_KEY ? {
       understand: (link, text) => interpret(db, link, text, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }),
+      organizeDay: (link, text) => dayFromTelegram(db, link, text, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }),
       faxinao: (link, text) => faxFromTelegram(db, link, text, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }),
       plate: async (link, fileId, caption) => {
         const img = await downloadPhoto(env, fileId)

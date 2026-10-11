@@ -6,6 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { fallbackFax, faxSummary, faxTotals, fmtMin, nextFor, resetSteps, type FaxStep, type FaxWho, type Faxinao } from '@/lib/faxinao'
 import * as api from '@/lib/services/faxinao'
+import { useSpeech } from '@/hooks/useSpeech'
 
 const first = (n: string) => (n || '').split(' ')[0]
 const ROOMS: Array<[string, string]> = [['🛁', 'banheiro'], ['🍳', 'cozinha'], ['🛏️', 'quartos e roupa de cama'], ['🛋️', 'sala'], ['🧺', 'lavar roupa'], ['🌳', 'quintal'], ['🗑️', 'tirar o lixo'], ['🐶', 'banho e caminha das cachorras']]
@@ -26,20 +27,6 @@ export function FaxinaoView(p: FaxProps) {
   const draft = drafts.find(d => d.id === openDraft) || drafts[0]
   if (draft && openDraft !== 'novo') return <DraftFax {...p} f={draft} others={drafts.length - 1} onNew={() => setOpenDraft('novo')}/>
   return <NewFax {...p} onCreated={id => setOpenDraft(id)}/>
-}
-
-/** Voz pelo navegador (Chrome/Android/Safari), quando existe. */
-function useSpeech(onText: (t: string) => void) {
-  const [on, setOn] = useState(false), ref = useRef<any>(null)
-  const SR = typeof window !== 'undefined' ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition) : null
-  function toggle() {
-    if (on) { ref.current?.stop(); return }
-    const r = new SR(); r.lang = 'pt-BR'; r.continuous = true; r.interimResults = false
-    r.onresult = (e: any) => { for (let i = e.resultIndex; i < e.results.length; i++) if (e.results[i].isFinal) onText(e.results[i][0].transcript) }
-    r.onend = () => setOn(false); r.onerror = () => setOn(false)
-    ref.current = r; r.start(); setOn(true)
-  }
-  return { supported: !!SR, on, toggle }
 }
 
 function NewFax(p: FaxProps & { onCreated: (id: string) => void }) {
