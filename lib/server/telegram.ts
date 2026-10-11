@@ -27,6 +27,8 @@ export interface BotDeps {
   tips?: (householdId: string) => Promise<{ ok: true, text: string } | { ok: false, message: string }>
   /** Texto livre interpretado pela IA (opcional: sem a chave, o bot só entende comandos). */
   understand?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<Understood>
+  /** Foto do prato (opcional: precisa da chave da IA). */
+  plate?: (link: { id: string, household_id: string, who: Who, chat_id: number }, fileId: string, caption: string) => Promise<Understood>
 }
 
 interface Link { id: string, household_id: string, who: Who, chat_id: number, morning: boolean, weekly: boolean, active: boolean }
@@ -61,7 +63,8 @@ export function menuCommand(text: string): string | null {
 export const ADD_PROMPT = 'O que vai na lista? Mande os itens separados por vírgula (ex.: leite, 2 kg arroz, café).'
 
 export const HELP = [
-  'Escreva do seu jeito, por exemplo: “comprei leite e café”, “a Zelda tomou a V10 hoje”, “lembra a Sabrina de pagar a internet sexta”, “bebi um copo de água”, “lavei a louça”. Eu mostro o que entendi e você confirma.',
+  'Escreva do seu jeito, por exemplo: “comprei leite e café”, “a Zelda tomou a V10 hoje”, “lembra a Sabrina de pagar a internet sexta”, “bebi um copo de água”, “lavei a louça”, “almocei arroz, feijão e frango”. Eu mostro o que entendi e você confirma.',
+  '📷 Mande a foto do prato (com “almoço”, “jantar”… na legenda, se quiser) e eu estimo as calorias.',
   '',
   'Ou use o menu aqui embaixo e os comandos:',
   '/hoje — o que é seu hoje (com botões para concluir)',
@@ -235,8 +238,10 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   if (!(await firstTime(deps.db, update?.update_id))) return
   if (update?.callback_query) return onCallback(deps, update.callback_query, date)
   const msg = update?.message
-  if (!msg?.chat || typeof msg.text !== 'string') return
+  if (!msg?.chat) return
   if (msg.chat.type && msg.chat.type !== 'private') return // só conversas privadas
+  if (Array.isArray(msg.photo) && msg.photo.length) { await photo(deps, msg); return }
+  if (typeof msg.text !== 'string') return
   const chatId = Number(msg.chat.id)
   const text = msg.text.trim()
   const [head] = text.split(/\s+/)
@@ -279,6 +284,24 @@ async function freeText(deps: BotDeps, link: Link, text: string) {
   let u: Understood
   try { u = await deps.understand!(link, text) }
   catch (e: any) { console.error('[ninho] telegram ia', String(e?.message || e).slice(0, 200)); u = { ok: false, message: 'Não consegui entender agora. Tente de novo ou use /ajuda.' } }
+  await propose(deps, link, u)
+}
+
+/** Foto do prato: a maior versão da foto vai para a IA; a pessoa confirma antes de gravar. */
+async function photo(deps: BotDeps, msg: any) {
+  const chatId = Number(msg.chat.id)
+  const link = await linkOf(deps.db, chatId)
+  if (!link) { await send(deps, chatId, 'Esta conversa ainda não está ligada ao Ninho. No app: Ajustes › Telegram › Conectar.'); return }
+  if (!deps.plate) { await send(deps, chatId, 'A IA ainda não foi configurada no servidor, então ainda não leio fotos.'); return }
+  await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
+  const best = [...msg.photo].sort((a: any, b: any) => (b.file_size || b.width || 0) - (a.file_size || a.width || 0))[0]
+  let u: Understood
+  try { u = await deps.plate(link, String(best.file_id), String(msg.caption || '')) }
+  catch (e: any) { console.error('[ninho] telegram foto', String(e?.message || e).slice(0, 200)); u = { ok: false, message: 'Não consegui ler a foto agora. Tente de novo ou escreva o que comeu.' } }
+  await propose(deps, link, u)
+}
+
+async function propose(deps: BotDeps, link: Link, u: Understood) {
   if (u.ok === false) { await send(deps, link.chat_id, u.message); return }
   if (!u.actions.length) {
     await send(deps, link.chat_id, u.reply || 'Não achei nada para registrar nessa mensagem. Exemplos: “comprei leite”, “a Zelda tomou a V10”, “bebi um copo de água”. Ou use /ajuda.')

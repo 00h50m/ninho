@@ -90,3 +90,24 @@ describe('IA do Telegram: textos', () => {
     ])
   })
 })
+
+describe('IA do Telegram: refeição', () => {
+  it('itens pela tabela do Ninho (com os gramas da IA) ou pela estimativa da IA', () => {
+    const r = validate({ reply: null, actions: [act({ type: 'refeicao', kind: 'almoco', items: [
+      { title: 'arroz branco', qty: '4 colheres', grams: 100, kcal: 130 },
+      { title: 'feijão', qty: '1 concha', grams: null, kcal: 80 },
+      { title: 'farofa da vó', qty: '2 colheres', grams: 30, kcal: 120 },
+      { title: '', qty: null, grams: null, kcal: null },
+    ] })] }, C)
+    const a = r.actions[0] as any
+    expect(a.meal).toBe('almoco')
+    expect(a.items.map((i: any) => `${i.food_id}:${i.g}:${i.kcal}`)).toEqual(['arroz:100:128', 'feijao:100:76', 'farofa:30:122'])
+    expect(describePlan(r.actions, C)[0]).toBe('🍽️ Almoço: Arroz branco cozido (100 g), Feijão carioca cozido (100 g), Farofa pronta (30 g) · ≈ 326 kcal')
+  })
+  it('sem refeição dita: pelo horário; sem itens: descarta', () => {
+    const r = validate({ reply: null, actions: [act({ type: 'refeicao', kind: 'xyz', items: [{ title: 'pizza estranha', qty: '2 fatias', grams: 220, kcal: 600 }] }), act({ type: 'refeicao', kind: 'jantar', items: [] })] }, C)
+    expect(r.actions).toHaveLength(1)
+    expect((r.actions[0] as any).meal).toBe('cafe')
+    expect((r.actions[0] as any).items[0].food_id).toBe('pizza')
+  })
+})

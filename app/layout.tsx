@@ -9,6 +9,8 @@ export const metadata: Metadata = {
   description: 'Sistema operacional da sua casa',
   manifest: '/manifest.json',
   appleWebApp: { capable: true, title: 'Ninho', statusBarStyle: 'default' },
+  // o Chrome pede a versão sem "apple-" além da do iPhone
+  other: { 'mobile-web-app-capable': 'yes' },
   icons: { icon: '/icon-192.png', apple: '/icon-192.png' },
 }
 

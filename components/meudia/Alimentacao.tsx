@@ -2,10 +2,14 @@
 // Alimentação no Meu dia: perfil e meta, saldo do dia (comido × meta + treino),
 // refeição escrita em texto e conferida item a item, semana e peso com previsão.
 // Tudo é estimativa e fica só com a dona, a não ser que ela compartilhe.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Who } from '@/lib/types'
 import { fmtDate } from '@/lib/dates'
-import { bodySeries, type PKind, type PLog } from '@/lib/meudia'
+import { bodySeries, type PKind, type PLog, type PMed, type PSettings } from '@/lib/meudia'
+import type { DietPlan, PlanRow } from '@/lib/dietPlan'
+import { readPlatePhoto } from '@/lib/services/aiFiles'
+import { PlanCard } from './Plano'
+import type { MdFocus } from './MeuDia'
 import { FOODS, type Food, type FoodUnit } from '@/lib/foods'
 import {
   ACTIVITIES, GOALS, MEALS, SAFE_MIN, calorieTarget, customToFood, dayFood, dayWord, etaDate, itemFor, kcalWeek, mealForTime, mealTotals, mealsOn, norm, parseMeal, weightTrend,
@@ -16,6 +20,7 @@ import { WeekBars } from './SleepBars'
 
 const K = (v: number) => Math.round(v).toLocaleString('pt-BR')
 const N1 = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
+const PACE = (v: number) => String(Math.round(v * 100) / 100).replace('.', ',')
 const num = (v: string) => v.trim() ? Number(v.replace(',', '.')) : NaN
 const UNIT_LABEL: Record<string, string> = {
   un: 'unidade', fatia: 'fatia', colher: 'colher (sopa)', colherinha: 'colher (chá)', xicara: 'xícara', concha: 'concha', copo: 'copo', lata: 'lata', taca: 'taça',
@@ -23,21 +28,42 @@ const UNIT_LABEL: Record<string, string> = {
 }
 
 export interface FoodTabProps {
-  me: Who, today: string, nowHM: string, logs: PLog[], profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean
+  householdId: string, me: Who, today: string, nowHM: string, logs: PLog[], profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean
+  meds: PMed[], settings: PSettings[], plans: PlanRow[], plansReady?: boolean, focus?: MdFocus
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
   onSaveProfile: (p: Omit<FoodProfile, 'who'>) => Promise<void>
   onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
   onStopFood: (f: CustomFood) => Promise<void>
+  onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
+  onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
+  onStopPlan: (p: PlanRow) => Promise<void>
+  onSaveMed: (m: { id?: string, name: string, dose: string | null, times: string[] }) => Promise<void>
+  onSaveSettings: (s: Partial<Omit<PSettings, 'who'>>) => Promise<void>
 }
 
 export function FoodTab(p: FoodTabProps) {
   const [editing, setEditing] = useState(false)
+  // atalho do menu / ação rápida: rola até o cartão pedido
+  useEffect(() => {
+    const w = p.focus?.what
+    if (!w) return
+    const t = setTimeout(() => {
+      const el = document.getElementById(w === 'refeicao' ? 'al-add' : 'pl-hoje') || document.getElementById('pl-novo')
+      el?.closest('.card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+      if (w === 'refeicao') (document.querySelector('.al-text') as HTMLTextAreaElement | null)?.focus({ preventScroll: true })
+    }, 150)
+    return () => clearTimeout(t)
+  }, [p.focus?.n]) // eslint-disable-line react-hooks/exhaustive-deps
   if (p.foodReady === false) return <div className="card empty"><span className="empty-icon">🍽️</span>A Alimentação ainda não está ativa: falta rodar a atualização do banco (migration 026) no Supabase.</div>
   const prof = p.profiles.find(x => x.who === p.me)
   const weights = bodySeries(p.logs, p.me, 'weight')
   const w = weights.length ? weights[weights.length - 1].v : null
-  if (!prof || w == null || editing) return <ProfileForm {...p} prof={prof} weight={w} onDone={() => setEditing(false)} canCancel={!!prof && w != null}/>
+  if (!prof || w == null || editing) return <>
+    <ProfileForm {...p} prof={prof} weight={w} onDone={() => setEditing(false)} canCancel={!!prof && w != null}/>
+    {/* o plano da nutricionista não depende da meta de calorias */}
+    {!editing && <PlanCard {...p} hide={!!prof?.hide_numbers}/>}
+  </>
   const t = calorieTarget(prof, w, Number(p.today.slice(0, 4)))
   const d = dayFood(p.logs, p.me, p.today, t.kcal, w)
   const hide = prof.hide_numbers
@@ -57,6 +83,7 @@ export function FoodTab(p: FoodTabProps) {
         </dl>}
       </section>
 
+      <PlanCard {...p} hide={hide}/>
       <MealForm {...p} hide={hide}/>
       <MealsToday {...p} hide={hide}/>
 
@@ -69,11 +96,13 @@ export function FoodTab(p: FoodTabProps) {
 
       <WeightCard {...p} prof={prof} series={weights}/>
 
-      <section className="card" aria-labelledby="al-meta">
+      <details className="card al-cfg">
+        <summary>⚙️ Minha meta e meus alimentos</summary>
+      <section className="al-sub" aria-labelledby="al-meta">
         <div className="slbl" id="al-meta">Minha meta</div>
         <p className="row-s">
           {t.manual ? <>Meta definida por você: <b>{K(t.kcal)} kcal</b> por dia.</>
-            : <>Gasto estimado: <b>{K(t.tdee)} kcal</b> por dia. Meta: <b>{K(t.kcal)} kcal</b> ({GOALS.find(g => g[0] === prof.goal)?.[1].toLowerCase()}{prof.goal !== 'manter' ? `, ${N1(prof.pace_kg_week)} kg por semana` : ''}).</>}
+            : <>Gasto estimado: <b>{K(t.tdee)} kcal</b> por dia. Meta: <b>{K(t.kcal)} kcal</b> ({GOALS.find(g => g[0] === prof.goal)?.[1].toLowerCase()}{prof.goal !== 'manter' ? `, ${PACE(prof.pace_kg_week)} kg por semana` : ''}).</>}
           {' '}Os treinos que você registra somam à parte.
         </p>
         {t.clamped && <p className="row-s al-warn">Nesse ritmo a conta daria menos de {K(SAFE_MIN[prof.sex])} kcal, então a meta ficou nesse mínimo. Um ritmo mais leve costuma ser mais fácil de manter.</p>}
@@ -82,7 +111,8 @@ export function FoodTab(p: FoodTabProps) {
         <p className="row-s" style={{ marginTop: 8 }}>São estimativas para o dia a dia. Para um plano individual, gestação ou alguma condição de saúde, fale com nutricionista ou médica.</p>
       </section>
 
-      <MyFoods {...p}/>
+      <MyFoods {...p} inner/>
+      </details>
     </>
   )
 }
@@ -130,7 +160,7 @@ function ProfileForm(p: FoodTabProps & { prof?: FoodProfile, weight: number | nu
       {goal !== 'manter' && <>
         <div className="onb-q">Ritmo</div>
         <div className="onb-days wrap" role="radiogroup" aria-label="Ritmo por semana">
-          {[0.25, 0.5, 0.75, 1].map(v => <button key={v} role="radio" aria-checked={pace === v} className={`onb-day wide ${pace === v ? 'on' : ''}`} onClick={() => setPace(v)}>{N1(v)} kg/semana</button>)}
+          {[0.25, 0.5, 0.75, 1].map(v => <button key={v} role="radio" aria-checked={pace === v} className={`onb-day wide ${pace === v ? 'on' : ''}`} onClick={() => setPace(v)}>{PACE(v)} kg/semana</button>)}
         </div>
       </>}
       <div className="onb-row" style={{ marginTop: 10 }}>
@@ -151,6 +181,18 @@ function ProfileForm(p: FoodTabProps & { prof?: FoodProfile, weight: number | nu
 function MealForm(p: FoodTabProps & { hide: boolean }) {
   const [meal, setMeal] = useState<Meal>(() => mealForTime(p.nowHM))
   const [text, setText] = useState(''), [items, setItems] = useState<MealItem[] | null>(null), [busy, setBusy] = useState(false)
+  const [photo, setPhoto] = useState<'idle' | 'busy'>('idle'), [note, setNote] = useState<string | null>(null), [err, setErr] = useState<string | null>(null)
+  const photoRef = useRef<HTMLInputElement>(null)
+  async function fromPhoto(f: File | undefined) {
+    if (!f) return
+    setPhoto('busy'); setErr(null); setNote(null)
+    const r = await readPlatePhoto(p.householdId, f, text)
+    setPhoto('idle')
+    if (photoRef.current) photoRef.current.value = ''
+    if (r.ok === false) { setErr(r.error); return }
+    setItems(r.data.items); setNote(r.data.note)
+    if (!text.trim()) setText('Foto do prato')
+  }
   const custom = useMemo(() => p.foods.filter(f => f.who === p.me), [p.foods, p.me])
   const all = useMemo(() => [...custom.map(customToFood), ...FOODS], [custom])
   const byName = (n: string) => all.find(f => norm(f.name) === norm(n))
@@ -162,7 +204,7 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
     setBusy(true)
     try {
       await p.onAdd('refeicao', total.kcal, { meal, text: text.trim().slice(0, 500), items: items.filter(i => i.food_id || i.kcal > 0) })
-      setText(''); setItems(null)
+      setText(''); setItems(null); setNote(null)
     } catch { /* aviso já mostrado */ } finally { setBusy(false) }
   }
   return (
@@ -173,13 +215,20 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
       </div>
       <label className="onb-f" style={{ marginTop: 10 }}><span>O que você comeu?</span>
         <textarea className="fi al-text" rows={2} value={text} maxLength={500} onChange={e => { setText(e.target.value); setItems(null) }} placeholder="2 ovos mexidos, 1 pão francês com manteiga e café com leite"/></label>
-      {!items && <button className="btn btn-s" disabled={!text.trim()} onClick={() => setItems(parseMeal(text, custom))}>Conferir</button>}
+      {!items && <div className="md-acts" style={{ marginTop: 0 }}>
+        <button className="btn btn-s" disabled={!text.trim()} onClick={() => setItems(parseMeal(text, custom))}>Conferir</button>
+        <input ref={photoRef} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={e => fromPhoto(e.target.files?.[0])}/>
+        <button className="btn btn-g" disabled={photo === 'busy'} onClick={() => photoRef.current?.click()}>{photo === 'busy' ? 'Olhando a foto…' : '📷 Foto do prato'}</button>
+      </div>}
+      {!items && <p className="row-s">Na foto, o que você escrever acima ajuda a IA (ex.: "frango e arroz integral"). A foto não fica guardada.</p>}
+      {err && <p className="row-s al-warn" role="alert">{err}</p>}
+      {items && note && <p className="row-s">📷 {note}</p>}
       {items && <>
         <datalist id="al-foods">{all.map(f => <option key={f.id} value={f.name}/>)}</datalist>
         <ul className="al-items">{items.map((it, i) => {
           const food = it.food_id ? all.find(f => f.id === it.food_id) : undefined
           const units = food ? [...Object.keys(food.units), food.liquid ? 'ml' : 'g'] as Array<FoodUnit | 'g' | 'ml'> : []
-          return <li key={`${i}:${it.food_id}:${it.unit}:${it.qty}`} className={`al-item ${food ? '' : 'miss'}`}>
+          return <li key={`${i}:${it.food_id}:${it.unit}:${it.qty}`} className={`al-item ${food || it.kcal > 0 ? '' : 'miss'}`}>
             <input className="fi" list="al-foods" defaultValue={it.name} aria-label={`Alimento ${i + 1}`} onBlur={e => {
               const f = byName(e.target.value)
               if (f) set(i, itemFor(f, it.qty, f.units[it.unit as FoodUnit] || it.unit === 'g' || it.unit === 'ml' ? it.unit : null, it.text))
@@ -194,10 +243,10 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
               }}>{units.map(u => <option key={u} value={u}>{UNIT_LABEL[u] || u}</option>)}</select>
               <span className="al-k mono">{it.g} {food.liquid ? 'ml' : 'g'}{p.hide ? '' : ` · ${K(it.kcal)} kcal`}</span>
             </> : <>
-              <span className="al-miss">Não achei na tabela. Escolha um parecido{p.hide ? '' : ' ou informe as calorias'}.</span>
-              {!p.hide && <input className="fi al-q" inputMode="numeric" placeholder="kcal" aria-label={`Calorias de ${it.name}`} onBlur={e => { const k = num(e.target.value); set(i, { ...it, kcal: k > 0 ? Math.round(k) : 0 }) }}/>}
+              <span className={it.kcal > 0 ? 'al-k' : 'al-miss'}>{it.kcal > 0 ? `estimativa da IA${it.g ? ` · ${it.g} g` : ''}` : `Não achei na tabela. Escolha um parecido${p.hide ? '' : ' ou informe as calorias'}.`}</span>
+              {!p.hide && <input className="fi al-q" inputMode="numeric" placeholder="kcal" defaultValue={it.kcal > 0 ? String(it.kcal) : ''} aria-label={`Calorias de ${it.name}`} onBlur={e => { const k = num(e.target.value); set(i, { ...it, kcal: k > 0 ? Math.round(k) : 0 }) }}/>}
             </>}
-            {it.guess && <span className="al-miss">medida trocada por {UNIT_LABEL[it.unit]}</span>}
+            {it.guess && food && <span className="al-miss">medida trocada por {UNIT_LABEL[it.unit]}</span>}
             <button className="ib" aria-label={`Tirar ${it.name}`} onClick={() => setItems(l => l && l.filter((_, j) => j !== i))}>✕</button>
           </li>
         })}</ul>
@@ -245,7 +294,7 @@ function WeightCard(p: FoodTabProps & { prof: FoodProfile, series: Array<{ date:
       <LineChart title="Peso" unit="kg" data={series} proj={proj} goal={prof.target_kg}/>
       <ul className="al-proj">
         {trend != null && <li>Últimas 4 semanas: <b>{trend > 0 ? '+' : ''}{N1(trend)} kg por semana</b>{trendEta && <> · nesse ritmo, {N1(prof.target_kg!)} kg por volta de <b>{fmtDate(trendEta)}/{trendEta.slice(2, 4)}</b></>}.</li>}
-        {planEta && <li>No ritmo planejado ({N1(prof.pace_kg_week)} kg/semana): por volta de <b>{fmtDate(planEta)}/{planEta.slice(2, 4)}</b>.</li>}
+        {planEta && <li>No ritmo planejado ({PACE(prof.pace_kg_week)} kg/semana): por volta de <b>{fmtDate(planEta)}/{planEta.slice(2, 4)}</b>.</li>}
         {trend == null && <li>Registre o peso pelo menos uma vez por semana para ver a tendência.</li>}
       </ul>
       <div className="tk-add">
@@ -256,13 +305,13 @@ function WeightCard(p: FoodTabProps & { prof: FoodProfile, series: Array<{ date:
   )
 }
 
-function MyFoods(p: FoodTabProps) {
+function MyFoods(p: FoodTabProps & { inner?: boolean }) {
   const mine = p.foods.filter(f => f.who === p.me)
   const blank = { name: '', portion: '1 unidade', portion_g: '', kcal: '', protein: '' }
   const [f, setF] = useState<{ id?: string, name: string, portion: string, portion_g: string, kcal: string, protein: string }>(blank)
   const ok = f.name.trim() && num(f.portion_g) > 0 && num(f.kcal) >= 0 && !isNaN(num(f.kcal))
   return (
-    <section className="card" aria-labelledby="al-meus">
+    <section className={p.inner ? 'al-sub' : 'card'} aria-labelledby="al-meus">
       <div className="slbl" id="al-meus">Meus alimentos</div>
       <p className="row-s" style={{ marginBottom: 8 }}>Para o que não está na tabela: copie do rótulo (por porção). Depois é só escrever o nome na refeição.</p>
       {mine.map(x => <div key={x.id} className="md-row"><span className="md-t"><b>{x.name}</b><small>{x.portion} ({N1(x.portion_g)} g) · {K(x.kcal)} kcal{x.protein != null ? ` · ${N1(x.protein)} g de proteína` : ''}</small></span>

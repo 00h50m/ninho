@@ -9,7 +9,9 @@ import { homeClock } from '@/lib/dates'
 import { planToday } from '@/lib/today'
 import { guessCategory } from '@/lib/shopping'
 import { kindInfo } from '@/lib/caes'
-import { OUTPUT_SCHEMA, SYSTEM, contextText, describe, validate, type AiAction, type AiContext } from '@/lib/telegramAi'
+import { OUTPUT_SCHEMA, SYSTEM, contextText, describe, describeMeal, validate, type AiAction, type AiContext } from '@/lib/telegramAi'
+import { MEALS, mealForTime, mealTotals } from '@/lib/nutricao'
+import { customFoods, readPlate } from './nutritionAi'
 import { AI_MODEL } from './ai'
 import { loadHousehold, must } from './notify'
 
@@ -113,6 +115,10 @@ export async function execute(db: SupabaseClient, link: TgLink, actions: AiActio
         const dup = must(await db.from('personal_logs').select('id').eq('household_id', hh).eq('who', link.who).eq('date', date).eq('kind', 'remedio').contains('data', { med_id: m.id, time: a.time }), 'doses') as any[]
         if (dup.length) { out.push(`💊 ${m.name}${a.time ? ` (${a.time})` : ''} já estava marcado`); continue }
         ok(await db.from('personal_logs').insert({ household_id: hh, who: link.who, date, kind: 'remedio', value: null, data: { med_id: m.id, name: m.name, time: a.time } }), `💊 ${m.name}${a.time ? ` (dose das ${a.time})` : ''} marcado`)
+      } else if (a.type === 'refeicao') {
+        const kcal = mealTotals(a.items).kcal
+        ok(await db.from('personal_logs').insert({ household_id: hh, who: link.who, date, kind: 'refeicao', value: kcal, data: { meal: a.meal, text: 'Telegram', items: a.items, via: 'telegram' } }),
+          `🍽️ ${MEALS.find(m => m[0] === a.meal)?.[2] || 'Refeição'} registrado (${kcal.toLocaleString('pt-BR')} kcal)`)
       }
     } catch (e: any) {
       out.push(`⚠️ Não consegui registrar: ${describeShort(a)}`)
@@ -130,5 +136,25 @@ function describeShort(a: AiAction): string {
     case 'tarefa_feita': return a.title
     case 'agua': return 'água'
     case 'remedio_tomado': return a.name
+    case 'refeicao': return 'refeição'
   }
+}
+
+/** Foto do prato mandada no Telegram: a IA estima e a pessoa confirma (a foto não fica guardada). */
+export async function plateFromPhoto(db: SupabaseClient, link: TgLink, image: { type: string, data: string }, caption: string, opts: { apiKey?: string, baseURL?: string, now?: Date } = {}): Promise<Understood> {
+  const r = await readPlate(db, link.household_id, image, caption, await customFoods(db, link.household_id, link.who), opts)
+  if (r.ok === false) return { ok: false, message: (r as { message: string }).message }
+  const action: AiAction = { type: 'refeicao', meal: mealFromCaption(caption) ?? mealForTime(homeClock(opts.now ?? new Date()).hm), items: r.plate.items }
+  return { ok: true, actions: [action], lines: [describeMeal(action)], reply: r.plate.note ? `📷 ${r.plate.note}` : null }
+}
+
+/** "almoço", "janta"… na legenda da foto escolhem a refeição. */
+export function mealFromCaption(c: string): (typeof MEALS)[number][0] | null {
+  const t = c.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase()
+  if (/cafe|manha/.test(t)) return 'cafe'
+  if (/almoc/.test(t)) return 'almoco'
+  if (/jant/.test(t)) return 'jantar'
+  if (/lanche/.test(t)) return 'lanche'
+  if (/ceia/.test(t)) return 'ceia'
+  return null
 }

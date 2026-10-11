@@ -98,7 +98,8 @@ export type TipsResult = { ok: true, tips: string[], text: string } | { ok: fals
 export async function weeklyTips(db: SupabaseClient, householdId: string, opts: { apiKey?: string, baseURL?: string, now?: Date } = {}): Promise<TipsResult> {
   if (!opts.apiKey) return { ok: false, status: 503, message: 'A IA ainda não foi configurada (falta ANTHROPIC_API_KEY na Vercel).' }
   const since = new Date((opts.now ?? new Date()).getTime() - 24 * 3600 * 1000).toISOString()
-  const used = must(await db.from('ai_log').select('id').eq('household_id', householdId).gte('created_at', since), 'uso da IA') as any[]
+  // conta só as sugestões da semana (Telegram e alimentação têm limites próprios)
+  const used = must(await db.from('ai_log').select('id').eq('household_id', householdId).eq('kind', 'weekly').gte('created_at', since), 'uso da IA') as any[]
   if (used.length >= AI_DAILY_LIMIT) return { ok: false, status: 429, message: `Limite de ${AI_DAILY_LIMIT} pedidos por dia atingido. Tente amanhã.` }
 
   const facts = await loadWeekFacts(db, householdId, opts.now)

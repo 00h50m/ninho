@@ -5,6 +5,7 @@ import type { Names, Who } from './types'
 import { addDays, dowOf } from './dates'
 import { HEALTH_KINDS, type HealthKind } from './caes'
 import { KINDS as EVENT_KINDS, type EventKind } from './agenda'
+import { MEALS, findFood, itemFor, mealForTime, mealTotals, parseMeal, type Meal, type MealItem } from './nutricao'
 
 export type AiAction =
   | { type: 'compras', items: Array<{ title: string, qty: string | null }> }
@@ -13,6 +14,7 @@ export type AiAction =
   | { type: 'tarefa_feita', task_id: string, title: string }
   | { type: 'agua', ml: number }
   | { type: 'remedio_tomado', med_id: string, name: string, time: string | null }
+  | { type: 'refeicao', meal: Meal, items: MealItem[] }
 
 export interface AiContext {
   today: string, hm: string, me: Who, names: Names
@@ -36,8 +38,9 @@ Transforme a mensagem em ações do app, usando só os tipos do formato de respo
 - tarefa_feita: a pessoa diz que fez uma tarefa da lista de pendentes de hoje; use exatamente o id da lista. Se nenhuma combinar, não invente.
 - agua: água que a pessoa bebeu, em ml ("um copo" = tamanho do copo informado; "uma garrafa" = 500 ml).
 - remedio_tomado: a pessoa tomou um remédio da lista dela; use o id da lista e o horário da dose mais próxima.
+- refeicao: o que a pessoa comeu. "kind" = cafe, almoco, lanche, jantar, ceia ou outro (pelo que ela disser; senão pelo horário). Em "items", cada alimento com "title" simples ("arroz branco", "ovo"), "qty" como ela disse ("2 unidades", "1 concha"), "grams" = estimativa em gramas (ml para bebidas) e "kcal" = estimativa de calorias dessa quantidade (tabela TACO).
 Datas sempre em AAAA-MM-DD, calculadas a partir de "hoje" (ex.: "sexta" = a próxima sexta, ou hoje se hoje for sexta; "ontem" = hoje menos 1).
-Se a mensagem for só conversa, pergunta ou algo que o app não faz (dieta, calorias, finanças, diagnóstico de saúde), devolva "actions" vazia e uma resposta curta e gentil em "reply" dizendo o que o bot sabe fazer.
+Se a mensagem for só conversa, pergunta ou algo que o app não faz (finanças, diagnóstico de saúde, montar dieta), devolva "actions" vazia e uma resposta curta e gentil em "reply" dizendo o que o bot sabe fazer.
 Nunca invente itens, nomes, ids ou datas que a mensagem não sustenta. Em caso de dúvida real, prefira não incluir a ação e explique em "reply".`
 
 const nullable = (t: string) => ({ type: [t, 'null'] })
@@ -55,8 +58,8 @@ export const OUTPUT_SCHEMA = {
         additionalProperties: false,
         required: ['type', 'items', 'dogs', 'kind', 'title', 'date', 'next_date', 'weight_kg', 'time', 'who', 'id', 'ml'],
         properties: {
-          type: { type: 'string', enum: ['compras', 'saude_cao', 'agenda', 'tarefa_feita', 'agua', 'remedio_tomado'] },
-          items: { type: ['array', 'null'], items: { type: 'object', additionalProperties: false, required: ['title', 'qty'], properties: { title: { type: 'string' }, qty: nullable('string') } } },
+          type: { type: 'string', enum: ['compras', 'saude_cao', 'agenda', 'tarefa_feita', 'agua', 'remedio_tomado', 'refeicao'] },
+          items: { type: ['array', 'null'], items: { type: 'object', additionalProperties: false, required: ['title', 'qty', 'grams', 'kcal'], properties: { title: { type: 'string' }, qty: nullable('string'), grams: nullable('number'), kcal: nullable('number') } } },
           dogs: { type: ['array', 'null'], items: { type: 'string' } },
           kind: nullable('string'),
           title: nullable('string'),
@@ -132,9 +135,30 @@ export function validate(raw: unknown, c: AiContext): { actions: AiAction[], rep
     } else if (a.type === 'remedio_tomado') {
       const m = c.meds.find(x => x.id === a.id)
       if (m) out.push({ type: 'remedio_tomado', med_id: m.id, name: m.name, time: isTime(a.time) && m.times.includes(a.time) ? a.time : nearestDose(m.times, c.hm) })
+    } else if (a.type === 'refeicao') {
+      const items = (Array.isArray(a.items) ? a.items : []).slice(0, 20).map(aiMealItem).filter((x: MealItem | null): x is MealItem => !!x)
+      if (items.length) out.push({ type: 'refeicao', meal: MEALS.some(m => m[0] === a.kind) ? a.kind as Meal : mealForTime(c.hm), items })
     }
   }
   return { actions: out, reply: str(r.reply, 600) || null, dropped: list.length - out.length }
+}
+
+/** Item de refeição vindo da IA: tabela do Ninho quando reconhece; senão a estimativa da IA. */
+export function aiMealItem(i: any): MealItem | null {
+  const title = str(i?.title, 80)
+  if (!title) return null
+  const num = (v: unknown, lo: number, hi: number) => typeof v === 'number' && Number.isFinite(v) && v >= lo && v <= hi ? v : null
+  const grams = num(i?.grams, 1, 2000), kcal = num(i?.kcal, 0, 3000), qty = str(i?.qty, 30)
+  const m = findFood(title)
+  if (m && grams) return itemFor(m.food, grams, m.food.liquid ? 'ml' : 'g', `${qty} ${title}`.trim())
+  if (m) { const [x] = parseMeal(`${qty || '1'} ${title}`); if (x?.food_id) return x }
+  return { name: title, food_id: null, qty: 1, unit: 'g', g: Math.round(grams || 0), kcal: Math.round(kcal || 0), p: 0, c: 0, f: 0, text: `${qty} ${title}`.trim(), guess: true }
+}
+
+/** Linha da refeição para conferir (texto e foto). */
+export function describeMeal(a: { meal: Meal, items: MealItem[] }): string {
+  const label = MEALS.find(m => m[0] === a.meal)?.[2] || 'Refeição'
+  return `🍽️ ${label}: ${a.items.map(i => `${i.name}${i.g ? ` (${i.g} g)` : ''}`).join(', ')} · ≈ ${mealTotals(a.items).kcal.toLocaleString('pt-BR')} kcal`
 }
 
 /** Dose mais próxima do horário (para "tomei a vitamina"). */
@@ -165,6 +189,7 @@ export function describe(actions: AiAction[], c: AiContext): string[] {
       case 'tarefa_feita': return `✓ Concluir: ${a.title}`
       case 'agua': return `💧 Água: +${a.ml} ml`
       case 'remedio_tomado': return `💊 Tomei: ${a.name}${a.time ? ` (dose das ${a.time})` : ''}`
+      case 'refeicao': return describeMeal(a)
     }
   })
 }

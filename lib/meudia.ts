@@ -3,11 +3,12 @@
 import { addDays, dayNum, weekStartOf } from './dates'
 import type { Who } from './types'
 
-export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo' | 'parar' | 'refeicao'
+/** 'fotos' só existe no compartilhamento (as fotos ficam em personal_photos, não em registros). */
+export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo' | 'parar' | 'refeicao' | 'fotos'
 export const PKINDS: Array<[PKind, string, string]> = [
   ['agua', '💧', 'Água'], ['sono', '😴', 'Sono'], ['autocuidado', '🌿', 'Autocuidado'],
   ['remedio', '💊', 'Remédios'], ['treino', '🏋️', 'Treinos'], ['corpo', '📏', 'Evolução física'],
-  ['parar', '🚭', 'Parar de…'], ['refeicao', '🍽️', 'Alimentação'],
+  ['parar', '🚭', 'Parar de…'], ['refeicao', '🍽️', 'Alimentação'], ['fotos', '📸', 'Fotos de evolução'],
 ]
 
 export interface PSettings { who: Who, water_goal_ml: number, cup_ml: number, sleep_goal_h: number, share: Partial<Record<PKind, boolean>>, selfcare: string[] }
@@ -94,7 +95,10 @@ export function loadSeries(logs: PLog[], who: Who, exercise: string): Array<{ da
 }
 
 // ── Evolução física ──────────────────────────────────────────────────
-export const BODY_FIELDS: Array<[string, string, string]> = [['weight', 'Peso', 'kg'], ['waist', 'Cintura', 'cm'], ['hip', 'Quadril', 'cm'], ['arm', 'Braço', 'cm'], ['chest', 'Peito', 'cm'], ['fat', '% de gordura', '%']]
+export const BODY_FIELDS: Array<[string, string, string]> = [
+  ['weight', 'Peso', 'kg'], ['fat', '% de gordura', '%'], ['muscle', 'Massa muscular', 'kg'], ['visceral', 'Gordura visceral', 'nível'], ['water', 'Água corporal', '%'],
+  ['waist', 'Cintura', 'cm'], ['hip', 'Quadril', 'cm'], ['chest', 'Peito', 'cm'], ['arm', 'Braço', 'cm'], ['thigh', 'Coxa', 'cm'], ['calf', 'Panturrilha', 'cm'], ['neck', 'Pescoço', 'cm'],
+]
 export function bodySeries(logs: PLog[], who: Who, field: string): Array<{ date: string, v: number }> {
   return mine(logs, who, 'corpo')
     .map(l => ({ date: l.date, v: field === 'weight' ? Number(l.value) : Number(l.data?.[field]) }))

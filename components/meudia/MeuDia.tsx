@@ -1,28 +1,33 @@
 'use client'
 // Meu dia: a parte individual de cada uma. Água, sono, autocuidado, remédios,
 // treinos (com cargas) e evolução física. Cada uma escolhe o que a outra vê.
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
 import { fmtDate } from '@/lib/dates'
 import {
-  BODY_FIELDS, DEFAULT_SETTINGS, PKINDS, WORKOUT_TYPES, bodySeries, change, dosesToday, exerciseNames, loadSeries, selfcareDone,
+  DEFAULT_SETTINGS, PKINDS, WORKOUT_TYPES, change, dosesToday, exerciseNames, loadSeries, selfcareDone,
   quitStats, sleepHours, sleepWeek, waterOn, waterStreak, workoutLabel, workoutsWeek, type Exercise, type PKind, type PLog, type PMed, type PQuit, type PSettings,
 } from '@/lib/meudia'
 import { LineChart } from './LineChart'
 import { SleepBars } from './SleepBars'
 import { FoodTab, foodLine } from './Alimentacao'
+import { Body } from './Corpo'
 import type { CustomFood, FoodProfile } from '@/lib/nutricao'
+import type { DietPlan, PlanRow } from '@/lib/dietPlan'
 
 const first = (n: string) => (n || '').split(' ')[0]
 const fmtN = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
-type Tab = 'hoje' | 'comida' | 'treinos' | 'corpo' | 'ajustes'
+import { MD_TABS, type MdTab } from '@/lib/nav'
+type Tab = MdTab
+/** Pedido vindo do menu ou das ações rápidas: rolar até um cartão (n muda a cada pedido). */
+export type MdFocus = { what: 'plano' | 'comi' | 'refeicao' | 'peso' | 'foto', n: number } | null
 
 export interface MeuDiaProps {
-  available: boolean, reason?: string, me: Who, names: Names, today: string, nowHM: string
+  available: boolean, reason?: string, tab?: Tab, onTab?: (t: Tab) => void, focus?: MdFocus, me: Who, names: Names, today: string, nowHM: string
   settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean
-  profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean
-  onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
+  profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, householdId: string
+  onAdd: (kind: PKind, value: number | null, data?: Record<string, any>, date?: string) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
   onSaveSettings: (s: Partial<Omit<PSettings, 'who'>>) => Promise<void>
   onSaveMed: (m: { id?: string, name: string, dose: string | null, times: string[] }) => Promise<void>
@@ -32,19 +37,23 @@ export interface MeuDiaProps {
   onSaveProfile: (p: Omit<FoodProfile, 'who'>) => Promise<void>
   onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
   onStopFood: (f: CustomFood) => Promise<void>
+  onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
+  onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
+  onStopPlan: (p: PlanRow) => Promise<void>
 }
 
 export function MeuDiaView(p: MeuDiaProps) {
-  const [tab, setTab] = useState<Tab>('hoje')
+  const [own, setOwn] = useState<Tab>('hoje')
+  const tab = p.tab ?? own, setTab = p.onTab ?? setOwn
   if (!p.available) return <div className="card empty"><span className="empty-icon">💧</span>O Meu dia ainda não está ativo: falta rodar a atualização do banco (migration 021) no Supabase.{p.reason && <div className="row-s" style={{ marginTop: 6 }}>Detalhe: {p.reason}</div>}</div>
   const mine = p.settings.find(s => s.who === p.me) || DEFAULT_SETTINGS(p.me)
   const other: Who = p.me === 'g' ? 's' : 'g'
   const theirs = p.settings.find(s => s.who === other)
   return (
     <div className="md">
-      <div className="md-tabs" role="tablist" aria-label="Meu dia">
-        {([['hoje', 'Hoje'], ['comida', 'Alimentação'], ['treinos', 'Treinos'], ['corpo', 'Evolução'], ['ajustes', 'Metas e privacidade']] as Array<[Tab, string]>).map(([k, l]) =>
-          <button key={k} role="tab" aria-selected={tab === k} className={`fc ${tab === k ? 'on' : ''}`} onClick={() => setTab(k)}>{l}</button>)}
+      <div className="md-tabs md-nav" role="tablist" aria-label="Meu dia">
+        {MD_TABS.map(t => <button key={t.id} role="tab" aria-selected={tab === t.id} className={`fc ${tab === t.id ? 'on' : ''}`} onClick={() => setTab(t.id)}>
+          <span aria-hidden="true">{t.icon}</span><span className="t-full">{t.label}</span><span className="t-short">{t.short}</span></button>)}
       </div>
       {tab === 'hoje' && <Today {...p} s={mine} other={other} theirs={theirs}/>}
       {tab === 'comida' && <FoodTab {...p}/>}
@@ -122,6 +131,7 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           {sh.remedio && (() => { const d = dosesToday(p.meds, logs, p.other, today, p.nowHM); return <span>💊 {d.filter(x => x.taken).length}/{d.length} doses</span> })()}
           {sh.treino && (() => { const w = workoutsWeek(logs, p.other, today); return <span>🏋️ {w.count} treino(s) na semana</span> })()}
           {sh.corpo && <span>📏 evolução compartilhada</span>}
+          {sh.fotos && <span>📸 fotos compartilhadas</span>}
           {sh.refeicao && (() => { const l = foodLine(logs, p.profiles, p.other, today); return <span>{l || '🍽️ sem refeições hoje'}</span> })()}
           {sh.parar && p.quits.filter(q => q.who === p.other).map(q => <span key={q.id}>🚭 {q.title}: {quitStats(q, logs, today).days} dia(s)</span>)}
         </div>}
@@ -284,36 +294,6 @@ function Workouts(p: MeuDiaProps) {
           <button className="ib" aria-label="Apagar treino" onClick={() => { if (confirm('Apagar este treino?')) p.onRemove(l).catch(() => {}) }}>✕</button>
         </div>))}</div>
       {open && <WorkoutSheet {...p} onClose={() => setOpen(false)}/>}
-    </>
-  )
-}
-
-function Body(p: MeuDiaProps) {
-  const [f, setF] = useState<Record<string, string>>({}), [notes, setNotes] = useState(''), [field, setField] = useState('weight')
-  const num = (v?: string) => v && v.trim() ? Number(v.replace(',', '.')) : null
-  const series = bodySeries(p.logs, p.me, field)
-  const info = BODY_FIELDS.find(b => b[0] === field)!
-  const ch = change(series)
-  const canSave = BODY_FIELDS.some(([k]) => num(f[k]) && num(f[k])! > 0)
-  async function save() {
-    const data: Record<string, any> = {}
-    for (const [k] of BODY_FIELDS) if (k !== 'weight' && num(f[k])) data[k] = num(f[k])
-    if (notes.trim()) data.notes = notes.trim()
-    try { await p.onAdd('corpo', num(f.weight), data); setF({}); setNotes('') } catch { /* aviso já mostrado */ }
-  }
-  return (
-    <>
-      <section className="card" aria-labelledby="md-medir">
-        <div className="slbl" id="md-medir">Nova medição · {fmtDate(p.today)}</div>
-        <div className="md-body-f">{BODY_FIELDS.map(([k, l, u]) => <label key={k} className="onb-f"><span>{l} ({u})</span><input className="fi" inputMode="decimal" value={f[k] || ''} onChange={e => setF(x => ({ ...x, [k]: e.target.value }))}/></label>)}</div>
-        <label className="onb-f"><span>Observação</span><input className="fi" value={notes} maxLength={200} onChange={e => setNotes(e.target.value)}/></label>
-        <button className="btn btn-p" disabled={!canSave} onClick={save}>Salvar medição</button>
-      </section>
-      <section className="card" aria-labelledby="md-evo">
-        <div className="slbl" id="md-evo">Evolução {ch != null && <span className="chip">{ch > 0 ? '+' : ''}{fmtN(ch)} {info[2]} desde {fmtDate(series[0].date)}</span>}</div>
-        <div className="md-tabs" role="tablist" aria-label="Medida">{BODY_FIELDS.map(([k, l]) => <button key={k} role="tab" aria-selected={field === k} className={`fc ${field === k ? 'on' : ''}`} onClick={() => setField(k)}>{l}</button>)}</div>
-        <LineChart title={info[1]} unit={info[2]} data={series}/>
-      </section>
     </>
   )
 }

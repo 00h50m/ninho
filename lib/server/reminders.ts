@@ -6,6 +6,7 @@ import { addDays, homeClock } from '@/lib/dates'
 import { DEFAULT_NAMES } from '@/lib/constants'
 import { remainingMs } from '@/lib/sprint'
 import { dueReminders, forDevice, type RemState, type Reminder } from '@/lib/reminders'
+import { validatePlan } from '@/lib/dietPlan'
 import { deliver, must, type NotifyDeps, type Report, type Subscription } from './notify'
 
 export interface ReminderSub extends Subscription { reminders: unknown, quiet_start: string, quiet_end: string }
@@ -18,10 +19,10 @@ const soft = async <T>(q: PromiseLike<{ data: T[] | null, error: any }>): Promis
 export async function loadRemState(db: SupabaseClient, householdId: string, now: Date): Promise<RemState> {
   const { date, hm } = homeClock(now)
   const hh = (t: string, cols: string) => db.from(t).select(cols).eq('household_id', householdId)
-  const [profiles, meds, logs, settings, routines, runs, sprints, dogs, health, events, challenges, marks, checkins] = await Promise.all([
+  const [profiles, meds, logs, settings, routines, runs, sprints, dogs, health, events, challenges, marks, checkins, plans] = await Promise.all([
     soft<any>(hh('profiles', 'display_name,role')),
     soft<any>(hh('personal_meds', 'id,who,name,dose,times').eq('active', true)),
-    soft<any>(hh('personal_logs', 'who,kind,value,data').eq('date', date).in('kind', ['remedio', 'agua'])),
+    soft<any>(hh('personal_logs', 'who,kind,value,data').eq('date', date).in('kind', ['remedio', 'agua', 'refeicao'])),
     soft<any>(hh('personal_settings', 'who,water_goal_ml')),
     soft<any>(hh('routines', 'id,title,scheduled_time,weekdays,assign_mode,start_date,paused_until,reminder_min,active')),
     soft<any>(hh('routine_runs', 'routine_id').eq('date', date).eq('status', 'done')),
@@ -32,6 +33,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     soft<any>(hh('couple_challenges', 'id,title,kind,start_date,days').eq('status', 'active').eq('kind', 'livre')),
     soft<any>(hh('challenge_marks', 'challenge_id').eq('date', date)),
     soft<any>(hh('daily_checkins', 'who,mood,energy').eq('date', date)),
+    soft<any>(hh('personal_diet_plans', 'id,who,plan').eq('active', true).eq('remind', true)),
   ])
   const g = profiles.find(p => p.role === 'g'), s = profiles.find(p => p.role === 's')
   const names: Names = { g: g?.display_name || DEFAULT_NAMES.g, s: s?.display_name || DEFAULT_NAMES.s }
@@ -49,6 +51,8 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     events,
     challenges: challenges.filter(c => date >= c.start_date && date <= addDays(c.start_date, c.days - 1) && !marks.some(m => m.challenge_id === c.id)).map(c => ({ id: c.id, title: c.title })),
     checkins: checkins.filter(c => c.mood || c.energy).map(c => c.who),
+    planMeals: plans.flatMap(p => (validatePlan(p.plan)?.meals || []).filter(m => m.time && m.when !== 'treino').map(m => ({ who: p.who, id: m.id, name: m.name, time: m.time! }))),
+    planDone: logs.filter(l => l.kind === 'refeicao' && l.data?.plan?.meal_id).map(l => ({ who: l.who, meal_id: String(l.data.plan.meal_id) })),
   }
 }
 
