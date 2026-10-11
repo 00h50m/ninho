@@ -5,16 +5,18 @@ import type { Who } from '@/lib/types'
 import type { PKind, PLog, PMed, PQuit, PSettings } from '@/lib/meudia'
 import type { CustomFood, FoodProfile } from '@/lib/nutricao'
 import { validatePlan, type DietPlan, type PlanRow } from '@/lib/dietPlan'
+import type { PGoal } from '@/lib/goals'
+import type { MoodRow } from '@/lib/humor'
 
 function must<T>(r: { data: T | null, error: any }, ctx: string): T {
   if (r.error) { logError(ctx, r.error); throw new NinhoError(r.error, ctx) }
   return r.data as T
 }
 
-export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, reason?: string }
+export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, goals: PGoal[], goalsReady?: boolean, reason?: string }
 
 export async function loadMeuDia(householdId: string, from: string): Promise<MeuDiaData> {
-  const [s, l, m, q, fp, ff, dp] = await Promise.all([
+  const [s, l, m, q, fp, ff, dp, gl] = await Promise.all([
     supabase.from('personal_settings').select('who,water_goal_ml,cup_ml,sleep_goal_h,share,selfcare').eq('household_id', householdId),
     supabase.from('personal_logs').select('id,who,date,kind,value,data,created_at').eq('household_id', householdId).gte('date', from).order('date').limit(4000),
     supabase.from('personal_meds').select('id,who,name,dose,times,active').eq('household_id', householdId).eq('active', true).order('name'),
@@ -22,10 +24,11 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     supabase.from('personal_food_profile').select('who,sex,birth_year,height_cm,activity,goal,pace_kg_week,target_kg,kcal_override,hide_numbers').eq('household_id', householdId),
     supabase.from('personal_foods').select('id,who,name,portion,portion_g,kcal,protein,carb,fat').eq('household_id', householdId).eq('active', true).order('name'),
     supabase.from('personal_diet_plans').select('id,who,title,plan,source,remind').eq('household_id', householdId).eq('active', true),
+    supabase.from('personal_goals').select('id,who,title,kind,unit,start_value,target,start_date,due_date,status').eq('household_id', householdId).neq('status', 'arquivado').order('created_at'),
   ])
   const e = s.error || l.error || m.error
   if (e) {
-    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
+    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], goals: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
     must({ data: null, error: e }, 'carregar Meu dia')
   }
   // "Parar de…" (migration 025) é opcional: sem a tabela, o resto do Meu dia segue normal
@@ -36,6 +39,8 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
   const n = (v: any) => v == null ? null : Number(v)
   // Plano alimentar (migration 027) também é opcional
   if (dp.error && !isMissingTable(dp.error)) must({ data: null, error: dp.error }, 'carregar plano alimentar')
+  // Objetivos (migration 029) também são opcionais
+  if (gl.error && !isMissingTable(gl.error)) must({ data: null, error: gl.error }, 'carregar objetivos')
   return {
     available: true, settings: (s.data || []) as PSettings[], logs: ((l.data || []) as any[]).map(x => ({ ...x, value: x.value == null ? null : Number(x.value) })), meds: (m.data || []) as PMed[],
     quits: q.error ? [] : (q.data || []) as PQuit[], quitsReady: !q.error,
@@ -44,6 +49,8 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     foodReady: !fe,
     plans: dp.error ? [] : ((dp.data || []) as any[]).flatMap(x => { const plan = validatePlan(x.plan); return plan ? [{ ...x, plan }] : [] }) as PlanRow[],
     plansReady: !dp.error,
+    goals: gl.error ? [] : ((gl.data || []) as any[]).map(x => ({ ...x, target: Number(x.target), start_value: n(x.start_value) })) as PGoal[],
+    goalsReady: !gl.error,
   }
 }
 
@@ -131,4 +138,22 @@ export async function addPhoto(householdId: string, who: Who, p: { date: string,
 
 export async function deletePhoto(id: string): Promise<void> {
   must(await supabase.from('personal_photos').delete().eq('id', id).select('id'), 'apagar foto')
+}
+
+// ── Objetivos (migration 029) ─────────────────────────────────────────
+export async function saveGoal(householdId: string, who: Who, g: Omit<PGoal, 'id' | 'who' | 'status'> & { id?: string }): Promise<void> {
+  const row = { title: g.title.trim().slice(0, 80), kind: g.kind, unit: g.unit?.trim().slice(0, 20) || null, start_value: g.start_value, target: g.target, start_date: g.start_date, due_date: g.due_date || null }
+  if (g.id) must(await supabase.from('personal_goals').update(row).eq('id', g.id).select('id'), 'salvar objetivo')
+  else must(await supabase.from('personal_goals').insert({ ...row, household_id: householdId, who }).select('id'), 'criar objetivo')
+}
+
+export async function setGoalStatus(id: string, status: PGoal['status']): Promise<void> {
+  must(await supabase.from('personal_goals').update({ status }).eq('id', id).select('id'), 'atualizar objetivo')
+}
+
+/** Humor do check-in de quem está usando (para o calendário do Meu dia). */
+export async function loadMoods(householdId: string, who: Who, from: string): Promise<MoodRow[]> {
+  const r = await supabase.from('daily_checkins').select('date,mood').eq('household_id', householdId).eq('who', who).gte('date', from).order('date')
+  if (r.error) { if (isMissingTable(r.error)) return []; must(r, 'carregar humor') }
+  return (r.data || []) as MoodRow[]
 }

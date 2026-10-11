@@ -13,6 +13,10 @@ import { LineChart } from './LineChart'
 import { SleepBars } from './SleepBars'
 import { FoodTab, foodLine } from './Alimentacao'
 import { Body } from './Corpo'
+import { WaterCups } from './WaterCups'
+import { GoalsCard } from './Objetivos'
+import { MoodCard } from './Humor'
+import { goalProgress, type PGoal } from '@/lib/goals'
 import type { CustomFood, FoodProfile } from '@/lib/nutricao'
 import type { DietPlan, PlanRow } from '@/lib/dietPlan'
 
@@ -27,6 +31,7 @@ export interface MeuDiaProps {
   available: boolean, reason?: string, tab?: Tab, onTab?: (t: Tab) => void, focus?: MdFocus, me: Who, names: Names, today: string, nowHM: string
   settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean
   profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, householdId: string
+  goals: PGoal[], goalsReady?: boolean
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>, date?: string) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
   onSaveSettings: (s: Partial<Omit<PSettings, 'who'>>) => Promise<void>
@@ -40,6 +45,10 @@ export interface MeuDiaProps {
   onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
   onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
   onStopPlan: (p: PlanRow) => Promise<void>
+  onSaveGoal: (g: Omit<PGoal, 'id' | 'who' | 'status'> & { id?: string }) => Promise<void>
+  onGoalStatus: (g: PGoal, status: PGoal['status']) => Promise<void>
+  /** Abre o check-in do dia (fica no Início) */
+  onCheckin?: () => void
 }
 
 export function MeuDiaView(p: MeuDiaProps) {
@@ -80,10 +89,10 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
   return (
     <>
       <div className="md-grid">
+        <GoalsCard {...p} waterGoal={s.water_goal_ml}/>
         <section className="card md-card" aria-labelledby="md-agua">
           <div className="slbl" id="md-agua">💧 Água {streak > 0 && <span className="chip amber">🔥 {streak} dia{streak > 1 ? 's' : ''} na meta</span>}</div>
-          <div className="md-water"><b className="mono">{(water / 1000).toFixed(2).replace('.', ',')} L</b><span>de {(s.water_goal_ml / 1000).toFixed(1).replace('.', ',')} L</span></div>
-          <div className="bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Água de hoje"><div className="barf" style={{ width: `${pct}%`, background: 'var(--pri)' }}/></div>
+          <WaterCups ml={water} goal={s.water_goal_ml} cup={s.cup_ml} onAdd={() => run(() => p.onAdd('agua', s.cup_ml))} onUndo={lastCup ? () => run(() => p.onRemove(lastCup)) : undefined}/>
           <div className="md-acts">
             <button className="btn btn-p" onClick={() => run(() => p.onAdd('agua', s.cup_ml))}>+1 copo ({s.cup_ml} ml)</button>
             <button className="btn btn-g" onClick={() => run(() => p.onAdd('agua', 500))}>+500 ml</button>
@@ -120,6 +129,8 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
         </section>
 
         {p.quitsReady !== false && <QuitCard {...p} run={run}/>}
+
+        <MoodCard {...p} s={s}/>
       </div>
 
       <section className="card md-other" aria-labelledby="md-outra">
@@ -132,6 +143,11 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           {sh.treino && (() => { const w = workoutsWeek(logs, p.other, today); return <span>🏋️ {w.count} treino(s) na semana</span> })()}
           {sh.corpo && <span>📏 evolução compartilhada</span>}
           {sh.fotos && <span>📸 fotos compartilhadas</span>}
+          {sh.objetivo && p.goals.filter(g => g.who === p.other && g.status === 'ativo').map(g => {
+            // peso só aparece se "Evolução física" também estiver compartilhada
+            const hidden = g.kind === 'peso' && !logs.some(l => l.who === p.other && l.kind === 'corpo')
+            return <span key={g.id}>🎯 {g.title}{hidden ? '' : `: ${goalProgress(g, logs, today, p.theirs?.water_goal_ml).pct}%`}</span>
+          })}
           {sh.refeicao && (() => { const l = foodLine(logs, p.profiles, p.other, today); return <span>{l || '🍽️ sem refeições hoje'}</span> })()}
           {sh.parar && p.quits.filter(q => q.who === p.other).map(q => <span key={q.id}>🚭 {q.title}: {quitStats(q, logs, today).days} dia(s)</span>)}
         </div>}
@@ -360,17 +376,20 @@ function Settings(p: MeuDiaProps & { s: PSettings }) {
 }
 
 /** Resumo no Início: água com +1 copo, sono e remédios pendentes. */
-export function MeuDiaCard({ me, settings, logs, meds, profiles = [], today, nowHM, onAdd, onOpen }: { me: Who, settings: PSettings[], logs: PLog[], meds: PMed[], profiles?: FoodProfile[], today: string, nowHM: string, onAdd: (k: PKind, v: number) => void, onOpen: () => void }) {
+export function MeuDiaCard({ me, settings, logs, meds, profiles = [], goals = [], today, nowHM, onAdd, onUndo, onOpen }: { me: Who, settings: PSettings[], logs: PLog[], meds: PMed[], profiles?: FoodProfile[], goals?: PGoal[], today: string, nowHM: string, onAdd: (k: PKind, v: number) => void, onUndo?: (l: PLog) => void, onOpen: () => void }) {
   const s = settings.find(x => x.who === me) || DEFAULT_SETTINGS(me)
   const water = waterOn(logs, me, today), pct = Math.min(100, Math.round(water / s.water_goal_ml * 100))
   const pend = dosesToday(meds, logs, me, today, nowHM).filter(d => !d.taken)
   const slept = logs.find(l => l.who === me && l.kind === 'sono' && l.date === today)
   const food = foodLine(logs, profiles, me, today)
+  const lastCup = [...logs].reverse().find(l => l.who === me && l.kind === 'agua' && l.date === today)
+  const g0 = goals.find(g => g.who === me && g.status === 'ativo')
+  const goal = g0 ? { g: g0, p: goalProgress(g0, logs, today, s.water_goal_ml).pct } : null
   return (
     <section className="card md-home" aria-labelledby="md-home">
       <div className="slbl" id="md-home">💧 Meu dia<button className="lnk" onClick={onOpen}>Abrir →</button></div>
-      <div className="md-home-w"><span className="mono">{fmtN(water / 1000)} / {fmtN(s.water_goal_ml / 1000)} L</span><button className="btn btn-s" onClick={() => onAdd('agua', s.cup_ml)}>+1 copo</button></div>
-      <div className="bar" aria-hidden="true"><div className="barf" style={{ width: `${pct}%`, background: 'var(--pri)' }}/></div>
+      <WaterCups compact ml={water} goal={s.water_goal_ml} cup={s.cup_ml} onAdd={() => onAdd('agua', s.cup_ml)} onUndo={lastCup && onUndo ? () => onUndo(lastCup) : undefined}/>
+      {goal && <div className="md-home-g"><span>🎯 {goal.g.title}</span><span className="gl-bar sm" aria-hidden="true"><span style={{ width: `${goal.p}%` }}/></span><b className="mono">{goal.p}%</b></div>}
       <div className="md-home-s">{slept ? `😴 ${fmtN(Number(slept.value))} h de sono` : <button className="lnk-inline" onClick={onOpen}>😴 Como dormiu?</button>}
         {pend.length > 0 && <span className={pend.some(d => d.late) ? 'md-late' : ''}> · 💊 {pend.length} dose{pend.length > 1 ? 's' : ''} {pend.some(d => d.late) ? 'atrasada(s)' : 'hoje'}</span>}
         {food && <span> · {food}</span>}</div>
