@@ -4,11 +4,11 @@ import { addDays, dayNum, weekStartOf } from './dates'
 import type { Who } from './types'
 
 /** 'fotos' só existe no compartilhamento (as fotos ficam em personal_photos, não em registros). */
-export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo' | 'parar' | 'refeicao' | 'fotos'
+export type PKind = 'agua' | 'sono' | 'autocuidado' | 'remedio' | 'treino' | 'corpo' | 'parar' | 'refeicao' | 'fotos' | 'objetivo'
 export const PKINDS: Array<[PKind, string, string]> = [
   ['agua', '💧', 'Água'], ['sono', '😴', 'Sono'], ['autocuidado', '🌿', 'Autocuidado'],
   ['remedio', '💊', 'Remédios'], ['treino', '🏋️', 'Treinos'], ['corpo', '📏', 'Evolução física'],
-  ['parar', '🚭', 'Parar de…'], ['refeicao', '🍽️', 'Alimentação'], ['fotos', '📸', 'Fotos de evolução'],
+  ['parar', '🚭', 'Parar de…'], ['refeicao', '🍽️', 'Alimentação'], ['fotos', '📸', 'Fotos de evolução'], ['objetivo', '🎯', 'Objetivos'],
 ]
 
 export interface PSettings { who: Who, water_goal_ml: number, cup_ml: number, sleep_goal_h: number, share: Partial<Record<PKind, boolean>>, selfcare: string[] }

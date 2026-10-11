@@ -82,6 +82,17 @@ begin
     create policy "personal_write" on public.personal_quits for all to authenticated
       using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
   end if;
+  -- Objetivos (029): compartilhamento próprio
+  if to_regclass('public.personal_goals') is not null then
+    drop policy if exists "allow_all_auth" on public.personal_goals;
+    drop policy if exists "household_member" on public.personal_goals;
+    drop policy if exists "personal_read" on public.personal_goals;
+    drop policy if exists "personal_write" on public.personal_goals;
+    create policy "personal_read" on public.personal_goals for select to authenticated
+      using (who = public.ninho_my_who(household_id) or (public.ninho_is_member(household_id) and public.ninho_personal_shared(household_id, who, 'objetivo')));
+    create policy "personal_write" on public.personal_goals for all to authenticated
+      using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id));
+  end if;
   -- Fotos de evolução (028): compartilhamento próprio
   if to_regclass('public.personal_photos') is not null then
     drop policy if exists "allow_all_auth" on public.personal_photos;
