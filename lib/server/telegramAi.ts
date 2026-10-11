@@ -12,6 +12,9 @@ import { kindInfo } from '@/lib/caes'
 import { OUTPUT_SCHEMA, SYSTEM, contextText, describe, describeMeal, validate, type AiAction, type AiContext } from '@/lib/telegramAi'
 import { MEALS, mealForTime, mealTotals } from '@/lib/nutricao'
 import { customFoods, readPlate } from './nutritionAi'
+import { planDay } from './organizarAi'
+import { toEvent, toTask } from '@/lib/organizar'
+import { describeDay } from '@/lib/telegramAi'
 import { AI_MODEL } from './ai'
 import { loadHousehold, must } from './notify'
 
@@ -115,6 +118,15 @@ export async function execute(db: SupabaseClient, link: TgLink, actions: AiActio
         const dup = must(await db.from('personal_logs').select('id').eq('household_id', hh).eq('who', link.who).eq('date', date).eq('kind', 'remedio').contains('data', { med_id: m.id, time: a.time }), 'doses') as any[]
         if (dup.length) { out.push(`💊 ${m.name}${a.time ? ` (${a.time})` : ''} já estava marcado`); continue }
         ok(await db.from('personal_logs').insert({ household_id: hh, who: link.who, date, kind: 'remedio', value: null, data: { med_id: m.id, name: m.name, time: a.time } }), `💊 ${m.name}${a.time ? ` (dose das ${a.time})` : ''} marcado`)
+      } else if (a.type === 'dia') {
+        let n = 0
+        for (const i of a.items) {
+          if (i.kind === 'compra') must(await db.rpc('ninho_add_shopping_item', { p_household_id: hh, p_title: i.title, p_qty: null, p_category: guessCategory(i.title), p_by: link.who }), 'compras')
+          else if (i.kind === 'compromisso') must(await db.from('house_events').insert({ ...toEvent(i), household_id: hh, created_by: link.who }).select('id'), 'agenda')
+          else must(await db.from('tasks').insert({ ...toTask(i), household_id: hh, active: true }).select('id'), 'tarefa')
+          n++
+        }
+        out.push(`🗓️ ${n} item(ns) no seu dia: tarefas em Hoje, compromissos na Agenda e compras na lista`)
       } else if (a.type === 'refeicao') {
         const kcal = mealTotals(a.items).kcal
         ok(await db.from('personal_logs').insert({ household_id: hh, who: link.who, date, kind: 'refeicao', value: kcal, data: { meal: a.meal, text: 'Telegram', items: a.items, via: 'telegram' } }),
@@ -137,6 +149,7 @@ function describeShort(a: AiAction): string {
     case 'agua': return 'água'
     case 'remedio_tomado': return a.name
     case 'refeicao': return 'refeição'
+    case 'dia': return 'o dia'
   }
 }
 
@@ -157,4 +170,14 @@ export function mealFromCaption(c: string): (typeof MEALS)[number][0] | null {
   if (/lanche/.test(t)) return 'lanche'
   if (/ceia/.test(t)) return 'ceia'
   return null
+}
+
+/** Telegram: "organiza meu dia: …" → o dia em ordem, para confirmar. */
+export async function dayFromTelegram(db: SupabaseClient, link: TgLink, text: string, opts: { apiKey?: string, baseURL?: string, now?: Date } = {}): Promise<Understood> {
+  const body = text.replace(/^\s*organiz\w*\s+(o\s+)?meu\s+dia\s*[:\-–]?\s*/i, '').trim()
+  if (body.length < 3) return { ok: false, message: 'Me diga o que precisa fazer, por exemplo: "organiza meu dia: dentista 14h30, pagar o boleto, mercado, ração das meninas".' }
+  const r = await planDay(db, link.household_id, link.who, body, opts)
+  if (r.ok === false) return { ok: false, message: (r as { message: string }).message }
+  const action: AiAction = { type: 'dia', items: r.plan.items.map(i => ({ ...i, note: i.note ? i.note.slice(0, 80) : null })) }
+  return { ok: true, actions: [action], lines: [describeDay(action.items, homeClock(opts.now ?? new Date()).date)], reply: r.plan.tips.length ? r.plan.tips.map(t => `💡 ${t}`).join('\n') : null }
 }

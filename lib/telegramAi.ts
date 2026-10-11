@@ -5,6 +5,7 @@ import type { Names, Who } from './types'
 import { addDays, dowOf } from './dates'
 import { HEALTH_KINDS, type HealthKind } from './caes'
 import { KINDS as EVENT_KINDS, type EventKind } from './agenda'
+import { endOf, type DayItem } from './organizar'
 import { MEALS, findFood, itemFor, mealForTime, mealTotals, parseMeal, type Meal, type MealItem } from './nutricao'
 
 export type AiAction =
@@ -15,6 +16,7 @@ export type AiAction =
   | { type: 'agua', ml: number }
   | { type: 'remedio_tomado', med_id: string, name: string, time: string | null }
   | { type: 'refeicao', meal: Meal, items: MealItem[] }
+  | { type: 'dia', items: DayItem[] }
 
 export interface AiContext {
   today: string, hm: string, me: Who, names: Names
@@ -155,6 +157,13 @@ export function aiMealItem(i: any): MealItem | null {
   return { name: title, food_id: null, qty: 1, unit: 'g', g: Math.round(grams || 0), kcal: Math.round(kcal || 0), p: 0, c: 0, f: 0, text: `${qty} ${title}`.trim(), guess: true }
 }
 
+/** O dia organizado, um item por linha, para conferir no Telegram. */
+export function describeDay(items: DayItem[], today: string): string {
+  const ic = (i: DayItem) => i.kind === 'compromisso' ? '📅' : i.kind === 'compra' ? '🛒' : i.priority === 'alta' ? '❗' : '✓'
+  const day = (d: string) => d === today ? '' : ' (amanhã)'
+  return ['🗓️ Seu dia:', ...items.map(i => `   ${i.time ? `${i.time}–${endOf(i)}` : '—'} ${ic(i)} ${i.title}${day(i.date)}${i.who === 'both' ? ' · as duas' : ''}`)].join('\n')
+}
+
 /** Linha da refeição para conferir (texto e foto). */
 export function describeMeal(a: { meal: Meal, items: MealItem[] }): string {
   const label = MEALS.find(m => m[0] === a.meal)?.[2] || 'Refeição'
@@ -190,6 +199,7 @@ export function describe(actions: AiAction[], c: AiContext): string[] {
       case 'agua': return `💧 Água: +${a.ml} ml`
       case 'remedio_tomado': return `💊 Tomei: ${a.name}${a.time ? ` (dose das ${a.time})` : ''}`
       case 'refeicao': return describeMeal(a)
+      case 'dia': return describeDay(a.items, c.today)
     }
   })
 }

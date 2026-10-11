@@ -31,6 +31,8 @@ export interface BotDeps {
   plate?: (link: { id: string, household_id: string, who: Who, chat_id: number }, fileId: string, caption: string) => Promise<Understood>
   /** "faxinão: …" vira rascunho no app (opcional: precisa da chave da IA). */
   faxinao?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<string>
+  /** "organiza meu dia: …" → o dia em ordem, com Confirmar (opcional: precisa da chave da IA). */
+  organizeDay?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<Understood>
 }
 
 interface Link { id: string, household_id: string, who: Who, chat_id: number, morning: boolean, weekly: boolean, active: boolean }
@@ -68,6 +70,7 @@ export const HELP = [
   'Escreva do seu jeito, por exemplo: “comprei leite e café”, “a Zelda tomou a V10 hoje”, “lembra a Sabrina de pagar a internet sexta”, “bebi um copo de água”, “lavei a louça”, “almocei arroz, feijão e frango”. Eu mostro o que entendi e você confirma.',
   '📷 Mande a foto do prato (com “almoço”, “jantar”… na legenda, se quiser) e eu estimo as calorias.',
   '🧹 “faxinão: banheiro, cozinha, roupa de cama, quintal” — eu organizo na melhor ordem e divido entre vocês (fica no app para conferir).',
+  '🗓️ “organiza meu dia: dentista 14h30, pagar o boleto, mercado” — eu monto o dia em ordem e você confirma.',
   '',
   'Ou use o menu aqui embaixo e os comandos:',
   '/hoje — o que é seu hoje (com botões para concluir)',
@@ -274,6 +277,12 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
     await send(deps, chatId, 'Pronto, esta conversa foi desligada do Ninho. Para voltar, gere um código no app.')
   } else if (cmd === '/ajuda' || cmd === '/help') await send(deps, chatId, HELP, { reply_markup: MENU })
   else if (text.startsWith('+')) await shoppingAdd(deps, link, text.slice(1))
+  else if (/^organiz\w*\s+(o\s+)?meu\s+dia\b/i.test(text) && deps.organizeDay) {
+    await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
+    let u: Understood
+    try { u = await deps.organizeDay(link, text) } catch { u = { ok: false, message: 'Não consegui organizar agora. Tente de novo em instantes.' } }
+    await propose(deps, link, u)
+  }
   else if (/^(faxin[aã]o|mutir[aã]o)\b/i.test(text) && deps.faxinao) {
     await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
     await send(deps, chatId, await deps.faxinao(link, text).catch(() => 'Não consegui organizar agora. Tente pelo app: Casa › Faxinão.'))

@@ -1119,6 +1119,13 @@ button.wc-cup:focus-visible{outline:2px solid var(--pri);outline-offset:2px}
 .fx-all li.ok .rt-step-t{text-decoration:line-through;color:var(--sub)}
 .fx-all li.skip .rt-step-t{color:var(--sub)}
 .fx-all small{color:var(--sub);font-size:12px}
+.od-list{list-style:none;margin:8px 0 0;padding:0}
+.od{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.od.hi .od-ic{background:var(--cbg);color:var(--cor-tx)}
+.od-ic{width:28px;height:28px;border-radius:50%;background:var(--sf2);display:inline-flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0}
+.od-main{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.od-main small{font-size:12px;color:var(--sub);overflow-wrap:anywhere}
+.od-time{width:auto;min-width:104px;padding:4px 6px}
 .co-date{max-width:220px}
 .co-add{display:flex;flex-wrap:wrap;align-items:flex-end;gap:8px 12px;margin:10px 0}
 .co-add .onb-f{margin:0}

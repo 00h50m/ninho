@@ -66,6 +66,9 @@ import type { MdTab } from '@/lib/nav'
 import { useNos } from '@/hooks/useNos'
 import { useFaxinao } from '@/hooks/useFaxinao'
 import { FaxinaoView, FaxinaoHomeCard } from '@/components/casa/Faxinao'
+import { OrganizarDiaSheet } from '@/components/OrganizarDia'
+import { toEvent, toTask, type DayItem } from '@/lib/organizar'
+import { guessCategory } from '@/lib/shopping'
 import * as nosApi from '@/lib/services/nos'
 import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as nosTimeline, type Agreement, type AgendaSection, type Challenge } from '@/lib/nos'
 import { ChallengeCard, ChallengesView, CheckinHistory, DayNoteCard, TimelineCard, TogetherCard } from '@/components/nos/NosViews'
@@ -464,6 +467,18 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const md=useMeuDia(householdId,today)
   const fx=useFaxinao(householdId)
   const fxLive=fx.list.find(f=>f.status==='andamento')
+  const [dayOpen,setDayOpen]=useState(false)
+  /** Cria o que o "Organizar meu dia" montou: tarefas avulsas, agenda e compras. */
+  async function createDay(items:DayItem[]){
+    try{
+      const tasksIn=items.filter(i=>i.kind==='tarefa'),evs=items.filter(i=>i.kind==='compromisso'),buys=items.filter(i=>i.kind==='compra')
+      if(tasksIn.length)await api.insertTasks(householdId,tasksIn.map(toTask) as any)
+      for(const e of evs)await agApi.saveEvent(householdId,me,toEvent(e))
+      for(const c of buys)await casaApi.addShoppingItem(householdId,c.title,null,guessCategory(c.title),me)
+      await Promise.all([data.reloadTasks(),evs.length?ag.reload():null,buys.length?casa.reloadShopping():null])
+      showToast(`🗓️ ${items.length} item(ns) no seu dia`)
+    }catch(e){showError(toNinhoError(e,'organizar o dia'));throw e}
+  }
   // ── Fila sem internet ──
   const [outbox,setOutbox]=useState<OutItem[]>(()=>readOutbox(householdId))
   const flushing=useRef(false)
@@ -1068,6 +1083,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
+    ...(me?[{id:'dia',icon:'reuniao',label:'Organizar meu dia',sub:'Fale tudo; a IA põe em ordem',run:()=>setDayOpen(true)}]:[]),
     ...(fx.available?[{id:'faxinao',icon:'casa',label:fxLive?'Faxinão em andamento':'Faxinão com IA',sub:fxLive?'Ver o que é seu agora':'Fale tudo; a IA organiza a ordem',run:()=>goCasa('faxinao')}]:[]),
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
     ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),
@@ -1310,6 +1326,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
               <div className="hd-chips">
                 {me&&<span className="chip"><span className={`mini av-${me}`} aria-hidden="true">{names[me].slice(0,1).toUpperCase()}</span>{account?'Sua conta':'Este aparelho'}</span>}
                 <button className={`chip ${en.cls}`} onClick={()=>openModal('energy')} aria-label={`Energia da semana: ${en.l}. Alterar`}>{en.ic} {en.l}</button>
+                {me&&<button className="chip" onClick={()=>setDayOpen(true)}>🗓️ Organizar meu dia</button>}
                 <button className={`chip ${settings.survival?'coral':''}`} onClick={toggleSurvival} aria-label={settings.survival?'Modo sobrevivência ativo. Desativar':'Modo normal. Ativar modo sobrevivência'}>{settings.survival?'🛡 Modo sobrevivência':'Modo normal'}</button>
               </div>
             </div>
@@ -1970,6 +1987,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
       {data.status==='ready'&&screen!=='ajustes'&&<button className="fab mob-fab" onClick={()=>openModal('quick')} aria-label="Ação rápida"><Icon name="plus" size={24}/></button>}
       {modal==='quick'&&<QuickActionsSheet onClose={closeModal} actions={quickActions}/>}
+      {dayOpen&&me&&<OrganizarDiaSheet householdId={householdId} me={me} names={names} today={today} onClose={()=>setDayOpen(false)} onCreate={createDay}/>}
 
       {toast&&<div className={`toast ${toast.kind==='err'?'err':''}`} role={toast.kind==='err'?'alert':'status'}>
         <span className="toast-m">{toast.msg}</span>
