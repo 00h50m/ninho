@@ -1322,8 +1322,15 @@ html[data-size="xl"]{zoom:1.25}
 .setup-cta{flex-wrap:wrap}
 .setup-cta>div{flex:1 1 180px}
 .md-card,.chl,.card{min-width:0}
-.onb-row{flex-wrap:wrap}
-.onb-row>.onb-f{min-width:min(130px,100%)}
+/* Linhas de campos: grade que se ajusta à largura (nada passa da borda); os campos alinham pela base
+   mesmo quando um rótulo quebra em duas linhas; o campo largo (nome) ocupa duas colunas quando cabe */
+.onb-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(140px,100%),1fr));gap:0 10px;align-items:end}
+.onb-row>.onb-f{min-width:0}
+.onb-row>.onb-f.wide{grid-column:span 2}
+@media (max-width:420px){.onb-row>.onb-f.wide{grid-column:1/-1}}
+.onb-f>.fi,.onb-f>input,.onb-f>select{width:100%;min-width:0}
+.onb-f>span{line-height:1.25}
+.onb-f>span small{font-weight:400;color:var(--sub)}
 /* Nino, o mascote (Início) */
 .masc{display:flex;align-items:center;gap:12px;padding:10px 14px;margin-bottom:12px}
 .masc-b{background:transparent;border:0;padding:0;border-radius:50%;flex-shrink:0;cursor:pointer;line-height:0}
@@ -1436,3 +1443,53 @@ html[data-size="xl"]{zoom:1.25}
 .fc-why{color:var(--sub)}
 .fc-form{margin-top:10px}
 .fc-ok{border-left:3px solid var(--green);padding:2px 0 2px 8px;margin:0}
+
+/* Proteína do dia (033) */
+.pt-q{margin:10px 0 6px}
+.pt-ideas{list-style:none;margin:0;padding:0;display:grid;gap:6px}
+.pt-ideas li{display:flex;align-items:center;gap:10px;justify-content:space-between;border:1px solid var(--bd);border-radius:var(--r);padding:8px 10px}
+.pt-ideas li>span{min-width:0;flex:1}
+.pt-ideas b{display:block;font-size:13.5px}
+.pt-ideas small{color:var(--sub);font-size:12px}
+
+/* Cardápio da semana (033) */
+.mn-days{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin-bottom:8px;scrollbar-width:thin}
+.mn-day{flex:0 0 auto;display:grid;justify-items:center;gap:0;min-width:52px;min-height:var(--touch);padding:4px 8px;border:1px solid var(--bd);border-radius:var(--r);background:var(--sf);color:var(--tx);font:inherit;cursor:pointer}
+.mn-day small{color:var(--sub);font-size:11.5px}
+.mn-day.mn-today{border-color:var(--green)}
+.mn-day.on{background:var(--gdk);border-color:var(--gdk);color:var(--on-green)}
+.mn-day.on small{color:var(--on-green)}
+.mn-tot{margin:0 0 6px}
+.mn-meal{border-top:1px solid var(--bd);padding:8px 0}
+.mn-mh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.mn-mh b{flex:1;min-width:0}
+.mn-mh small{color:var(--sub)}
+.mn-meal ul{margin:4px 0 0;padding-left:18px;font-size:13.5px}
+.mn-meal li small{color:var(--sub)}
+.mn-form{margin-top:8px}
+.mn-shop{border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin-top:10px}
+.mn-shop ul{list-style:none;margin:6px 0 0;padding:0;display:grid;gap:2px}
+.mn-chk{padding:4px 0}
+.mn-chk small{color:var(--sub);margin-left:4px}
+
+/* Código de barras */
+.bc-box{border:1px solid var(--bd);border-radius:var(--r);padding:10px 12px;margin:0 0 10px;display:grid;gap:6px}
+.bc-acts{margin-top:0}
+
+/* Exportar */
+.ex-acts{margin-top:8px}
+
+/* Sobrou no vermelho */
+.sob.sob-neg{border-color:var(--cbdr);box-shadow:inset 3px 0 0 var(--cor)}
+.sob-alert{margin:2px 0 8px;padding:6px 10px;border-radius:var(--r);background:var(--cbg);color:var(--cor-tx);font-size:13px}
+
+/* Meus alimentos: Nome largo + Porção + Gramas em cima; kcal e macros embaixo (2 colunas no celular) */
+.onb-row.fc-grid{grid-template-columns:repeat(4,minmax(0,1fr))}
+@media (max-width:640px){.onb-row.fc-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.onb-row.fc-grid>.onb-f.wide{grid-column:1/-1}}
+
+/* Pop-up de água */
+.ag-pop{display:grid;gap:10px}
+.ag-big{display:flex;align-items:baseline;gap:8px}
+.ag-big b{font-size:34px;line-height:1;color:var(--tx)}
+.ag-big span{color:var(--sub)}
+.ag-tip{font-size:12px}

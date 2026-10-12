@@ -14,6 +14,9 @@ import { dueForPerson, type MaintenanceItem } from '@/lib/maintenance'
 import { SHOP_CATS, guessCategory, normalize, parseEntry } from '@/lib/shopping'
 import { loadHousehold, morningPayloads, must, weeklyPayload } from './notify'
 import { execute as executeAi, type Understood } from './telegramAi'
+import { meuDiaWeekLines } from './weekReport'
+import { sobrouAlerts, type SobrouResumo } from '@/lib/sobrou'
+import { addDays } from '@/lib/dates'
 import type { AiAction } from '@/lib/telegramAi'
 
 export type TgResponse = { ok: boolean, result?: any, description?: string, error_code?: number }
@@ -33,6 +36,10 @@ export interface BotDeps {
   faxinao?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<string>
   /** "organiza meu dia: …" → o dia em ordem, com Confirmar (opcional: precisa da chave da IA). */
   organizeDay?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<Understood>
+  /** Resumo do mês do Sobrou (opcional: só com o Sobrou ligado) para avisar de vencimentos na manhã. */
+  sobrou?: () => Promise<SobrouResumo | null>
+  /** Linhas do Meu dia da semana de uma pessoa (domingo). Padrão: lê do banco. */
+  meuDiaWeek?: (householdId: string, who: Who, today: string) => Promise<string[]>
 }
 
 interface Link { id: string, household_id: string, who: Who, chat_id: number, morning: boolean, weekly: boolean, active: boolean }
@@ -69,6 +76,7 @@ export const ADD_PROMPT = 'O que vai na lista? Mande os itens separados por vír
 export const HELP = [
   'Escreva do seu jeito, por exemplo: “comprei leite e café”, “a Zelda tomou a V10 hoje”, “lembra a Sabrina de pagar a internet sexta”, “bebi um copo de água”, “lavei a louça”, “almocei arroz, feijão e frango”. Eu mostro o que entendi e você confirma.',
   '📷 Mande a foto do prato (com “almoço”, “jantar”… na legenda, se quiser) e eu estimo as calorias.',
+  '🏷️ Foto da tabela nutricional com “rótulo” na legenda (ex.: “rótulo iogurte grego”): eu cadastro em Meus alimentos, ou confiro o que já está lá.',
   '🧹 “faxinão: banheiro, cozinha, roupa de cama, quintal” — eu organizo na melhor ordem e divido entre vocês (fica no app para conferir).',
   '🗓️ “organiza meu dia: dentista 14h30, pagar o boleto, mercado” — eu monto o dia em ordem e você confirma.',
   '',
@@ -397,6 +405,9 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
   const clock = homeClock(deps.now)
   const report: TgReport = { kind, day: clock.date, sent: 0, skipped: 0, failed: 0, deactivated: 0, errors: [] }
   const links = must(await deps.db.from('telegram_links').select('*').eq('active', true).eq(kind, true).not('chat_id', 'is', null), 'vínculos') as Link[]
+  // Sobrou (finanças da casa): uma busca por rodada; falhar aqui não atrapalha a mensagem
+  const sob = kind === 'morning' && deps.sobrou ? await deps.sobrou().catch(() => null) : null
+  const money = sob ? sobrouAlerts(sob, clock.date, addDays(clock.date, 1)) : []
   const byHouse = new Map<string, Link[]>()
   links.forEach(l => byHouse.set(l.household_id, [...(byHouse.get(l.household_id) || []), l]))
   for (const [householdId, list] of Array.from(byHouse.entries())) {
@@ -408,8 +419,15 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
         const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind, day: clock.date }).select('id').maybeSingle()
         if (claim.error) { if (claim.error.code === '23505') { report.skipped++; continue } throw new Error(claim.error.message) }
         const p = morning ? morning(l.who) : weekly!
+        // manhã: avisos do Sobrou · domingo: o Meu dia da semana (só de quem recebe)
+        let more = ''
+        if (kind === 'morning' && money.length) more = `\n\n${money.join('\n')}`
+        if (kind === 'weekly') {
+          const lines = await (deps.meuDiaWeek ?? ((h, w, d) => meuDiaWeekLines(deps.db, h, w, d)))(householdId, l.who, clock.date).catch(() => [] as string[])
+          if (lines.length) more = `\n\n🌿 Seu Meu dia na semana\n${lines.join('\n')}`
+        }
         const extra = kind === 'morning' ? { reply_markup: { inline_keyboard: [[{ text: '📋 Ver e concluir', callback_data: 'hoje' }]] } } : {}
-        const r = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${p.title}\n${p.body}`, ...extra })
+        const r = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${p.title}\n${p.body}${more}`.slice(0, 4000), ...extra })
         if (r.ok) { report.sent++; await deps.db.from('telegram_log').update({ status: 'sent' }).eq('id', (claim.data as any).id) }
         else {
           report.failed++

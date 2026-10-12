@@ -7,6 +7,7 @@ import { DEFAULT_NAMES } from '@/lib/constants'
 import { remainingMs } from '@/lib/sprint'
 import { dueReminders, forDevice, type RemState, type Reminder } from '@/lib/reminders'
 import { validatePlan } from '@/lib/dietPlan'
+import { signWater, waterSecret } from './waterToken'
 import { deliver, must, type NotifyDeps, type Report, type Subscription } from './notify'
 
 export interface ReminderSub extends Subscription { reminders: unknown, quiet_start: string, quiet_end: string }
@@ -23,7 +24,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     soft<any>(hh('profiles', 'display_name,role')),
     soft<any>(hh('personal_meds', 'id,who,name,dose,times').eq('active', true)),
     soft<any>(hh('personal_logs', 'who,kind,value,data').eq('date', date).in('kind', ['remedio', 'agua', 'refeicao'])),
-    soft<any>(hh('personal_settings', 'who,water_goal_ml')),
+    soft<any>(hh('personal_settings', 'who,water_goal_ml,cup_ml')),
     soft<any>(hh('routines', 'id,title,scheduled_time,weekdays,assign_mode,start_date,paused_until,reminder_min,active')),
     soft<any>(hh('routine_runs', 'routine_id').eq('date', date).eq('status', 'done')),
     soft<any>(hh('sprints', 'id,area,participants,duration_min,started_at,paused_at,paused_ms,ended_at').is('ended_at', null)),
@@ -43,7 +44,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     date, hm, nowMs: now.getTime(), names,
     meds: meds.map(m => ({ id: m.id, who: m.who, name: m.name, dose: m.dose, times: m.times || [] })),
     medTaken: logs.filter(l => l.kind === 'remedio').map(l => ({ who: l.who, med_id: l.data?.med_id, time: l.data?.time ?? null })),
-    water: (['g', 's'] as Who[]).map(w => ({ who: w, ml: logs.filter(l => l.kind === 'agua' && l.who === w).reduce((a, l) => a + Number(l.value || 0), 0), goal: Number(settings.find(x => x.who === w)?.water_goal_ml || 2000) })),
+    water: (['g', 's'] as Who[]).map(w => ({ who: w, ml: logs.filter(l => l.kind === 'agua' && l.who === w).reduce((a, l) => a + Number(l.value || 0), 0), goal: Number(settings.find(x => x.who === w)?.water_goal_ml || 2000), cup: Number(settings.find(x => x.who === w)?.cup_ml || 250) })),
     routines: routines.filter(r => r.active !== false),
     routineDone: runs.map(r => r.routine_id),
     sprint: sp ? { id: sp.id, area: sp.area, participants: sp.participants || [], endMs: now.getTime() + remainingMs(sp, now.getTime()) } : null,
@@ -83,7 +84,9 @@ export async function runReminders(deps: NotifyDeps, win = 20): Promise<Report &
           const logId = await claimReminder(deps.db, sub.id, clock.date, r.ref)
           if (!logId) { report.skipped++; continue }
           n++
-          await deliver(deps, sub, logId, { title: r.title, body: r.body, tag: r.ref.slice(0, 60), url: r.url }, report)
+          // água: bilhete assinado para o "+1 copo" funcionar sem abrir o app (vale até o fim do dia)
+          const agua = r.water && waterSecret() ? signWater({ h: householdId, w: r.who, d: clock.date, ml: r.water, r: `${r.ref}:${logId}`, exp: now.getTime() + 12 * 3600000 }, waterSecret()) : null
+          await deliver(deps, sub, logId, { title: r.title, body: r.body, tag: r.ref.slice(0, 60), url: r.url, ...(agua ? { agua, actions: [{ action: 'agua', title: `💧 +1 copo (${r.water} ml)` }] } : {}) }, report)
         }
       }
     } catch (e: any) {

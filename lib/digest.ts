@@ -5,7 +5,7 @@ import { hhmm } from './dates'
 import { canEarnOnTime, type WeeklyScores } from './gamification'
 import { FPT } from './constants'
 
-export interface PushPayload { title: string, body: string, tag: string, url: string }
+export interface PushPayload { title: string, body: string, tag: string, url: string, /** "+1 copo" (bilhete assinado) */ agua?: string, actions?: Array<{ action: string, title: string }> }
 
 const first = (n: string) => (n || '').split(' ')[0]
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`

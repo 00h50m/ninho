@@ -2,8 +2,9 @@
 import type { TgCall, BotDeps } from './telegram'
 import { createDb } from './push'
 import { weeklyTips } from './ai'
-import { dayFromTelegram, interpret, plateFromPhoto } from './telegramAi'
+import { dayFromTelegram, interpret, isLabelCaption, labelFromPhoto, plateFromPhoto } from './telegramAi'
 import { faxFromTelegram } from './faxinaoAi'
+import { fetchSobrou, sobrouConfigured } from './sobrou'
 
 export function telegramConfigured(env = process.env): boolean {
   return !!env.TELEGRAM_BOT_TOKEN && !!env.TELEGRAM_WEBHOOK_SECRET && !!env.NEXT_PUBLIC_SUPABASE_URL && !!env.SUPABASE_SERVICE_ROLE_KEY
@@ -28,6 +29,7 @@ export function createBotDeps(env = process.env): BotDeps {
   const db = createDb(env)
   return {
     db, tg: createTg(env),
+    ...(sobrouConfigured(env) ? { sobrou: async () => { const r = await fetchSobrou(env); return r.ok === true ? r.resumo : null } } : {}),
     tips: async (householdId: string) => {
       const r = await weeklyTips(db, householdId, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL })
       return r.ok === true ? { ok: true as const, text: r.text } : { ok: false as const, message: (r as { message: string }).message }
@@ -40,7 +42,9 @@ export function createBotDeps(env = process.env): BotDeps {
       plate: async (link, fileId, caption) => {
         const img = await downloadPhoto(env, fileId)
         if (!img) return { ok: false as const, message: 'Não consegui baixar a foto do Telegram. Tente mandar de novo.' }
-        return plateFromPhoto(db, link, img, caption, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL })
+        const ai = { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }
+        // "rótulo", "tabela", "cadastrar…" na legenda: lê a tabela nutricional em vez de estimar o prato
+        return isLabelCaption(caption) ? labelFromPhoto(db, link, img, caption, ai) : plateFromPhoto(db, link, img, caption, ai)
       },
     } : {}),
   }

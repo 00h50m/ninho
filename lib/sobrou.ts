@@ -32,3 +32,15 @@ export function quando(data: string, today: string, tomorrow: string): string {
   const wd = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][new Date(`${data}T12:00:00Z`).getUTCDay()]
   return `${wd}, ${data.slice(8, 10)}/${data.slice(5, 7)}`
 }
+
+/**
+ * Avisos do Sobrou para a mensagem da manhã: contas que vencem hoje ou amanhã e o mês no vermelho.
+ * Vazio = nada para avisar.
+ */
+export function sobrouAlerts(r: SobrouResumo, today: string, tomorrow: string): string[] {
+  const out: string[] = []
+  for (const v of r.vencimentos.filter(v => v.data === today || v.data === tomorrow))
+    out.push(`💰 Vence ${v.data === today ? 'hoje' : 'amanhã'}: ${v.titulo} ${brl(v.valor)}${v.estimada ? ' (estimada)' : ''}`)
+  if (r.sobraProjetada < 0) out.push(`⚠️ O mês está fechando no vermelho: faltam ${brl(-r.sobraProjetada)} (Sobrou, ${mesNome(r.mes)})`)
+  return out
+}

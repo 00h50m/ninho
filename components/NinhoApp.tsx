@@ -62,6 +62,7 @@ import { enqueue, flush as flushOutbox, newId, readOutbox, writeOutbox, type Out
 import { isOfflineError } from '@/lib/offline'
 import * as mdApi from '@/lib/services/meudia'
 import { MeuDiaView, MeuDiaCard, type MdFocus } from '@/components/meudia/MeuDia'
+import { AguaPopup } from '@/components/meudia/AguaPopup'
 import type { MdTab } from '@/lib/nav'
 import { useNos } from '@/hooks/useNos'
 import { useFaxinao } from '@/hooks/useFaxinao'
@@ -260,6 +261,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // Links das notificações (?ir=meudia, desafios, sprint…): abre a tela certa e limpa o endereço
   const [wantSprint,setWantSprint]=useState(false)
   const [mdTab,setMdTab]=useState<MdTab>('hoje'),[mdFocus,setMdFocus]=useState<MdFocus>(null)
+  /** Pop-up de água: >0 = aberto pelo lembrete (força); o próprio pop-up decide se abre sozinho */
+  const [aguaPop,setAguaPop]=useState(0)
   /** Abre uma parte do Meu dia (e, se pedido, rola até um cartão). */
   const goMd=(t:MdTab,what?:NonNullable<MdFocus>['what'])=>{setTab('eu');setMdTab(t);if(what)setMdFocus({what,n:Date.now()})}
   useEffect(()=>{
@@ -269,6 +272,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     u.searchParams.delete('ir');window.history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)
     switch(ir){
       case 'meudia':goMd('hoje');break
+      case 'agua':setAguaPop(p=>p+1);break
       case 'alimentacao':goMd('comida','plano');break
       case 'rotinas':setTab('rotinas');setRotView('rotinas');break
       case 'caes':setTab('caes');break
@@ -1186,7 +1190,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── MEU DIA (de cada uma) ── */}
         {screen==='eu'&&<div className="scr">
           <div className="sh"><div><h2>Meu dia</h2><p>Água, sono, alimentação, treinos e corpo · só você vê o que não compartilhar</p></div></div>
-          {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} saved={md.saved} savedReady={md.savedReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
+          {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} saved={md.saved} savedReady={md.savedReady} menus={md.menus} menusReady={md.menusReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
             onCheckin={()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),300)}}
             onSaveGoal={g=>mdApi.saveGoal(householdId,me,g).then(md.reload).then(()=>showToast(g.id?'Objetivo salvo':'Objetivo criado 🎯')).catch(e=>{showError(toNinhoError(e,'salvar objetivo'));throw e})}
             onGoalStatus={(g,st)=>mdApi.setGoalStatus(g.id,st).then(md.reload).then(()=>showToast(st==='concluido'?'Parabéns! Objetivo concluído 🎉':'Objetivo arquivado')).catch(e=>{showError(toNinhoError(e,'atualizar objetivo'));throw e})}
@@ -1213,6 +1217,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             onStopMeal={m=>mdApi.stopMeal(m.id).then(md.reload).then(()=>showToast('Refeição removida das salvas')).catch(e=>{showError(toNinhoError(e,'remover refeição salva'));throw e})}
             onUseMeal={m=>{mdApi.countMealUse(m.id,m.uses).then(md.reload).catch(()=>{})}}
             onSaveFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>showToast(`${list.length} alimento(s) em Meus alimentos 🥗`)).catch(e=>{showError(toNinhoError(e,'lançar alimentos'));throw e})}
+            onSaveMenu={(start,menu,prefs)=>mdApi.saveMenu(householdId,me,start,menu,prefs).then(md.reload).then(()=>showToast('Cardápio da semana pronto 🗓️')).catch(e=>{showError(toNinhoError(e,'salvar cardápio'));throw e})}
+            onStopMenu={m=>mdApi.stopMenu(m.id).then(md.reload).then(()=>showToast('Cardápio apagado')).catch(e=>{showError(toNinhoError(e,'apagar cardápio'));throw e})}
+            onMenuToShopping={lines=>mdApi.menuToShopping(householdId,me,lines).then(r=>{casa.reloadShopping();showToast(`🛒 ${r.added} na lista de compras${r.had?` · ${r.had} já estava(m)`:''}`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}
             onImportFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>{const r=list.filter(x=>x.review).length;showToast(`${list.length} alimento(s) importado(s)${r?` · ${r} para conferir`:''} 🥗`)}).catch(e=>{showError(toNinhoError(e,'importar alimentos'));throw e})}
             onPlanRemind={(r,on)=>mdApi.setPlanRemind(r.id,on).then(md.reload).then(()=>showToast(on?'Lembretes das refeições ligados':'Lembretes desligados')).catch(e=>{showError(toNinhoError(e,'lembretes do plano'));throw e})}
             onStopPlan={r=>mdApi.stopPlan(r.id).then(md.reload).then(()=>showToast('Plano removido')).catch(e=>{showError(toNinhoError(e,'remover plano'));throw e})}/>
@@ -1716,6 +1723,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {modal==='quick'&&<QuickActionsSheet onClose={closeModal} actions={quickActions}/>}
       {dayOpen&&me&&<OrganizarDiaSheet householdId={householdId} me={me} names={names} today={today} onClose={()=>setDayOpen(false)} onCreate={createDay}/>}
 
+      {md.available&&me&&<AguaPopup key={aguaPop} me={me} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} force={aguaPop>0}
+        onAdd={ml=>mdAdd(me,'agua',ml).then(()=>showToast(`💧 +${ml} ml`)).catch(e=>{showError(toNinhoError(e,'registrar água'));throw e})}
+        onUndo={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'desfazer'));throw e})} onClose={()=>{}}/>}
       {toast&&<div className={`toast ${toast.kind==='err'?'err':''}`} role={toast.kind==='err'?'alert':'status'}>
         <span className="toast-m">{toast.msg}</span>
         {toast.undo&&<button onClick={toast.undo}>Desfazer</button>}

@@ -9,6 +9,7 @@ import { bodySeries, type PKind, type PLog, type PMed, type PSettings } from '@/
 import type { DietPlan, PlanFood, PlanRow } from '@/lib/dietPlan'
 import { readLabelPhoto, readPlatePhoto } from '@/lib/services/aiFiles'
 import { catalogFoods, type CatalogFood, type CatalogResult } from '@/lib/foodCatalog'
+import type { LabelRead } from '@/lib/foodLabel'
 import { PlanCard } from './Plano'
 import type { MdFocus } from './MeuDia'
 import { toSaved, type SavedMeal } from '@/lib/savedMeals'
@@ -18,6 +19,11 @@ import {
   type Activity, type CustomFood, type FoodProfile, type Goal, type Meal, type MealItem,
 } from '@/lib/nutricao'
 import { LineChart } from './LineChart'
+import { PROTEIN_DEFAULT, proteinTarget } from '@/lib/protein'
+import { ProteinCard } from './Proteina'
+import { MenuCard } from './Cardapio'
+import { BarcodeBox } from './Barcode'
+import type { Menu, MenuRow, ShopLine } from '@/lib/cardapio'
 import { WeekBars } from './SleepBars'
 
 const K = (v: number) => Math.round(v).toLocaleString('pt-BR')
@@ -32,6 +38,7 @@ const UNIT_LABEL: Record<string, string> = {
 export interface FoodTabProps {
   householdId: string, me: Who, today: string, nowHM: string, logs: PLog[], profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean
   saved: SavedMeal[], savedReady?: boolean
+  menus: MenuRow[], menusReady?: boolean
   meds: PMed[], settings: PSettings[], plans: PlanRow[], plansReady?: boolean, focus?: MdFocus
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
@@ -40,6 +47,9 @@ export interface FoodTabProps {
   onStopFood: (f: CustomFood) => Promise<void>
   onSaveFoods: (list: PlanFood[]) => Promise<void>
   onImportFoods: (list: CatalogFood[]) => Promise<void>
+  onSaveMenu: (start: string, menu: Menu, prefs: string | null) => Promise<void>
+  onStopMenu: (m: MenuRow) => Promise<void>
+  onMenuToShopping: (lines: ShopLine[]) => Promise<void>
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void
@@ -90,12 +100,15 @@ export function FoodTab(p: FoodTabProps) {
           <div><dt>Proteína · Carbo · Gordura</dt><dd><b className="mono al-mac">{d.p} · {d.c} · {d.f}</b><small>gramas</small></dd></div>
         </dl>}
       </section>
+      <ProteinCard prof={prof} weight={w} eatenP={d.p} kcalLeft={d.left} foods={p.foods.filter(f => f.who === p.me)} nowHM={p.nowHM} onAdd={p.onAdd}/>
 
       <nav className="md-jump" aria-label="Ir para">
-        {([['pl-hoje', '📋 Plano'], ['al-add', '✍️ Registrar'], ['al-hoje', '🍽️ Refeições de hoje'], ['al-semana', '📊 Semana'], ['al-peso', '⚖️ Peso'], ['al-meus', '🥗 Meus alimentos']] as Array<[string, string]>)
+        {([['pl-hoje', '📋 Plano'], ['mn-t', '🗓️ Cardápio'], ['al-add', '✍️ Registrar'], ['al-hoje', '🍽️ Refeições de hoje'], ['al-semana', '📊 Semana'], ['al-peso', '⚖️ Peso'], ['al-meus', '🥗 Meus alimentos']] as Array<[string, string]>)
           .map(([id, l]) => <button key={id} className="fc" onClick={() => (document.getElementById(id) || (id === 'pl-hoje' ? document.getElementById('pl-novo') : null))?.closest('.card, details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{l}</button>)}
       </nav>
       <PlanCard {...p} hide={hide}/>
+      <MenuCard householdId={p.householdId} me={p.me} today={p.today} menus={p.menus} menusReady={p.menusReady} kcal={t.kcal} protein={proteinTarget(prof, w).g} hide={hide}
+        onSaveMenu={p.onSaveMenu} onStopMenu={p.onStopMenu} onMenuToShopping={p.onMenuToShopping} onAdd={p.onAdd}/>
       <MealForm {...p} hide={hide}/>
       <MealsToday {...p} hide={hide}/>
 
@@ -136,10 +149,11 @@ function ProfileForm(p: FoodTabProps & { prof?: FoodProfile, weight: number | nu
   const [goal, setGoal] = useState<Goal>(pr?.goal || 'perder'), [pace, setPace] = useState(pr?.pace_kg_week ?? 0.5)
   const [target, setTarget] = useState(pr?.target_kg != null ? N1(pr.target_kg) : ''), [manual, setManual] = useState(pr?.kcal_override ? String(pr.kcal_override) : '')
   const [hide, setHide] = useState(pr?.hide_numbers ?? false), [busy, setBusy] = useState(false)
+  const [protKg, setProtKg] = useState(pr?.protein_g_kg != null ? N1(pr.protein_g_kg) : '')
   const nowYear = Number(p.today.slice(0, 4))
   const valid = Number(year) >= 1920 && Number(year) <= nowYear - 12 && num(height) >= 120 && num(height) <= 230 && num(weight) >= 30 && num(weight) <= 300
-    && (!target.trim() || (num(target) >= 30 && num(target) <= 300)) && (!manual.trim() || (num(manual) >= 1000 && num(manual) <= 5000))
-  const draft: Omit<FoodProfile, 'who'> = { sex, birth_year: Number(year), height_cm: num(height), activity, goal, pace_kg_week: goal === 'manter' ? 0 : pace, target_kg: target.trim() ? num(target) : null, kcal_override: manual.trim() ? Math.round(num(manual)) : null, hide_numbers: hide }
+    && (!target.trim() || (num(target) >= 30 && num(target) <= 300)) && (!manual.trim() || (num(manual) >= 1000 && num(manual) <= 5000)) && (!protKg.trim() || (num(protKg) >= 0.5 && num(protKg) <= 3))
+  const draft: Omit<FoodProfile, 'who'> = { sex, birth_year: Number(year), height_cm: num(height), activity, goal, pace_kg_week: goal === 'manter' ? 0 : pace, target_kg: target.trim() ? num(target) : null, kcal_override: manual.trim() ? Math.round(num(manual)) : null, hide_numbers: hide, protein_g_kg: protKg.trim() ? Math.round(num(protKg) * 10) / 10 : null }
   const preview = valid ? calorieTarget({ ...draft, who: p.me }, num(weight), nowYear) : null
   async function save() {
     setBusy(true)
@@ -176,12 +190,14 @@ function ProfileForm(p: FoodTabProps & { prof?: FoodProfile, weight: number | nu
         </div>
       </>}
       <div className="onb-row" style={{ marginTop: 10 }}>
-        <label className="onb-f"><span>Peso desejado (kg, opcional)</span><input className="fi" inputMode="decimal" value={target} onChange={e => setTarget(e.target.value)}/></label>
-        <label className="onb-f"><span>Meta manual (kcal, opcional)</span><input className="fi" inputMode="numeric" value={manual} onChange={e => setManual(e.target.value)} placeholder="da nutricionista"/></label>
+        <label className="onb-f"><span>Peso desejado (kg)</span><input className="fi" inputMode="decimal" placeholder="opcional" value={target} onChange={e => setTarget(e.target.value)}/></label>
+        <label className="onb-f"><span>Meta manual (kcal)</span><input className="fi" inputMode="numeric" value={manual} onChange={e => setManual(e.target.value)} placeholder="opcional (da nutri)"/></label>
+        <label className="onb-f"><span>Proteína (g por kg)</span><input className="fi" inputMode="decimal" value={protKg} onChange={e => setProtKg(e.target.value)} placeholder={`padrão ${N1(PROTEIN_DEFAULT[goal])}`}/></label>
       </div>
+      {protKg.trim() && !(num(protKg) >= 0.5 && num(protKg) <= 3) && <small className="al-warn">A proteína fica entre 0,5 e 3 g por kg.</small>}
       <label className="rt-toggle"><input type="checkbox" checked={hide} onChange={e => setHide(e.target.checked)}/><span><b>Esconder as calorias</b><small>Mostra só como foi o dia ("na medida", "ainda tem espaço"), sem números.</small></span></label>
       {preview && <p className="al-prev" aria-live="polite">{preview.manual ? <>Meta: <b>{K(preview.kcal)} kcal</b> por dia (manual).</> : <>Gasto estimado <b>{K(preview.tdee)} kcal</b> · meta <b>{K(preview.kcal)} kcal</b> por dia.</>}
-        {preview.clamped && <> Ficou no mínimo seguro de {K(SAFE_MIN[sex])} kcal.</>}</p>}
+        {preview.clamped && <> Ficou no mínimo seguro de {K(SAFE_MIN[sex])} kcal.</>} Proteína: <b>{proteinTarget(draft, num(weight)).g} g</b> por dia.</p>}
       <div className="md-acts">
         <button className="btn btn-p" disabled={!valid || busy} onClick={save}>{busy ? 'Salvando…' : 'Salvar'}</button>
         {p.canCancel && <button className="btn btn-g" onClick={p.onDone}>Cancelar</button>}
@@ -411,7 +427,8 @@ function MyFoods(p: FoodTabProps & { inner?: boolean }) {
     .then(() => { setF(blank); setLbl(null) }).catch(() => {})
 
   // 📷 foto do rótulo: a IA copia a tabela; a pessoa confere e salva
-  const [lbl, setLbl] = useState<{ s: 'busy' } | { s: 'ok', note: string | null } | { s: 'err', msg: string } | null>(null)
+  const [lbl, setLbl] = useState<{ s: 'busy' } | { s: 'ok', note: string | null, src: 'rotulo' | 'codigo' } | { s: 'err', msg: string } | null>(null)
+  const [bc, setBc] = useState(false)
   const photoRef = useRef<HTMLInputElement>(null)
   const target = useRef<CustomFood | null>(null)
   const askPhoto = (x: CustomFood | null) => { target.current = x; photoRef.current?.click() }
@@ -423,9 +440,13 @@ function MyFoods(p: FoodTabProps & { inner?: boolean }) {
     setLbl({ s: 'busy' })
     const r = await readLabelPhoto(p.householdId, file)
     if (r.ok === false) { setLbl({ s: 'err', msg: r.error }); return }
-    const d = r.data, s1 = (v: number | null) => v != null ? N1(v) : ''
+    fill(r.data, x, 'rotulo')
+  }
+  /** Rótulo lido (foto ou código de barras) → formulário para conferir. Num item "para conferir", o nome fica. */
+  function fill(d: LabelRead, x: CustomFood | null, src: 'rotulo' | 'codigo') {
+    const s1 = (v: number | null) => v != null ? N1(v) : ''
     setF(cur => ({ ...cur, name: x ? x.name : (d.name || cur.name), portion: d.portion, portion_g: N1(d.portion_g), kcal: N1(d.kcal), protein: s1(d.protein), carb: s1(d.carb), fat: s1(d.fat) }))
-    setLbl({ s: 'ok', note: d.note })
+    setLbl({ s: 'ok', note: d.note, src })
     setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
   }
 
@@ -447,10 +468,12 @@ function MyFoods(p: FoodTabProps & { inner?: boolean }) {
       <p className="row-s" style={{ marginBottom: 8 }}>Para o que não está na tabela: copie do rótulo (por porção), tire foto da tabela nutricional ou importe uma planilha. Depois é só escrever o nome na refeição.</p>
       <div className="md-acts fc-acts">
         <button className="btn btn-g" disabled={lbl?.s === 'busy'} onClick={() => askPhoto(null)}>{lbl?.s === 'busy' ? 'Lendo o rótulo…' : '📷 Foto do rótulo'}</button>
+        <button className="btn btn-g" aria-expanded={bc} onClick={() => setBc(v => !v)}>🔢 Código de barras</button>
         <button className="btn btn-g" onClick={() => csvRef.current?.click()}>📄 Importar planilha</button>
         <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden aria-label="Foto da tabela nutricional" onChange={e => fromLabel(e.target.files?.[0])}/>
         <input ref={csvRef} type="file" accept=".csv,text/csv" hidden aria-label="Planilha de alimentos (CSV)" onChange={e => fromCsv(e.target.files?.[0])}/>
       </div>
+      {bc && <BarcodeBox householdId={p.householdId} onClose={() => setBc(false)} onFound={d => { setBc(false); fill(d, f.id ? p.foods.find(x => x.id === f.id) || null : null, 'codigo') }}/>}
       {imp && <div className="fc-imp" role="status">
         {'err' in imp ? <p className="al-warn">{imp.err}</p> : <>
           <p><b>{imp.add.length} alimento(s) novo(s)</b>{imp.add.some(x => x.review) && <> · <span className="fc-flag">⚠ {imp.add.filter(x => x.review).length} para conferir</span></>}
@@ -477,16 +500,16 @@ function MyFoods(p: FoodTabProps & { inner?: boolean }) {
       {shown.length < list.length && <button className="lnk" onClick={() => setMore(true)}>Ver todos ({list.length})</button>}
       <div ref={formRef} className="fc-form">
         {f.id && <p className="row-s">Editando <b>{f.name}</b>{f.review ? <> · falta conferir: {f.review}. Ao salvar, fica conferido.</> : null} <button className="lnk-inline" onClick={() => { setF(blank); setLbl(null) }}>cancelar</button></p>}
-        {lbl?.s === 'ok' && <p className="fc-ok" role="status">📷 Copiado do rótulo. Confira os números com a embalagem antes de salvar.{lbl.note ? ` ${lbl.note}` : ''}</p>}
+        {lbl?.s === 'ok' && <p className="fc-ok" role="status">{lbl.src === 'codigo' ? '🔢 Encontrado pelo código de barras.' : '📷 Copiado do rótulo.'} Confira os números com a embalagem antes de salvar.{lbl.note && lbl.src === 'rotulo' ? ` ${lbl.note}` : ''}</p>}
         {lbl?.s === 'err' && <p className="al-warn" role="alert">{lbl.msg}</p>}
-        <div className="onb-row" style={{ marginTop: 8 }}>
-          <label className="onb-f"><span>Nome</span><input className="fi" value={f.name} maxLength={60} onChange={e => setF(x => ({ ...x, name: e.target.value }))} placeholder="Barrinha de proteína"/></label>
+        <div className="onb-row fc-grid" style={{ marginTop: 8 }}>
+          <label className="onb-f wide"><span>Nome</span><input className="fi" value={f.name} maxLength={60} onChange={e => setF(x => ({ ...x, name: e.target.value }))} placeholder="Barrinha de proteína"/></label>
           <label className="onb-f"><span>Porção</span><input className="fi" value={f.portion} maxLength={30} onChange={e => setF(x => ({ ...x, portion: e.target.value }))}/></label>
-          <label className="onb-f"><span>Gramas da porção</span><input className="fi" inputMode="decimal" value={f.portion_g} onChange={e => setF(x => ({ ...x, portion_g: e.target.value }))}/></label>
+          <label className="onb-f"><span>Gramas ou ml</span><input className="fi" inputMode="decimal" value={f.portion_g} onChange={e => setF(x => ({ ...x, portion_g: e.target.value }))}/></label>
           <label className="onb-f"><span>kcal da porção</span><input className="fi" inputMode="decimal" value={f.kcal} onChange={e => setF(x => ({ ...x, kcal: e.target.value }))}/></label>
-          <label className="onb-f"><span>Proteína (g, opcional)</span><input className="fi" inputMode="decimal" value={f.protein} onChange={e => setF(x => ({ ...x, protein: e.target.value }))}/></label>
-          <label className="onb-f"><span>Carboidrato (g, opcional)</span><input className="fi" inputMode="decimal" value={f.carb} onChange={e => setF(x => ({ ...x, carb: e.target.value }))}/></label>
-          <label className="onb-f"><span>Gordura (g, opcional)</span><input className="fi" inputMode="decimal" value={f.fat} onChange={e => setF(x => ({ ...x, fat: e.target.value }))}/></label>
+          <label className="onb-f"><span>Proteína (g)</span><input className="fi" inputMode="decimal" placeholder="opcional" value={f.protein} onChange={e => setF(x => ({ ...x, protein: e.target.value }))}/></label>
+          <label className="onb-f"><span>Carboidrato (g)</span><input className="fi" inputMode="decimal" placeholder="opcional" value={f.carb} onChange={e => setF(x => ({ ...x, carb: e.target.value }))}/></label>
+          <label className="onb-f"><span>Gordura (g)</span><input className="fi" inputMode="decimal" placeholder="opcional" value={f.fat} onChange={e => setF(x => ({ ...x, fat: e.target.value }))}/></label>
         </div>
         <button className="btn btn-s" disabled={!ok} onClick={save}>{f.id ? (f.review ? 'Salvar conferido' : 'Salvar') : '+ Cadastrar'}</button>
       </div>

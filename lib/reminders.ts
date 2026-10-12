@@ -4,6 +4,8 @@
 import type { Names, Who } from './types'
 import { addDays, dowOf } from './dates'
 
+import { WATER_TIMES, waterBehind, waterLine } from './water'
+
 export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao'
 export const RKINDS: Array<[RKind, string, string, string]> = [
   ['remedio', '💊', 'Remédios e vitaminas', 'No horário de cada dose, se ainda não marcou'],
@@ -13,7 +15,7 @@ export const RKINDS: Array<[RKind, string, string, string]> = [
   ['caes', '🐾', 'Saúde dos cães', 'Vacina, vermífugo e consulta: na véspera e no dia, às 9h'],
   ['agenda', '📅', 'Agenda da casa', '1 hora antes; vencimentos na véspera e no dia'],
   ['desafio', '🤝', 'Desafio em dupla', 'Às 21h, se o dia ainda não foi marcado'],
-  ['agua', '💧', 'Água', 'Às 11h, 15h e 19h, se estiver abaixo do esperado'],
+  ['agua', '💧', 'Água', 'De 9h30 às 20h, só quando estiver atrás do ritmo, com botão "+1 copo"'],
   ['checkin', '💬', 'Check-in da noite', 'Às 21h30, se ainda não fez o check-in'],
 ]
 export type RPrefs = Record<RKind, boolean>
@@ -24,7 +26,7 @@ export interface RemState {
   date: string, hm: string, nowMs: number, names: Names
   meds: Array<{ id: string, who: Who, name: string, dose: string | null, times: string[] }>
   medTaken: Array<{ who: Who, med_id: string, time: string | null }>
-  water: Array<{ who: Who, ml: number, goal: number }>
+  water: Array<{ who: Who, ml: number, goal: number, cup?: number }>
   routines: Array<{ id: string, title: string, scheduled_time: string | null, weekdays: number[] | null, assign_mode: string, start_date?: string | null, paused_until?: string | null, reminder_min?: number | null }>
   routineDone: string[]
   sprint: { id: string, area: string, participants: Who[], endMs: number } | null
@@ -36,7 +38,7 @@ export interface RemState {
   planMeals?: Array<{ who: Who, id: string, name: string, time: string }>
   planDone?: Array<{ who: Who, meal_id: string }>
 }
-export interface Reminder { who: Who, kind: RKind, ref: string, title: string, body: string, url: string }
+export interface Reminder { who: Who, kind: RKind, ref: string, title: string, body: string, url: string, /** "+1 copo" na própria notificação */ water?: number }
 
 export const toMin = (hm: string) => { const [h, m] = hm.slice(0, 5).split(':').map(Number); return h * 60 + m }
 const fromMin = (n: number) => `${String(Math.floor(n / 60)).padStart(2, '0')}:${String(n % 60).padStart(2, '0')}`
@@ -67,9 +69,14 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
     push([m.who], 'refeicao', `refeicao:${m.id}`, `🍽️ ${m.name}`, 'Hora da refeição do seu plano. Toque para marcar no Meu dia.', '/?ir=alimentacao')
   }
   // Água: pontos do dia, se abaixo do esperado até ali
-  for (const [t, frac] of [['11:00', 0.35], ['15:00', 0.6], ['19:00', 0.85]] as Array<[string, number]>) {
+  // Água: ao longo do dia, só quando está atrás do ritmo; o aviso traz o botão "+1 copo"
+  for (const t of WATER_TIMES) {
     if (!due(t, s.hm, win)) continue
-    for (const w of s.water) if (w.ml < w.goal * frac) push([w.who], 'agua', `agua:${t}`, '💧 Um copo de água?', `Até agora ${(w.ml / 1000).toFixed(1).replace('.', ',')} L de ${(w.goal / 1000).toFixed(1).replace('.', ',')} L.`, '/?ir=meudia')
+    for (const w of s.water) {
+      const cup = w.cup || 250
+      if (!waterBehind(w.ml, w.goal, cup, t)) continue
+      out.push({ who: w.who, kind: 'agua', ref: `agua:${t}`, title: '💧 Hora de um copo de água', body: waterLine(w.ml, w.goal, cup), url: '/?ir=agua', water: cup })
+    }
   }
   // Rotinas no horário
   const dow = dowOf(s.date)

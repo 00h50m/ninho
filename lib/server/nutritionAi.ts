@@ -7,6 +7,8 @@ import { PLAN_SCHEMA, PLAN_SYSTEM, PLATE_SCHEMA, PLATE_SYSTEM, plateToItems, val
 import type { CustomFood } from '@/lib/nutricao'
 import { BODY_SCHEMA, BODY_SYSTEM, validateBody, type BodyScan } from '@/lib/bodyScan'
 import { LABEL_SCHEMA, LABEL_SYSTEM, validateLabel, type LabelRead } from '@/lib/foodLabel'
+import { MENU_SCHEMA, MENU_SYSTEM, menuContext, validateMenu, type Menu } from '@/lib/cardapio'
+import { cleanItems } from '@/lib/savedMeals'
 import { homeClock } from '@/lib/dates'
 import { AI_MODEL } from './ai'
 import { must } from './notify'
@@ -16,6 +18,7 @@ export const PLAN_DAILY_LIMIT = 10
 export const PLATE_DAILY_LIMIT = 30
 export const BODY_DAILY_LIMIT = 10
 export const LABEL_DAILY_LIMIT = 40
+export const MENU_DAILY_LIMIT = 6
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const
 /** Tamanho máximo em base64 de um arquivo mandado de uma vez (o corpo do pedido na Vercel vai até ~4,5 MB). */
 export const MAX_B64 = 4_300_000
@@ -153,4 +156,27 @@ export async function readLabel(db: SupabaseClient, householdId: string, image: 
   const label = validateLabel(r.json)
   if (!label) return { ok: false, status: 422, message: 'Não consegui ler a tabela nutricional. Tente uma foto mais de perto, reta e com boa luz, só da tabela.' }
   return { ok: true, label }
+}
+
+/**
+ * Cardápio de 7 dias a partir de hoje, com o plano, os alimentos e as refeições salvas de quem pede.
+ * Só monta e devolve: quem grava é o app (com as regras do banco), depois que a pessoa vê.
+ */
+export async function readMenu(db: SupabaseClient, householdId: string, who: string, o: { kcal: number, protein: number, prefs: string, start: string }, opts: AiOpts = {}): Promise<{ ok: true, menu: Menu } | Fail> {
+  if (!(await underLimit(db, householdId, 'cardapio', MENU_DAILY_LIMIT, opts.now ?? new Date()))) return { ok: false, status: 429, message: `Limite de ${MENU_DAILY_LIMIT} cardápios por dia. Tente amanhã.` }
+  const [pl, sv] = await Promise.all([
+    db.from('personal_diet_plans').select('plan').eq('household_id', householdId).eq('who', who).eq('active', true).limit(1).maybeSingle(),
+    db.from('personal_saved_meals').select('id,who,name,items,kcal,uses').eq('household_id', householdId).eq('who', who).eq('active', true).order('uses', { ascending: false }),
+  ])
+  const foods = await customFoods(db, householdId, who)
+  const plan = pl.error || !pl.data ? null : validatePlan((pl.data as any).plan)
+  const saved = sv.error ? [] : ((sv.data || []) as any[]).map(x => ({ ...x, kcal: Number(x.kcal), items: cleanItems(x.items) }))
+  const r = await ask(db, householdId, 'cardapio', opts, {
+    system: MENU_SYSTEM, schema: MENU_SCHEMA, effort: 'low', maxTokens: 16000,
+    content: [{ type: 'text', text: menuContext({ plan, foods, saved, kcal: o.kcal, protein: o.protein, prefs: o.prefs, start: o.start }) }],
+  })
+  if (r.ok === false) return r
+  const menu = validateMenu(r.json, o.start, foods)
+  if (!menu) return { ok: false, status: 422, message: 'A IA não conseguiu montar o cardápio agora. Tente de novo.' }
+  return { ok: true, menu }
 }

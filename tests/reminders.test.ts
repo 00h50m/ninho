@@ -29,7 +29,12 @@ describe('lembretes', () => {
   })
   it('água só se estiver abaixo do esperado', () => {
     const water = [{ who: 'g' as const, ml: 500, goal: 2000 }, { who: 's' as const, ml: 1500, goal: 2000 }]
-    expect(kinds(dueReminders(base({ hm: '15:02', water })))).toEqual(['g:agua:agua:15:00'])
+    expect(kinds(dueReminders(base({ hm: '15:32', water })))).toEqual(['g:agua:agua:15:30'])
+    const r = dueReminders(base({ hm: '15:32', water: [{ who: 'g' as const, ml: 500, goal: 2000, cup: 300 }] }))[0]
+    expect(r).toMatchObject({ url: '/?ir=agua', water: 300, body: '0,5 L de 2 L · faltam 5 copos' })
+    // fora dos horários e de manhã cedo com pouco atraso: nada
+    expect(dueReminders(base({ hm: '15:02', water }))).toEqual([])
+    expect(dueReminders(base({ hm: '09:32', water: [{ who: 'g' as const, ml: 150, goal: 2000 }] }))).toEqual([])
   })
   it('rotina no horário, no dia certo, se não foi feita; dividida vai para as duas', () => {
     const routines = [

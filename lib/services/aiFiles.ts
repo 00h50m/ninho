@@ -73,3 +73,10 @@ export async function readLabelPhoto(householdId: string, file: File) {
   if (!file.type.startsWith('image/')) return { ok: false as const, error: 'Mande uma foto da tabela nutricional.' }
   return post<LabelRead>('/api/ai/rotulo', { householdId, image: await shrink(file, 2000, 0.9) })
 }
+
+/** Cardápio da semana com a IA (o servidor lê o plano, os alimentos e as salvas de quem pede). */
+export const buildMenu = (householdId: string, o: { kcal: number, protein: number, prefs: string, start: string }) =>
+  post<import('@/lib/cardapio').Menu>('/api/ai/cardapio', { householdId, ...o })
+
+/** Código de barras → alimento (base pública Open Food Facts, sem IA). */
+export const lookupBarcode = (householdId: string, code: string) => post<LabelRead>('/api/alimentos/codigo', { householdId, code })

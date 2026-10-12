@@ -2,6 +2,8 @@
 // Meu dia: a parte individual de cada uma. Água, sono, autocuidado, remédios,
 // treinos (com cargas) e evolução física. Cada uma escolhe o que a outra vê.
 import type { CatalogFood } from '@/lib/foodCatalog'
+import { ExportCard } from './Exportar'
+import type { Menu, MenuRow, ShopLine } from '@/lib/cardapio'
 import { useEffect, useMemo, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
@@ -34,6 +36,7 @@ export interface MeuDiaProps {
   settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean
   profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, householdId: string
   saved: SavedMeal[], savedReady?: boolean
+  menus: MenuRow[], menusReady?: boolean
   goals: PGoal[], goalsReady?: boolean
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>, date?: string) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
@@ -47,6 +50,9 @@ export interface MeuDiaProps {
   onStopFood: (f: CustomFood) => Promise<void>
   onSaveFoods: (list: PlanFood[]) => Promise<void>
   onImportFoods: (list: CatalogFood[]) => Promise<void>
+  onSaveMenu: (start: string, menu: Menu, prefs: string | null) => Promise<void>
+  onStopMenu: (m: MenuRow) => Promise<void>
+  onMenuToShopping: (lines: ShopLine[]) => Promise<void>
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void
@@ -403,6 +409,7 @@ function Settings(p: MeuDiaProps & { s: PSettings }) {
         </div>
         <button className="btn btn-s" disabled={!quit.title.trim()} onClick={() => p.onSaveQuit({ id: quit.id, title: quit.title, reason: quit.reason || null }).then(() => setQuit({ title: '', reason: '' })).catch(() => {})}>{quit.id ? 'Salvar' : '+ Começar'}</button>
       </section>}
+      <ExportCard householdId={p.householdId} me={p.me} foods={p.foods} saved={p.saved} today={p.today}/>
     </>
   )
 }

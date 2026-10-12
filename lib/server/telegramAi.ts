@@ -9,9 +9,9 @@ import { homeClock } from '@/lib/dates'
 import { planToday } from '@/lib/today'
 import { guessCategory } from '@/lib/shopping'
 import { kindInfo } from '@/lib/caes'
-import { OUTPUT_SCHEMA, SYSTEM, contextText, describe, describeMeal, validate, type AiAction, type AiContext } from '@/lib/telegramAi'
-import { MEALS, mealForTime, mealTotals } from '@/lib/nutricao'
-import { customFoods, readPlate } from './nutritionAi'
+import { OUTPUT_SCHEMA, SYSTEM, contextText, describe, describeFood, describeMeal, validate, type AiAction, type AiContext } from '@/lib/telegramAi'
+import { MEALS, mealForTime, mealTotals, norm } from '@/lib/nutricao'
+import { customFoods, readLabel, readPlate } from './nutritionAi'
 import { planDay } from './organizarAi'
 import { toEvent, toTask } from '@/lib/organizar'
 import { describeDay } from '@/lib/telegramAi'
@@ -144,6 +144,16 @@ export async function execute(db: SupabaseClient, link: TgLink, actions: AiActio
           n++
         }
         out.push(`🗓️ ${n} item(ns) no seu dia: tarefas em Hoje, compromissos na Agenda e compras na lista`)
+      } else if (a.type === 'alimento') {
+        const row = { name: a.name.slice(0, 60), portion: a.portion.slice(0, 30) || '1 porção', portion_g: Math.min(2000, Math.max(0.1, a.portion_g)), kcal: Math.min(3000, Math.max(0, a.kcal)), protein: a.protein, carb: a.carb, fat: a.fat }
+        // conferido: some o "para conferir" (032); sem a coluna, grava sem ela
+        const write = async (withReview: boolean) => a.food_id
+          ? db.from('personal_foods').update({ ...row, ...(withReview ? { review: null } : {}) }).eq('id', a.food_id).eq('household_id', hh).eq('who', link.who).select('id')
+          : db.from('personal_foods').insert({ ...row, household_id: hh, who: link.who }).select('id')
+        let r = await write(true)
+        if (r.error && /review/.test(r.error.message || '')) r = await write(false)
+        if (r.error) throw new Error(r.error.message)
+        out.push(a.food_id ? (r.data?.length ? `🥗 ${a.name} conferido em Meus alimentos` : '⚠️ Esse alimento não está mais em Meus alimentos.') : `🥗 ${a.name} cadastrado em Meus alimentos`)
       } else if (a.type === 'refeicao') {
         const kcal = mealTotals(a.items).kcal
         ok(await db.from('personal_logs').insert({ household_id: hh, who: link.who, date, kind: 'refeicao', value: kcal, data: { meal: a.meal, text: 'Telegram', items: a.items, via: 'telegram' } }),
@@ -176,6 +186,30 @@ export async function plateFromPhoto(db: SupabaseClient, link: TgLink, image: { 
   if (r.ok === false) return { ok: false, message: (r as { message: string }).message }
   const action: AiAction = { type: 'refeicao', meal: mealFromCaption(caption) ?? mealForTime(homeClock(opts.now ?? new Date()).hm), items: r.plate.items }
   return { ok: true, actions: [action], lines: [describeMeal(action)], reply: r.plate.note ? `📷 ${r.plate.note}` : null }
+}
+
+/** Legenda que pede para ler o rótulo (em vez de estimar o prato). */
+export const isLabelCaption = (c: string) => /\b(r[oó]tulo|tabela( nutricional)?|cadastr\w*|conferir|alimento novo)\b/i.test(c)
+
+/**
+ * Foto do rótulo pelo Telegram: lê a tabela e propõe cadastrar em Meus alimentos. Se a legenda (ou o rótulo)
+ * bate com um alimento que já existe, propõe atualizar esse (prefere os "para conferir").
+ */
+export async function labelFromPhoto(db: SupabaseClient, link: TgLink, image: { type: string, data: string }, caption: string, opts: { apiKey?: string, baseURL?: string, now?: Date } = {}): Promise<Understood> {
+  const r = await readLabel(db, link.household_id, image, opts)
+  if (r.ok === false) return { ok: false, message: (r as { message: string }).message }
+  const L = r.label
+  const hint = caption.replace(/\b(r[oó]tulo|tabela( nutricional)?|cadastr\w*|conferir|alimento novo|d[oa]s?|de)\b/gi, ' ').replace(/[:\-–]/g, ' ').trim()
+  let rows: any[] = []
+  const q = await db.from('personal_foods').select('id,name,review').eq('household_id', link.household_id).eq('who', link.who).eq('active', true)
+  if (q.error && /review/.test(q.error.message || '')) rows = ((await db.from('personal_foods').select('id,name').eq('household_id', link.household_id).eq('who', link.who).eq('active', true)).data || []) as any[]
+  else rows = (q.data || []) as any[]
+  const words = (s: string) => norm(s).split(' ').filter(w => w.length >= 3)
+  const score = (name: string) => { const n = ` ${norm(name)} `; const w = [...words(hint), ...words(L.name || '')]; return w.filter(x => n.includes(` ${x}`)).length }
+  const best = hint.length >= 3 ? rows.map(f => ({ f, s: score(f.name) + (f.review ? 0.5 : 0) })).filter(x => x.s >= 1.5 || (x.s >= 1 && words(hint).length === 1)).sort((a, b) => b.s - a.s)[0] : undefined
+  const name = best ? best.f.name : (hint.length >= 3 ? hint.slice(0, 60) : L.name) || 'Alimento do rótulo'
+  const action: AiAction = { type: 'alimento', food_id: best ? best.f.id : null, name, portion: L.portion, portion_g: L.portion_g, kcal: L.kcal, protein: L.protein, carb: L.carb, fat: L.fat }
+  return { ok: true, actions: [action], lines: [describeFood(action)], reply: ['📷 Confira os números com a embalagem.', L.note].filter(Boolean).join(' ') }
 }
 
 /** "almoço", "janta"… na legenda da foto escolhem a refeição. */

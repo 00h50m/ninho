@@ -43,8 +43,9 @@ export function SobrouCard({ householdId, today, link, onGuide }: { householdId:
   </div>
   const r = st.r, pos = r.sobraProjetada >= 0, tomorrow = addDays(today, 1)
   const pct = Math.max(0, Math.min(100, r.pctComprometido ?? 0))
-  return <div className="card sob">
+  return <div className={`card sob ${pos ? '' : 'sob-neg'}`}>
     <div className="slbl">💰 Sobrou · {mesNome(r.mes)}{open}</div>
+    {!pos && <p className="sob-alert" role="status">⚠️ O mês está fechando no vermelho. Vale olhar as contas no Sobrou.</p>}
     <div className="sob-big">
       <small>{pos ? 'Sobra projetada' : 'Faltam no mês'}</small>
       <b className={pos ? 'pos' : 'neg'}>{brl(Math.abs(r.sobraProjetada))}</b>

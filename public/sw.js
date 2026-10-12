@@ -3,7 +3,7 @@
 //   Os dados da casa ficam no aparelho pelo próprio app (último carregamento).
 // · Nunca guarda chamadas ao Supabase nem às rotas /api.
 // · Recebe as notificações push (manhã e resumo de domingo).
-const VERSION = 'ninho-v1'
+const VERSION = 'ninho-v2'
 const SHELL = ['/', '/manifest.json', '/icon-192.png', '/icon-512.png', '/favicon.ico']
 
 self.addEventListener('install', event => {
@@ -63,12 +63,23 @@ self.addEventListener('push', event => {
     badge: '/icon-192.png',
     tag: data.tag || 'ninho',
     renotify: !!data.tag,
-    data: { url: data.url || '/' },
+    // botões na notificação (Android/Chrome); no iPhone o toque abre o app
+    actions: Array.isArray(data.actions) ? data.actions.slice(0, 2) : [],
+    data: { url: data.url || '/', agua: data.agua || null },
   }))
 })
 
 self.addEventListener('notificationclick', event => {
   event.notification.close()
+  const d = event.notification.data || {}
+  // "+1 copo" registra sem abrir o app e confirma com outro aviso
+  if (event.action === 'agua' && d.agua) {
+    event.waitUntil(fetch('/api/agua/copo', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ t: d.agua }) })
+      .then(r => r.json().then(j => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => self.registration.showNotification(ok ? '💧 Copo registrado' : '💧 Não deu para registrar', { body: ok ? j.text : (j.error || 'Abra o app para registrar.'), icon: '/icon-192.png', badge: '/icon-192.png', tag: 'agua-ok', data: { url: '/?ir=agua' } }))
+      .catch(() => self.registration.showNotification('💧 Sem conexão', { body: 'Abra o app para registrar o copo.', icon: '/icon-192.png', tag: 'agua-ok', data: { url: '/?ir=agua' } })))
+    return
+  }
   const target = (event.notification.data && event.notification.data.url) || '/'
   event.waitUntil(self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then(list => {
     for (const c of list) { if ('focus' in c) { c.navigate(target).catch(() => {}); return c.focus() } }

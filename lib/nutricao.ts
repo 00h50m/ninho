@@ -12,6 +12,8 @@ export type Goal = 'perder' | 'manter' | 'ganhar'
 export interface FoodProfile {
   who: Who, sex: 'f' | 'm', birth_year: number, height_cm: number, activity: Activity, goal: Goal
   pace_kg_week: number, target_kg: number | null, kcal_override: number | null, hide_numbers: boolean
+  /** meta de proteína em g/kg (033); vazio = sugestão pelo objetivo */
+  protein_g_kg?: number | null
 }
 export const ACTIVITIES: Array<[Activity, string, string, number]> = [
   ['sedentario', 'Sedentária', 'quase o dia todo sentada', 1.2],

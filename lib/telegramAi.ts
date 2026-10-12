@@ -17,6 +17,8 @@ export type AiAction =
   | { type: 'remedio_tomado', med_id: string, name: string, time: string | null }
   | { type: 'refeicao', meal: Meal, items: MealItem[] }
   | { type: 'dia', items: DayItem[] }
+  /** foto do rótulo: cadastra em Meus alimentos (ou atualiza um "para conferir", que fica conferido) */
+  | { type: 'alimento', food_id: string | null, name: string, portion: string, portion_g: number, kcal: number, protein: number | null, carb: number | null, fat: number | null }
 
 export interface AiContext {
   today: string, hm: string, me: Who, names: Names
@@ -200,6 +202,14 @@ export function describe(actions: AiAction[], c: AiContext): string[] {
       case 'remedio_tomado': return `💊 Tomei: ${a.name}${a.time ? ` (dose das ${a.time})` : ''}`
       case 'refeicao': return describeMeal(a)
       case 'dia': return describeDay(a.items, c.today)
+      case 'alimento': return describeFood(a)
     }
   })
+}
+
+const n1 = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
+/** "🥗 Meus alimentos: Iogurte… · 1 pote (100 g) · 58 kcal · 6,2 g de proteína" */
+export function describeFood(a: Extract<AiAction, { type: 'alimento' }>): string {
+  return `🥗 ${a.food_id ? 'Conferir em' : 'Cadastrar em'} Meus alimentos: ${a.name} · ${a.portion} (${n1(a.portion_g)} g) · ${Math.round(a.kcal)} kcal` +
+    `${a.protein != null ? ` · ${n1(a.protein)} g de proteína` : ''}${a.carb != null ? ` · ${n1(a.carb)} g de carboidrato` : ''}${a.fat != null ? ` · ${n1(a.fat)} g de gordura` : ''}`
 }
