@@ -100,6 +100,13 @@ export async function saveFood(householdId: string, who: Who, f: Omit<CustomFood
   else must(await supabase.from('personal_foods').insert({ ...row, household_id: householdId, who }).select('id'), 'cadastrar alimento')
 }
 
+/** Vários alimentos de uma vez (ex.: os do plano). Devolve quantos entraram. */
+export async function saveFoods(householdId: string, who: Who, list: Array<Omit<CustomFood, 'id' | 'who'>>): Promise<number> {
+  const rows = list.slice(0, 150).map(f => ({ household_id: householdId, who, name: f.name.trim().slice(0, 60), portion: f.portion.trim().slice(0, 30) || '1 porção', portion_g: Math.min(2000, Math.max(0.1, f.portion_g)), kcal: Math.min(3000, Math.max(0, f.kcal)), protein: f.protein, carb: f.carb, fat: f.fat }))
+  for (let i = 0; i < rows.length; i += 50) must(await supabase.from('personal_foods').insert(rows.slice(i, i + 50)).select('id'), 'cadastrar alimentos')
+  return rows.length
+}
+
 export async function stopFood(id: string): Promise<void> {
   must(await supabase.from('personal_foods').update({ active: false }).eq('id', id).select('id'), 'remover alimento')
 }

@@ -18,7 +18,7 @@ import { GoalsCard } from './Objetivos'
 import { MoodCard } from './Humor'
 import { goalProgress, type PGoal } from '@/lib/goals'
 import type { CustomFood, FoodProfile } from '@/lib/nutricao'
-import type { DietPlan, PlanRow } from '@/lib/dietPlan'
+import type { DietPlan, PlanFood, PlanRow } from '@/lib/dietPlan'
 
 const first = (n: string) => (n || '').split(' ')[0]
 const fmtN = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
@@ -42,6 +42,7 @@ export interface MeuDiaProps {
   onSaveProfile: (p: Omit<FoodProfile, 'who'>) => Promise<void>
   onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
   onStopFood: (f: CustomFood) => Promise<void>
+  onSaveFoods: (list: PlanFood[]) => Promise<void>
   onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
   onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
   onStopPlan: (p: PlanRow) => Promise<void>

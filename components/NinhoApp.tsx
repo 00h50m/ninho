@@ -76,6 +76,7 @@ import { dosesToday, waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT, type
 import { buildTimeline } from '@/lib/timeline'
 import { mascotSay } from '@/lib/mascote'
 import { MascoteCard } from '@/components/Mascote'
+import { planFoods } from '@/lib/dietPlan'
 import { SobrouCard } from '@/components/SobrouCard'
 import { DayTimeline } from '@/components/DayTimeline'
 import * as cApi from '@/lib/services/caes'
@@ -1198,7 +1199,16 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             onSaveProfile={x=>mdApi.saveFoodProfile(householdId,me,x).then(md.reload).then(()=>showToast('Meta salva')).catch(e=>{showError(toNinhoError(e,'salvar perfil'));throw e})}
             onSaveFood={f=>mdApi.saveFood(householdId,me,f).then(md.reload).then(()=>showToast('Alimento salvo')).catch(e=>{showError(toNinhoError(e,'salvar alimento'));throw e})}
             onStopFood={f=>mdApi.stopFood(f.id).then(md.reload).then(()=>showToast('Alimento removido')).catch(e=>{showError(toNinhoError(e,'remover alimento'));throw e})}
-            onSavePlan={(pl,src)=>mdApi.savePlan(householdId,me,pl,src).then(md.reload).then(()=>showToast('Plano salvo')).catch(e=>{showError(toNinhoError(e,'salvar plano'));throw e})}
+            onSavePlan={async(pl,src)=>{
+              try{
+                await mdApi.savePlan(householdId,me,pl,src)
+                // cada alimento do plano entra em "Meus alimentos", com a porção e as calorias, para combinar as refeições
+                const n=await mdApi.saveFoods(householdId,me,planFoods(pl,md.foods.filter(f=>f.who===me))).catch(()=>0)
+                await md.reload()
+                showToast(n?`Plano salvo · ${n} alimento(s) em Meus alimentos 🥗`:'Plano salvo')
+              }catch(e){showError(toNinhoError(e,'salvar plano'));throw e}
+            }}
+            onSaveFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>showToast(`${list.length} alimento(s) em Meus alimentos 🥗`)).catch(e=>{showError(toNinhoError(e,'lançar alimentos'));throw e})}
             onPlanRemind={(r,on)=>mdApi.setPlanRemind(r.id,on).then(md.reload).then(()=>showToast(on?'Lembretes das refeições ligados':'Lembretes desligados')).catch(e=>{showError(toNinhoError(e,'lembretes do plano'));throw e})}
             onStopPlan={r=>mdApi.stopPlan(r.id).then(md.reload).then(()=>showToast('Plano removido')).catch(e=>{showError(toNinhoError(e,'remover plano'));throw e})}/>
             :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>}

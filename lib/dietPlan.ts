@@ -173,3 +173,39 @@ export function scaleItem(it: MealItem, g: number): MealItem {
 export function defaultItems(m: PlanMeal, custom: CustomFood[] = []): MealItem[] {
   return (m.options[0]?.items || []).map(it => altToItem(it.alts[0], custom))
 }
+
+// ── Alimentos do plano em "Meus alimentos" ───────────────────────────
+export interface PlanFood { name: string, portion: string, portion_g: number, kcal: number, protein: number | null, carb: number | null, fat: number | null, from: string }
+const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1)
+/**
+ * Cada alimento do plano (todas as refeições, opções, alternativas e listas de substituição), uma vez só,
+ * com a porção do plano e as calorias dessa porção (tabela do Ninho quando reconhece; senão a estimativa do plano).
+ * O que já está em "Meus alimentos" (mesmo nome) fica de fora.
+ */
+export function planFoods(plan: DietPlan, mine: Pick<CustomFood, 'name'>[] = []): PlanFood[] {
+  const seen = new Set(mine.map(f => norm(f.name)))
+  const out: PlanFood[] = []
+  const add = (it0: MealItem, food: string, qty: string | null, from: string, planKcal: number | null = null) => {
+    // as calorias que a nutricionista escreveu valem mais que a tabela; macros da tabela só se baterem (±25%)
+    const it = planKcal != null && planKcal > 0 && Math.abs(planKcal - it0.kcal) > 1
+      ? { ...it0, kcal: planKcal, ...(it0.kcal > 0 && Math.abs(planKcal / it0.kcal - 1) <= 0.25 ? {} : { food_id: null, p: 0, c: 0, f: 0 }) }
+      : it0
+    const name = cap(str(food, 60))
+    const key = norm(name)
+    if (!key || seen.has(key) || !(it.kcal > 0)) return
+    seen.add(key)
+    const g = it.g > 0 ? it.g : 100
+    const r1 = (v: number) => Math.round(v * 10) / 10
+    const known = !!it.food_id
+    out.push({
+      name, portion: str(qty || `${g} ${it.unit === 'ml' ? 'ml' : 'g'}`, 30) || '1 porção', portion_g: Math.min(2000, Math.max(1, g)), kcal: Math.min(3000, Math.round(it.kcal)),
+      protein: known || it.p ? r1(it.p) : null, carb: known || it.c ? r1(it.c) : null, fat: known || it.f ? r1(it.f) : null, from,
+    })
+  }
+  for (const m of plan.meals) for (const o of m.options) for (const i of o.items) for (const a of i.alts) add(altToItem(a), a.food, a.qty, m.name, a.kcal)
+  for (const l of plan.lists || []) for (const t of l.items) {
+    const [it] = parseMeal(t)
+    if (it?.food_id) add(it, it.name, t, l.name)
+  }
+  return out.slice(0, 120)
+}
