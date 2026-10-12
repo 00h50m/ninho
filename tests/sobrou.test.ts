@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { brl, mesNome, quando, validateSobrou } from '@/lib/sobrou'
-import { fetchSobrou, sobrouConfigured } from '@/lib/server/sobrou'
+import { fetchSobrou, sobrouConfigured, sobrouMissing } from '@/lib/server/sobrou'
 
 const RAW = { mes: '2026-10', renda: 5000, comprometido: 3200.456, pago: 1200, aPagar: 2000, sobraProjetada: 1800, pctComprometido: 64.2,
   vencimentos: [{ titulo: 'Internet', valor: 100, data: '2026-10-22', estimada: false }, { titulo: 'x', valor: 1, data: 'amanhã' }],
@@ -34,6 +34,17 @@ describe('Sobrou no Ninho', () => {
     expect(calls[0].url).toBe('https://sobrou.example.com/api/resumo-ninho')
     expect(calls[0].init.headers.authorization).toBe('Bearer segredo-de-teste-com-mais-de-24-caracteres')
     expect(calls[0].init.redirect).toBe('error')
+  })
+  it('diz o que falta (sem mostrar valores) e aceita espaços colados por engano', async () => {
+    expect(sobrouMissing({} as any)).toEqual(['SOBROU_API_URL (não cadastrada)', 'SOBROU_RESUMO_TOKEN (não cadastrada)'])
+    expect(sobrouMissing({ SOBROU_API_URL: 'sobrou.vercel.app', SOBROU_RESUMO_TOKEN: 'curto' } as any)).toEqual(['SOBROU_API_URL (precisa começar com https://)', 'SOBROU_RESUMO_TOKEN (precisa ter 24 caracteres ou mais)'])
+    const env = { SOBROU_API_URL: ' https://sobrou.example.com/ \n', SOBROU_RESUMO_TOKEN: ' segredo-de-teste-com-mais-de-24-caracteres\n' } as any
+    expect(sobrouMissing(env)).toEqual([])
+    const calls: any[] = []
+    vi.stubGlobal('fetch', async (url: string, init: any) => { calls.push({ url, init }); return new Response(JSON.stringify({ ok: true, resumo: RAW }), { status: 200 }) })
+    await fetchSobrou(env)
+    expect(calls[0].url).toBe('https://sobrou.example.com/api/resumo-ninho')
+    expect(calls[0].init.headers.authorization).toBe('Bearer segredo-de-teste-com-mais-de-24-caracteres')
   })
   it('falhas viram mensagens amigáveis', async () => {
     vi.stubGlobal('fetch', async () => new Response('', { status: 401 }))

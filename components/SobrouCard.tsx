@@ -6,7 +6,7 @@ import { supabase } from '@/lib/supabase'
 import { addDays } from '@/lib/dates'
 import { brl, mesNome, quando, type SobrouResumo } from '@/lib/sobrou'
 
-type State = { s: 'loading' } | { s: 'off' } | { s: 'err', msg: string } | { s: 'ok', r: SobrouResumo }
+type State = { s: 'loading' } | { s: 'off', missing: string[] } | { s: 'err', msg: string } | { s: 'ok', r: SobrouResumo }
 
 export function SobrouCard({ householdId, today, link }: { householdId: string, today: string, link: string | null }) {
   const [st, setSt] = useState<State>({ s: 'loading' })
@@ -14,15 +14,23 @@ export function SobrouCard({ householdId, today, link }: { householdId: string, 
     try {
       const { data } = await supabase.auth.getSession()
       const token = data.session?.access_token
-      if (!token) return setSt({ s: 'off' })
+      if (!token) return setSt({ s: 'off', missing: [] })
       const res = await fetch('/api/sobrou', { method: 'POST', headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` }, body: JSON.stringify({ householdId }) })
       const j = await res.json().catch(() => ({}))
-      if (j.configured === false) return setSt({ s: 'off' })
+      if (j.configured === false) return setSt({ s: 'off', missing: Array.isArray(j.missing) ? j.missing : [] })
       setSt(res.ok && j.resumo ? { s: 'ok', r: j.resumo } : { s: 'err', msg: j.error || 'Não foi possível ler o Sobrou agora.' })
     } catch { setSt({ s: 'err', msg: 'Sem conexão com o servidor.' }) }
   }, [householdId])
   useEffect(() => { load() }, [load])
-  if (st.s === 'loading' || st.s === 'off') return null
+  if (st.s === 'loading') return null
+  // ainda não ligado: diz o que falta (dá para esconder o cartão em Ajustes se não usam o Sobrou)
+  if (st.s === 'off') return st.missing.length ? <div className="card sob">
+    <div className="slbl">💰 Sobrou</div>
+    <p className="row-s">O resumo do mês ainda não está ligado. Falta na Vercel do Ninho:</p>
+    <ul className="sob-miss">{st.missing.map(m => <li key={m}><code>{m}</code></li>)}</ul>
+    <p className="row-s">Depois de cadastrar, faça <b>Redeploy</b> do Ninho. As variáveis valem para o ambiente em que foram marcadas (Production e/ou Preview).</p>
+    <p className="row-s">Não usam o Sobrou? Esconda este cartão em Ajustes › Cartões do Início.</p>
+  </div> : null
   const open = link && /^https?:\/\//.test(link) ? <a className="lnk" href={link} target="_blank" rel="noopener noreferrer">Abrir ↗<span className="sr-only"> o Sobrou (abre em outra aba)</span></a> : null
   if (st.s === 'err') return <div className="card sob">
     <div className="slbl">💰 Sobrou{open}</div>
