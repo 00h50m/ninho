@@ -17,6 +17,7 @@ import { toEvent, toTask } from '@/lib/organizar'
 import { describeDay } from '@/lib/telegramAi'
 import { AI_MODEL } from './ai'
 import { loadHousehold, must } from './notify'
+import { cleanItems, matchSaved } from '@/lib/savedMeals'
 
 export interface TgLink { id: string, household_id: string, who: Who, chat_id: number }
 /** Mensagens interpretadas por casa a cada 24 h (protege a conta de uso exagerado). */
@@ -43,9 +44,25 @@ export async function loadContext(db: SupabaseClient, link: TgLink, now: Date): 
   }
 }
 
+/** "comi meu café de sempre": a refeição salva (031) vira o registro, sem gastar IA. Sem a tabela, segue para a IA. */
+export async function savedFromText(db: SupabaseClient, link: TgLink, text: string, now: Date): Promise<Understood | null> {
+  if (!/^\s*(comi|almocei|jantei|lanchei|tomei|ceei|merendei)\b/i.test(text)) return null
+  const r = await db.from('personal_saved_meals').select('id,name,items,kcal,uses').eq('household_id', link.household_id).eq('who', link.who).eq('active', true)
+  if (r.error || !r.data?.length) return null
+  const i = matchSaved(text, r.data as any[])
+  if (i < 0) return null
+  const m = (r.data as any[])[i]
+  const items = cleanItems(m.items)
+  if (!items.length) return null
+  const action: AiAction = { type: 'refeicao', meal: mealFromCaption(text.replace(/^\s*(comi|tomei)\b/i, '')) ?? mealForTime(homeClock(now).hm), items }
+  return { ok: true, actions: [action], lines: [`${describeMeal(action)} (⭐ ${m.name})`], reply: null }
+}
+
 export async function interpret(db: SupabaseClient, link: TgLink, text: string, opts: { apiKey?: string, baseURL?: string, now?: Date } = {}): Promise<Understood> {
-  if (!opts.apiKey) return { ok: false, message: 'A IA ainda não foi configurada no servidor.' }
   const now = opts.now ?? new Date()
+  const saved = await savedFromText(db, link, text, now).catch(() => null)
+  if (saved) return saved
+  if (!opts.apiKey) return { ok: false, message: 'A IA ainda não foi configurada no servidor.' }
   const since = new Date(now.getTime() - 24 * 3600 * 1000).toISOString()
   const used = must(await db.from('ai_log').select('id').eq('household_id', link.household_id).eq('kind', 'telegram').gte('created_at', since), 'uso da IA') as any[]
   if (used.length >= TG_AI_DAILY_LIMIT) return { ok: false, message: `Hoje já foram ${TG_AI_DAILY_LIMIT} mensagens com a IA. Use os comandos (/ajuda) até amanhã.` }

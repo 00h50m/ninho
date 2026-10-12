@@ -7,16 +7,17 @@ import type { CustomFood, FoodProfile } from '@/lib/nutricao'
 import { validatePlan, type DietPlan, type PlanRow } from '@/lib/dietPlan'
 import type { PGoal } from '@/lib/goals'
 import type { MoodRow } from '@/lib/humor'
+import { cleanItems, type SavedMeal } from '@/lib/savedMeals'
 
 function must<T>(r: { data: T | null, error: any }, ctx: string): T {
   if (r.error) { logError(ctx, r.error); throw new NinhoError(r.error, ctx) }
   return r.data as T
 }
 
-export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, goals: PGoal[], goalsReady?: boolean, reason?: string }
+export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, goals: PGoal[], goalsReady?: boolean, saved: SavedMeal[], savedReady?: boolean, reason?: string }
 
 export async function loadMeuDia(householdId: string, from: string): Promise<MeuDiaData> {
-  const [s, l, m, q, fp, ff, dp, gl] = await Promise.all([
+  const [s, l, m, q, fp, ff, dp, gl, sm] = await Promise.all([
     supabase.from('personal_settings').select('who,water_goal_ml,cup_ml,sleep_goal_h,share,selfcare').eq('household_id', householdId),
     supabase.from('personal_logs').select('id,who,date,kind,value,data,created_at').eq('household_id', householdId).gte('date', from).order('date').limit(4000),
     supabase.from('personal_meds').select('id,who,name,dose,times,active').eq('household_id', householdId).eq('active', true).order('name'),
@@ -25,10 +26,11 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     supabase.from('personal_foods').select('id,who,name,portion,portion_g,kcal,protein,carb,fat').eq('household_id', householdId).eq('active', true).order('name'),
     supabase.from('personal_diet_plans').select('id,who,title,plan,source,remind').eq('household_id', householdId).eq('active', true),
     supabase.from('personal_goals').select('id,who,title,kind,unit,start_value,target,start_date,due_date,status').eq('household_id', householdId).neq('status', 'arquivado').order('created_at'),
+    supabase.from('personal_saved_meals').select('id,who,name,items,kcal,uses').eq('household_id', householdId).eq('active', true).order('uses', { ascending: false }).order('name'),
   ])
   const e = s.error || l.error || m.error
   if (e) {
-    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], goals: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
+    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], goals: [], saved: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
     must({ data: null, error: e }, 'carregar Meu dia')
   }
   // "Parar de…" (migration 025) é opcional: sem a tabela, o resto do Meu dia segue normal
@@ -41,6 +43,8 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
   if (dp.error && !isMissingTable(dp.error)) must({ data: null, error: dp.error }, 'carregar plano alimentar')
   // Objetivos (migration 029) também são opcionais
   if (gl.error && !isMissingTable(gl.error)) must({ data: null, error: gl.error }, 'carregar objetivos')
+  // Refeições salvas (migration 031) também são opcionais
+  if (sm.error && !isMissingTable(sm.error)) must({ data: null, error: sm.error }, 'carregar refeições salvas')
   return {
     available: true, settings: (s.data || []) as PSettings[], logs: ((l.data || []) as any[]).map(x => ({ ...x, value: x.value == null ? null : Number(x.value) })), meds: (m.data || []) as PMed[],
     quits: q.error ? [] : (q.data || []) as PQuit[], quitsReady: !q.error,
@@ -51,6 +55,8 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     plansReady: !dp.error,
     goals: gl.error ? [] : ((gl.data || []) as any[]).map(x => ({ ...x, target: Number(x.target), start_value: n(x.start_value) })) as PGoal[],
     goalsReady: !gl.error,
+    saved: sm.error ? [] : ((sm.data || []) as any[]).map(x => ({ ...x, kcal: Number(x.kcal), items: cleanItems(x.items) })) as SavedMeal[],
+    savedReady: !sm.error,
   }
 }
 
@@ -105,6 +111,20 @@ export async function saveFoods(householdId: string, who: Who, list: Array<Omit<
   const rows = list.slice(0, 150).map(f => ({ household_id: householdId, who, name: f.name.trim().slice(0, 60), portion: f.portion.trim().slice(0, 30) || '1 porção', portion_g: Math.min(2000, Math.max(0.1, f.portion_g)), kcal: Math.min(3000, Math.max(0, f.kcal)), protein: f.protein, carb: f.carb, fat: f.fat }))
   for (let i = 0; i < rows.length; i += 50) must(await supabase.from('personal_foods').insert(rows.slice(i, i + 50)).select('id'), 'cadastrar alimentos')
   return rows.length
+}
+
+/** Refeição salva (031): nova, ou renomear/atualizar uma existente. */
+export async function saveMeal(householdId: string, who: Who, m: { id?: string, name: string, items: SavedMeal['items'], kcal: number }): Promise<void> {
+  const row = { name: m.name.trim().slice(0, 60), items: m.items, kcal: m.kcal, updated_at: new Date().toISOString() }
+  if (m.id) must(await supabase.from('personal_saved_meals').update(row).eq('id', m.id).select('id'), 'salvar refeição')
+  else must(await supabase.from('personal_saved_meals').insert({ ...row, household_id: householdId, who }).select('id'), 'salvar refeição')
+}
+export async function stopMeal(id: string): Promise<void> {
+  must(await supabase.from('personal_saved_meals').update({ active: false }).eq('id', id).select('id'), 'remover refeição salva')
+}
+/** Conta mais um uso (as mais usadas aparecem primeiro). Falhar aqui não atrapalha o registro. */
+export async function countMealUse(id: string, uses: number): Promise<void> {
+  await supabase.from('personal_saved_meals').update({ uses: uses + 1 }).eq('id', id)
 }
 
 export async function stopFood(id: string): Promise<void> {
