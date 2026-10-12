@@ -1,7 +1,7 @@
 'use client'
 // Água em copinhos: um toque num copo vazio bebe mais um copo; o último copo
 // cheio desfaz. O "tanque" enche até a meta e comemora quando bate.
-const L = (ml: number) => `${String(Math.round(ml / 100) / 10).replace('.', ',')} L`
+const L = (ml: number) => `${String(Math.round(ml / 10) / 100).replace('.', ',')} L`
 
 export function WaterCups({ ml, goal, cup, onAdd, onUndo, compact }: { ml: number, goal: number, cup: number, onAdd: () => void, onUndo?: () => void, compact?: boolean }) {
   const n = Math.max(1, Math.min(12, Math.ceil(goal / cup)))

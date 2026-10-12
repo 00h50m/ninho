@@ -40,7 +40,7 @@ export function MoodCard(p: MeuDiaProps & { s: PSettings }) {
             <tbody>{grid.map((w, i) => <tr key={i}>{w.map((d, j) => {
               if (!d) return <td key={j}/>
               const mo = moodOf(by.get(d))
-              return <td key={j} className={`${d === p.today ? 'today' : ''} ${d > p.today ? 'fut' : ''}`}>
+              return <td key={j} className={`${d === p.today ? 'hm-today' : ''} ${d > p.today ? 'hm-fut' : ''}`}>
                 <span className="hm-d"><span className="hm-e" aria-hidden="true">{mo ? mo.emoji : ''}</span><small aria-hidden="true">{Number(d.slice(8))}</small><span className="sr-only">{Number(d.slice(8))}: {mo ? mo.label : 'sem registro'}</span></span>
               </td>
             })}</tr>)}</tbody>

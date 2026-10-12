@@ -78,6 +78,7 @@ import { mascotSay } from '@/lib/mascote'
 import { MascoteCard } from '@/components/Mascote'
 import { planFoods } from '@/lib/dietPlan'
 import { SobrouCard } from '@/components/SobrouCard'
+import { SobrouGuide } from '@/components/SobrouGuide'
 import { DayTimeline } from '@/components/DayTimeline'
 import * as cApi from '@/lib/services/caes'
 import { DogAvatar, DogHealthBlock, DogProfileSheet, HealthSheet, PuppyPanel } from '@/components/caes/DogPanels'
@@ -1158,7 +1159,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                   {soon.map(e=><div key={e.key} className="ag-home-i"><span>{e.icon} {e.title}</span><span className="mono">{e.date===today?'hoje':'amanhã'}{e.time?` ${e.time}`:''}</span></div>)}
                   {due.map(b=><div key={b.id} className={`ag-home-i ${b.date<today?'late':''}`}><span>{kindIcon('vencimento')} {b.title}</span><span className="mono">{b.date<today?'atrasado':b.date===today?'vence hoje':`vence ${fmtDate(b.date)}`}</span></div>)}
                 </div>)})()}
-              {showCard('sobrou')&&<SobrouCard householdId={householdId} today={today} link={ag.sobrouUrl}/>}
+              {showCard('sobrou')&&<SobrouCard householdId={householdId} today={today} link={ag.sobrouUrl} onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('sobrou-guia')?.scrollIntoView({behavior:'smooth',block:'start'}),300)}}/>}
               {showCard('manutencao')&&<MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>}
               {showCard('compras')&&(()=>{const sc=shoppingCounts(casa.shop);return casa.shopState==='ready'&&sc.toBuy>0&&(
                 <button className="card dsum shop-sum" onClick={()=>setTab('shop')}>
@@ -1567,6 +1568,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           <NotificationsCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
             onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
             onNeedIdentity={()=>openModal('device')}/>
+          <SobrouGuide householdId={householdId} link={ag.sobrouUrl}/>
           <TelegramCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
             onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
             onNeedIdentity={()=>openModal('device')}/>

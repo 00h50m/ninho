@@ -79,6 +79,9 @@ export function MeuDiaView(p: MeuDiaProps) {
   )
 }
 
+// litros com até 2 casas (250 ml → 0,25)
+const L2 = (ml: number) => (Math.round(ml / 10) / 100).toLocaleString('pt-BR')
+
 function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }) {
   const { me, today, logs, s } = p
   const water = waterOn(logs, me, today), pct = Math.min(100, Math.round(water / s.water_goal_ml * 100))
@@ -92,10 +95,28 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
   // a outra (só o que ela compartilhou; o banco não entrega o resto)
   const sh = p.theirs?.share || {}
   const anyShared = PKINDS.some(([k]) => sh[k])
+  const sleep = logs.find(l => l.who === me && l.kind === 'sono' && l.date === today)
+  const food = foodLine(logs, p.profiles, me, today)
+  const lateDoses = doses.filter(d => d.late).length, takenDoses = doses.filter(d => d.taken).length
+  const myGoals = p.goals.filter(g => g.who === me && g.status !== 'arquivado')
+  const myQuits = p.quits.filter(q => q.who === me)
+  const go = (id: string) => document.getElementById(id)?.closest('.card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   return (
     <>
+      <nav className="md-sum" aria-label="Resumo de hoje">
+        <button className={`md-sum-i ${pct >= 100 ? 'ok' : ''}`} onClick={() => go('md-agua')}><span aria-hidden="true">💧</span><b>{L2(water)}/{L2(s.water_goal_ml)} L</b><small>água</small></button>
+        <button className={`md-sum-i ${sleep ? 'ok' : ''}`} onClick={() => go('md-sono')}><span aria-hidden="true">😴</span><b>{sleep ? `${fmtN(Number(sleep.value))} h` : 'registrar'}</b><small>sono</small></button>
+        {p.foodReady !== false && (() => {
+          // "🍽️ restam 1.273 kcal" → número grande e o resto embaixo (não corta no celular)
+          const t = food ? food.replace(/^🍽️\s*/, '') : ''
+          const m = t.match(/^restam (.+)$/) || t.match(/^(.+ kcal) acima$/)
+          return <button className="md-sum-i" onClick={() => p.onTab?.('comida')}><span aria-hidden="true">🍽️</span><b>{m ? m[1] : t || 'registrar'}</b><small>{!t ? 'comida' : /^restam/.test(t) ? 'restam hoje' : /acima$/.test(t) ? 'acima da meta' : 'comida'}</small></button>
+        })()}
+        {doses.length > 0 && <button className={`md-sum-i ${lateDoses ? 'late' : takenDoses === doses.length ? 'ok' : ''}`} onClick={() => go('md-rem')}><span aria-hidden="true">💊</span><b>{takenDoses}/{doses.length}</b><small>{lateDoses ? `${lateDoses} atrasado${lateDoses > 1 ? 's' : ''}` : 'remédios'}</small></button>}
+        <button className={`md-sum-i ${done.size >= s.selfcare.length && s.selfcare.length ? 'ok' : ''}`} onClick={() => go('md-cuidado')}><span aria-hidden="true">🌿</span><b>{done.size}/{s.selfcare.length}</b><small>autocuidado</small></button>
+        <button className="md-sum-i" onClick={() => go('md-treino')}><span aria-hidden="true">🏋️</span><b>{wk.count}</b><small>treino{wk.count === 1 ? '' : 's'} na semana</small></button>
+      </nav>
       <div className="md-grid">
-        <GoalsCard {...p} waterGoal={s.water_goal_ml}/>
         <section className="card md-card" aria-labelledby="md-agua">
           <div className="slbl" id="md-agua">💧 Água {streak > 0 && <span className="chip amber">🔥 {streak} dia{streak > 1 ? 's' : ''} na meta</span>}</div>
           <WaterCups ml={water} goal={s.water_goal_ml} cup={s.cup_ml} onAdd={() => run(() => p.onAdd('agua', s.cup_ml))} onUndo={lastCup ? () => run(() => p.onRemove(lastCup)) : undefined}/>
@@ -106,8 +127,6 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           </div>
         </section>
 
-        <SleepCard {...p} run={run}/>
-
         <section className="card md-card" aria-labelledby="md-cuidado">
           <div className="slbl" id="md-cuidado">🌿 Autocuidado <span className="mono" style={{ color: 'var(--faint)' }}>{done.size}/{s.selfcare.length}</span></div>
           <ul className="rt-check">{s.selfcare.map(item => {
@@ -117,24 +136,29 @@ function Today(p: MeuDiaProps & { s: PSettings, other: Who, theirs?: PSettings }
           })}</ul>
         </section>
 
-        <section className="card md-card" aria-labelledby="md-rem">
+        <div className="md-stack">
+        {doses.length > 0 && <section className="card md-card" aria-labelledby="md-rem">
           <div className="slbl" id="md-rem">💊 Remédios</div>
-          {doses.length === 0 ? <div className="row-s">Nenhum remédio cadastrado. Cadastre em “Metas e privacidade”.</div> :
-            <ul className="rt-check">{doses.map(d => <li key={d.med.id + d.time}><button className={`rt-step ${d.taken ? 'on' : ''}`} role="checkbox" aria-checked={!!d.taken}
+          <ul className="rt-check">{doses.map(d => <li key={d.med.id + d.time}><button className={`rt-step ${d.taken ? 'on' : ''}`} role="checkbox" aria-checked={!!d.taken}
               onClick={() => run(() => d.taken ? p.onRemove(d.taken) : p.onAdd('remedio', null, { med_id: d.med.id, name: d.med.name, time: d.time }))}>
               <span className="rt-box" aria-hidden="true">{d.taken ? '✓' : ''}</span>
               <span className="rt-step-t">{d.med.name}{d.med.dose ? ` · ${d.med.dose}` : ''}</span>
-              <span className={`mono ${d.late ? 'md-late' : ''}`}>{d.time || 'livre'}{d.late ? ' · atrasado' : ''}</span></button></li>)}</ul>}
+              <span className={`mono ${d.late ? 'md-late' : ''}`}>{d.time || 'livre'}{d.late ? ' · atrasado' : ''}</span></button></li>)}</ul>
           <p className="row-s" style={{ marginTop: 6 }}>Só lembrete e registro. Dúvidas sobre remédio: fale com quem receitou.</p>
-        </section>
+        </section>}
 
         <section className="card md-card" aria-labelledby="md-treino">
           <div className="slbl" id="md-treino">🏋️ Treino</div>
           <div className="md-water"><b className="mono">{wk.count}</b><span>treino{wk.count === 1 ? '' : 's'} nesta semana · {wk.minutes} min</span></div>
           <button className="btn btn-s" onClick={() => setWorkout(true)}>+ Registrar treino</button>
         </section>
+        </div>
 
-        {p.quitsReady !== false && <QuitCard {...p} run={run}/>}
+        <SleepCard {...p} run={run}/>
+
+        {myGoals.length > 0 ? <GoalsCard {...p} waterGoal={s.water_goal_ml}/> : p.goalsReady !== false && <GoalsCard {...p} waterGoal={s.water_goal_ml} compact/>}
+
+        {p.quitsReady !== false && myQuits.length > 0 && <QuitCard {...p} run={run}/>}
 
         <MoodCard {...p} s={s}/>
       </div>

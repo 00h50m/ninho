@@ -11,9 +11,15 @@ import type { MeuDiaProps } from './MeuDia'
 const N = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
 const full = (d: string) => `${fmtDate(d)}/${d.slice(2, 4)}`
 
-export function GoalsCard(p: MeuDiaProps & { waterGoal: number }) {
+export function GoalsCard(p: MeuDiaProps & { waterGoal: number, compact?: boolean }) {
   const [edit, setEdit] = useState<PGoal | 'new' | null>(null)
   if (p.goalsReady === false) return null
+  // sem objetivos: só um convite discreto (não ocupa o topo do dia)
+  if (p.compact) return <section className="card md-card md-wide md-invite" aria-labelledby="md-obj">
+    <span id="md-obj">🎯 <b>Objetivos</b> <span className="row-s">Um objetivo com prazo ajuda a ver o caminho ("perder 12 kg até dezembro", "40 treinos no ano").</span></span>
+    <button className="btn btn-s" onClick={() => setEdit('new')}>+ Criar objetivo</button>
+    {edit && <GoalSheet {...p} goal={null} onClose={() => setEdit(null)}/>}
+  </section>
   const mine = p.goals.filter(g => g.who === p.me && g.status !== 'arquivado')
   return (
     <section className="card md-card md-wide" aria-labelledby="md-obj">

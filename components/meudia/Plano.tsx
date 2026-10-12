@@ -112,6 +112,14 @@ function PlanToday(p: PlanProps & { row: PlanRow, picker: React.ReactNode, err: 
   const myMeds = p.meds.filter(m => m.who === p.me)
   const pendingFoods = planFoods(row.plan, custom)
   const [launching, setLaunching] = useState(false)
+  // plano salvo antes desta versão: na primeira vez que abre, lança os alimentos sozinho (uma vez por plano, neste aparelho)
+  useEffect(() => {
+    if (!pendingFoods.length || launching) return
+    const key = `ninho.planFoods.${row.id}`
+    try { if (localStorage.getItem(key)) return; localStorage.setItem(key, '1') } catch { return }
+    setLaunching(true)
+    p.onSaveFoods(pendingFoods).catch(() => {}).finally(() => setLaunching(false))
+  }, [row.id]) // eslint-disable-line react-hooks/exhaustive-deps
   const missingSup = row.plan.supplements.filter(s => !myMeds.some(m => norm(m.name) === norm(s.name)))
   const goal = (p.settings.find(s => s.who === p.me)?.water_goal_ml) ?? 2000
   const water = row.plan.water_l ? Math.round(row.plan.water_l * 1000) : null

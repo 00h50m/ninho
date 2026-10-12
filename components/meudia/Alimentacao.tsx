@@ -89,6 +89,10 @@ export function FoodTab(p: FoodTabProps) {
         </dl>}
       </section>
 
+      <nav className="md-jump" aria-label="Ir para">
+        {([['pl-hoje', '📋 Plano'], ['al-add', '✍️ Registrar'], ['al-hoje', '🍽️ Refeições de hoje'], ['al-semana', '📊 Semana'], ['al-peso', '⚖️ Peso'], ['al-meus', '🥗 Meus alimentos']] as Array<[string, string]>)
+          .map(([id, l]) => <button key={id} className="fc" onClick={() => (document.getElementById(id) || (id === 'pl-hoje' ? document.getElementById('pl-novo') : null))?.closest('.card, details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{l}</button>)}
+      </nav>
       <PlanCard {...p} hide={hide}/>
       <MealForm {...p} hide={hide}/>
       <MealsToday {...p} hide={hide}/>
@@ -102,8 +106,10 @@ export function FoodTab(p: FoodTabProps) {
 
       <WeightCard {...p} prof={prof} series={weights}/>
 
+      <MyFoods {...p}/>
+
       <details className="card al-cfg">
-        <summary>⚙️ Minha meta e meus alimentos</summary>
+        <summary>⚙️ Minha meta de calorias</summary>
       <section className="al-sub" aria-labelledby="al-meta">
         <div className="slbl" id="al-meta">Minha meta</div>
         <p className="row-s">
@@ -116,8 +122,6 @@ export function FoodTab(p: FoodTabProps) {
         <button className="btn btn-s" onClick={() => setEditing(true)}>Editar perfil e meta</button>
         <p className="row-s" style={{ marginTop: 8 }}>São estimativas para o dia a dia. Para um plano individual, gestação ou alguma condição de saúde, fale com nutricionista ou médica.</p>
       </section>
-
-      <MyFoods {...p} inner/>
       </details>
     </>
   )
