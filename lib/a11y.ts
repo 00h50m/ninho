@@ -9,7 +9,7 @@ export const TEXT_SIZES: Array<[TextSize, string, number]> = [['md', 'Normal', 1
 export const HOME_CARDS: Array<[string, string]> = [
   ['mascote', 'Nino, o mascote'], ['resumo', 'Resumo do dia (números)'], ['semana', 'A semana'], ['checkin', 'Check-in'], ['meudia', 'Meu dia'],
   ['rotina', 'Rotina agora'], ['caes', 'Cães hoje'], ['agenda', 'Agenda'], ['manutencao', 'Manutenção'],
-  ['compras', 'Lista de compras'], ['atalhos', 'Atalhos'],
+  ['compras', 'Lista de compras'], ['sobrou', 'Sobrou! (finanças do mês)'], ['atalhos', 'Atalhos'],
 ]
 
 export interface A11yPrefs {
