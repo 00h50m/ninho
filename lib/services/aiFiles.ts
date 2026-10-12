@@ -1,9 +1,10 @@
-// Envio de arquivos para a IA (plano alimentar e foto do prato).
+// Envio de arquivos para a IA (plano alimentar, foto do prato e do rótulo).
 // Fotos são reduzidas no próprio aparelho antes de sair (mais rápido e dentro do limite da Vercel).
 import { supabase } from '@/lib/supabase'
 import type { DietPlan } from '@/lib/dietPlan'
 import type { MealItem } from '@/lib/nutricao'
 import type { BodyScan } from '@/lib/bodyScan'
+import type { LabelRead } from '@/lib/foodLabel'
 
 export const MAX_PDF_BYTES = 15 * 1024 * 1024
 /** Acima disso o arquivo vai em partes (a Vercel aceita pedidos de até ~4,5 MB). */
@@ -65,4 +66,10 @@ export const readBodyFile = (householdId: string, file: File) => sendDoc<BodySca
 export async function readPlatePhoto(householdId: string, file: File, caption: string) {
   if (!file.type.startsWith('image/')) return { ok: false as const, error: 'Escolha uma foto.' }
   return post<{ isFood: boolean, items: MealItem[], note: string | null }>('/api/ai/prato', { householdId, image: await shrink(file), caption })
+}
+
+/** Foto do rótulo: lado maior de 2000 px para os números pequenos continuarem legíveis. */
+export async function readLabelPhoto(householdId: string, file: File) {
+  if (!file.type.startsWith('image/')) return { ok: false as const, error: 'Mande uma foto da tabela nutricional.' }
+  return post<LabelRead>('/api/ai/rotulo', { householdId, image: await shrink(file, 2000, 0.9) })
 }

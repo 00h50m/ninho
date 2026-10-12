@@ -53,7 +53,8 @@ export function exerciseOn(logs: PLog[], who: Who, date: string, weightKg: numbe
 
 // ── Leitura do texto da refeição ─────────────────────────────────────
 export interface MealItem { name: string, food_id: string | null, qty: number, unit: FoodUnit | 'g' | 'ml', g: number, kcal: number, p: number, c: number, f: number, text: string, guess?: boolean }
-export interface CustomFood { id: string, who: Who, name: string, portion: string, portion_g: number, kcal: number, protein: number | null, carb: number | null, fat: number | null }
+/** review (032): o que falta conferir no rótulo; null/ausente = conferido. */
+export interface CustomFood { id: string, who: Who, name: string, portion: string, portion_g: number, kcal: number, protein: number | null, carb: number | null, fat: number | null, review?: string | null }
 
 export const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9/.,\s-]/g, ' ').replace(/-/g, ' ').replace(/\s+/g, ' ').trim()
 /** Singular simples para comparar ("ovos"→"ovo", "pães"→"pao", "colheres"→"colher"). */

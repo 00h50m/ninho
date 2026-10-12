@@ -16,6 +16,16 @@ function must<T>(r: { data: T | null, error: any }, ctx: string): T {
 
 export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, goals: PGoal[], goalsReady?: boolean, saved: SavedMeal[], savedReady?: boolean, reason?: string }
 
+const FOOD_COLS = 'id,who,name,portion,portion_g,kcal,protein,carb,fat'
+/** Coluna que ainda não existe no banco (migration nova não executada). */
+const missingColumn = (e: any) => !!e && (e.code === '42703' || e.code === 'PGRST204' || /column .* does not exist|could not find the '.*' column/i.test(e.message || ''))
+/** Alimentos com o "para conferir" (032); sem a coluna, carrega como antes. */
+async function loadFoods(householdId: string) {
+  const q = (cols: string) => supabase.from('personal_foods').select(cols).eq('household_id', householdId).eq('active', true).order('name')
+  const r = await q(FOOD_COLS + ',review')
+  return missingColumn(r.error) ? q(FOOD_COLS) : r
+}
+
 export async function loadMeuDia(householdId: string, from: string): Promise<MeuDiaData> {
   const [s, l, m, q, fp, ff, dp, gl, sm] = await Promise.all([
     supabase.from('personal_settings').select('who,water_goal_ml,cup_ml,sleep_goal_h,share,selfcare').eq('household_id', householdId),
@@ -23,7 +33,7 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     supabase.from('personal_meds').select('id,who,name,dose,times,active').eq('household_id', householdId).eq('active', true).order('name'),
     supabase.from('personal_quits').select('id,who,title,reason,started_on,active').eq('household_id', householdId).eq('active', true).order('created_at'),
     supabase.from('personal_food_profile').select('who,sex,birth_year,height_cm,activity,goal,pace_kg_week,target_kg,kcal_override,hide_numbers').eq('household_id', householdId),
-    supabase.from('personal_foods').select('id,who,name,portion,portion_g,kcal,protein,carb,fat').eq('household_id', householdId).eq('active', true).order('name'),
+    loadFoods(householdId),
     supabase.from('personal_diet_plans').select('id,who,title,plan,source,remind').eq('household_id', householdId).eq('active', true),
     supabase.from('personal_goals').select('id,who,title,kind,unit,start_value,target,start_date,due_date,status').eq('household_id', householdId).neq('status', 'arquivado').order('created_at'),
     supabase.from('personal_saved_meals').select('id,who,name,items,kcal,uses').eq('household_id', householdId).eq('active', true).order('uses', { ascending: false }).order('name'),
@@ -49,7 +59,7 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     available: true, settings: (s.data || []) as PSettings[], logs: ((l.data || []) as any[]).map(x => ({ ...x, value: x.value == null ? null : Number(x.value) })), meds: (m.data || []) as PMed[],
     quits: q.error ? [] : (q.data || []) as PQuit[], quitsReady: !q.error,
     profiles: fe ? [] : ((fp.data || []) as any[]).map(x => ({ ...x, height_cm: Number(x.height_cm), pace_kg_week: Number(x.pace_kg_week), target_kg: n(x.target_kg) })) as FoodProfile[],
-    foods: fe ? [] : ((ff.data || []) as any[]).map(x => ({ ...x, portion_g: Number(x.portion_g), kcal: Number(x.kcal), protein: n(x.protein), carb: n(x.carb), fat: n(x.fat) })) as CustomFood[],
+    foods: fe ? [] : ((ff.data || []) as any[]).map(x => ({ ...x, portion_g: Number(x.portion_g), kcal: Number(x.kcal), protein: n(x.protein), carb: n(x.carb), fat: n(x.fat), review: x.review || null })) as CustomFood[],
     foodReady: !fe,
     plans: dp.error ? [] : ((dp.data || []) as any[]).flatMap(x => { const plan = validatePlan(x.plan); return plan ? [{ ...x, plan }] : [] }) as PlanRow[],
     plansReady: !dp.error,
@@ -100,16 +110,25 @@ export async function saveFoodProfile(householdId: string, who: Who, p: Omit<Foo
   must(await supabase.from('personal_food_profile').upsert({ household_id: householdId, who, ...p, updated_at: new Date().toISOString() }, { onConflict: 'household_id,who' }).select('who'), 'salvar perfil da alimentação')
 }
 
-export async function saveFood(householdId: string, who: Who, f: Omit<CustomFood, 'id' | 'who'> & { id?: string }): Promise<void> {
-  const row = { name: f.name.trim().slice(0, 60), portion: f.portion.trim().slice(0, 30) || '1 porção', portion_g: f.portion_g, kcal: f.kcal, protein: f.protein, carb: f.carb, fat: f.fat }
-  if (f.id) must(await supabase.from('personal_foods').update(row).eq('id', f.id).select('id'), 'salvar alimento')
-  else must(await supabase.from('personal_foods').insert({ ...row, household_id: householdId, who }).select('id'), 'cadastrar alimento')
+/** Grava com o "para conferir" (032); se o banco ainda não tem a coluna, grava sem ela. */
+async function withReview<T>(run: (withCol: boolean) => PromiseLike<{ data: T | null, error: any }>, ctx: string): Promise<T> {
+  const r = await run(true)
+  return must(missingColumn(r.error) ? await run(false) : r, ctx)
+}
+const strip = (row: Record<string, unknown>, withCol: boolean) => { if (withCol) return row; const { review: _r, ...rest } = row; return rest }
+
+/** review: undefined = não mexe; null = conferido; texto = falta conferir. */
+export async function saveFood(householdId: string, who: Who, f: Omit<CustomFood, 'id' | 'who' | 'review'> & { id?: string, review?: string | null }): Promise<void> {
+  const row: Record<string, unknown> = { name: f.name.trim().slice(0, 60), portion: f.portion.trim().slice(0, 30) || '1 porção', portion_g: f.portion_g, kcal: f.kcal, protein: f.protein, carb: f.carb, fat: f.fat }
+  if (f.review !== undefined) row.review = f.review ? f.review.slice(0, 200) : null
+  if (f.id) await withReview(c => supabase.from('personal_foods').update(strip(row, c)).eq('id', f.id!).select('id'), 'salvar alimento')
+  else await withReview(c => supabase.from('personal_foods').insert({ ...strip(row, c), household_id: householdId, who }).select('id'), 'cadastrar alimento')
 }
 
-/** Vários alimentos de uma vez (ex.: os do plano). Devolve quantos entraram. */
-export async function saveFoods(householdId: string, who: Who, list: Array<Omit<CustomFood, 'id' | 'who'>>): Promise<number> {
-  const rows = list.slice(0, 150).map(f => ({ household_id: householdId, who, name: f.name.trim().slice(0, 60), portion: f.portion.trim().slice(0, 30) || '1 porção', portion_g: Math.min(2000, Math.max(0.1, f.portion_g)), kcal: Math.min(3000, Math.max(0, f.kcal)), protein: f.protein, carb: f.carb, fat: f.fat }))
-  for (let i = 0; i < rows.length; i += 50) must(await supabase.from('personal_foods').insert(rows.slice(i, i + 50)).select('id'), 'cadastrar alimentos')
+/** Vários alimentos de uma vez (os do plano ou de uma planilha). Devolve quantos entraram. */
+export async function saveFoods(householdId: string, who: Who, list: Array<Omit<CustomFood, 'id' | 'who' | 'review'> & { review?: string | null }>): Promise<number> {
+  const rows = list.slice(0, 300).map(f => ({ household_id: householdId, who, name: f.name.trim().slice(0, 60), portion: f.portion.trim().slice(0, 30) || '1 porção', portion_g: Math.min(2000, Math.max(0.1, f.portion_g)), kcal: Math.min(3000, Math.max(0, f.kcal)), protein: f.protein, carb: f.carb, fat: f.fat, review: f.review ? f.review.slice(0, 200) : null }))
+  for (let i = 0; i < rows.length; i += 50) await withReview(c => supabase.from('personal_foods').insert(rows.slice(i, i + 50).map(r => strip(r, c))).select('id'), 'cadastrar alimentos')
   return rows.length
 }
 

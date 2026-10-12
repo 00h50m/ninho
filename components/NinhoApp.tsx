@@ -1213,6 +1213,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             onStopMeal={m=>mdApi.stopMeal(m.id).then(md.reload).then(()=>showToast('Refeição removida das salvas')).catch(e=>{showError(toNinhoError(e,'remover refeição salva'));throw e})}
             onUseMeal={m=>{mdApi.countMealUse(m.id,m.uses).then(md.reload).catch(()=>{})}}
             onSaveFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>showToast(`${list.length} alimento(s) em Meus alimentos 🥗`)).catch(e=>{showError(toNinhoError(e,'lançar alimentos'));throw e})}
+            onImportFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>{const r=list.filter(x=>x.review).length;showToast(`${list.length} alimento(s) importado(s)${r?` · ${r} para conferir`:''} 🥗`)}).catch(e=>{showError(toNinhoError(e,'importar alimentos'));throw e})}
             onPlanRemind={(r,on)=>mdApi.setPlanRemind(r.id,on).then(md.reload).then(()=>showToast(on?'Lembretes das refeições ligados':'Lembretes desligados')).catch(e=>{showError(toNinhoError(e,'lembretes do plano'));throw e})}
             onStopPlan={r=>mdApi.stopPlan(r.id).then(md.reload).then(()=>showToast('Plano removido')).catch(e=>{showError(toNinhoError(e,'remover plano'));throw e})}/>
             :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>}

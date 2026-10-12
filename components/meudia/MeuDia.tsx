@@ -1,6 +1,7 @@
 'use client'
 // Meu dia: a parte individual de cada uma. Água, sono, autocuidado, remédios,
 // treinos (com cargas) e evolução física. Cada uma escolhe o que a outra vê.
+import type { CatalogFood } from '@/lib/foodCatalog'
 import { useEffect, useMemo, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
@@ -45,6 +46,7 @@ export interface MeuDiaProps {
   onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
   onStopFood: (f: CustomFood) => Promise<void>
   onSaveFoods: (list: PlanFood[]) => Promise<void>
+  onImportFoods: (list: CatalogFood[]) => Promise<void>
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void

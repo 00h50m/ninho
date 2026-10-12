@@ -6,6 +6,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { PLAN_SCHEMA, PLAN_SYSTEM, PLATE_SCHEMA, PLATE_SYSTEM, plateToItems, validatePlan, type DietPlan, type PlateResult } from '@/lib/dietPlan'
 import type { CustomFood } from '@/lib/nutricao'
 import { BODY_SCHEMA, BODY_SYSTEM, validateBody, type BodyScan } from '@/lib/bodyScan'
+import { LABEL_SCHEMA, LABEL_SYSTEM, validateLabel, type LabelRead } from '@/lib/foodLabel'
 import { homeClock } from '@/lib/dates'
 import { AI_MODEL } from './ai'
 import { must } from './notify'
@@ -14,6 +15,7 @@ import { must } from './notify'
 export const PLAN_DAILY_LIMIT = 10
 export const PLATE_DAILY_LIMIT = 30
 export const BODY_DAILY_LIMIT = 10
+export const LABEL_DAILY_LIMIT = 40
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const
 /** Tamanho máximo em base64 de um arquivo mandado de uma vez (o corpo do pedido na Vercel vai até ~4,5 MB). */
 export const MAX_B64 = 4_300_000
@@ -138,4 +140,17 @@ export async function readBody(db: SupabaseClient, householdId: string, file: Ai
   const scan = validateBody(r.json, homeClock(opts.now ?? new Date()).date)
   if (!scan) return { ok: false, status: 422, message: 'Não encontrei medidas neste arquivo. Confira se é a bioimpedância ou a avaliação física e se dá para ler.' }
   return { ok: true, scan }
+}
+
+/** Foto do rótulo → porção, calorias e macros para a pessoa conferir. A foto não fica guardada. */
+export async function readLabel(db: SupabaseClient, householdId: string, image: AiFile, opts: AiOpts = {}): Promise<{ ok: true, label: LabelRead } | Fail> {
+  if (!(await underLimit(db, householdId, 'rotulo', LABEL_DAILY_LIMIT, opts.now ?? new Date()))) return { ok: false, status: 429, message: `Limite de ${LABEL_DAILY_LIMIT} fotos de rótulo por dia. Copie à mão, por enquanto.` }
+  const r = await ask(db, householdId, 'rotulo', opts, {
+    system: LABEL_SYSTEM, schema: LABEL_SCHEMA, effort: 'low', maxTokens: 1500,
+    content: [block(image), { type: 'text', text: 'Copie a tabela nutricional deste rótulo no formato pedido.' }],
+  })
+  if (r.ok === false) return r
+  const label = validateLabel(r.json)
+  if (!label) return { ok: false, status: 422, message: 'Não consegui ler a tabela nutricional. Tente uma foto mais de perto, reta e com boa luz, só da tabela.' }
+  return { ok: true, label }
 }

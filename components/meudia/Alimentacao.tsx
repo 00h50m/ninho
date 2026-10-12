@@ -7,7 +7,8 @@ import type { Who } from '@/lib/types'
 import { fmtDate } from '@/lib/dates'
 import { bodySeries, type PKind, type PLog, type PMed, type PSettings } from '@/lib/meudia'
 import type { DietPlan, PlanFood, PlanRow } from '@/lib/dietPlan'
-import { readPlatePhoto } from '@/lib/services/aiFiles'
+import { readLabelPhoto, readPlatePhoto } from '@/lib/services/aiFiles'
+import { catalogFoods, type CatalogFood, type CatalogResult } from '@/lib/foodCatalog'
 import { PlanCard } from './Plano'
 import type { MdFocus } from './MeuDia'
 import { toSaved, type SavedMeal } from '@/lib/savedMeals'
@@ -38,6 +39,7 @@ export interface FoodTabProps {
   onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
   onStopFood: (f: CustomFood) => Promise<void>
   onSaveFoods: (list: PlanFood[]) => Promise<void>
+  onImportFoods: (list: CatalogFood[]) => Promise<void>
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void
@@ -389,27 +391,105 @@ function WeightCard(p: FoodTabProps & { prof: FoodProfile, series: Array<{ date:
 
 function MyFoods(p: FoodTabProps & { inner?: boolean }) {
   const [q, setQ] = useState('')
+  const [only, setOnly] = useState(false)
+  const [more, setMore] = useState(false)
   const all = p.foods.filter(f => f.who === p.me)
-  const mine = all.filter(f => !q.trim() || norm(f.name).includes(norm(q)))
-  const blank = { name: '', portion: '1 unidade', portion_g: '', kcal: '', protein: '' }
-  const [f, setF] = useState<{ id?: string, name: string, portion: string, portion_g: string, kcal: string, protein: string }>(blank)
+  const toCheck = all.filter(f => f.review)
+  const list = all.filter(f => (!only || f.review) && (!q.trim() || norm(f.name).includes(norm(q))))
+  const shown = more || q.trim() ? list : list.slice(0, 12)
+  const blank = { name: '', portion: '1 unidade', portion_g: '', kcal: '', protein: '', carb: '', fat: '' }
+  type Form = typeof blank & { id?: string, review?: string | null }
+  const [f, setF] = useState<Form>(blank)
   const ok = f.name.trim() && num(f.portion_g) > 0 && num(f.kcal) >= 0 && !isNaN(num(f.kcal))
+  const formRef = useRef<HTMLDivElement>(null)
+  const edit = (x: CustomFood) => {
+    setF({ id: x.id, review: x.review || null, name: x.name, portion: x.portion, portion_g: N1(x.portion_g), kcal: N1(x.kcal), protein: x.protein != null ? N1(x.protein) : '', carb: x.carb != null ? N1(x.carb) : '', fat: x.fat != null ? N1(x.fat) : '' })
+    setLbl(null); setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }
+  const opt = (v: string) => v.trim() ? num(v) : null
+  const save = () => p.onSaveFood({ id: f.id, name: f.name, portion: f.portion, portion_g: num(f.portion_g), kcal: num(f.kcal), protein: opt(f.protein), carb: opt(f.carb), fat: opt(f.fat), review: null })
+    .then(() => { setF(blank); setLbl(null) }).catch(() => {})
+
+  // 📷 foto do rótulo: a IA copia a tabela; a pessoa confere e salva
+  const [lbl, setLbl] = useState<{ s: 'busy' } | { s: 'ok', note: string | null } | { s: 'err', msg: string } | null>(null)
+  const photoRef = useRef<HTMLInputElement>(null)
+  const target = useRef<CustomFood | null>(null)
+  const askPhoto = (x: CustomFood | null) => { target.current = x; photoRef.current?.click() }
+  async function fromLabel(file: File | undefined) {
+    if (photoRef.current) photoRef.current.value = ''
+    if (!file) return
+    const x = target.current
+    if (x) edit(x)
+    setLbl({ s: 'busy' })
+    const r = await readLabelPhoto(p.householdId, file)
+    if (r.ok === false) { setLbl({ s: 'err', msg: r.error }); return }
+    const d = r.data, s1 = (v: number | null) => v != null ? N1(v) : ''
+    setF(cur => ({ ...cur, name: x ? x.name : (d.name || cur.name), portion: d.portion, portion_g: N1(d.portion_g), kcal: N1(d.kcal), protein: s1(d.protein), carb: s1(d.carb), fat: s1(d.fat) }))
+    setLbl({ s: 'ok', note: d.note })
+    setTimeout(() => formRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 50)
+  }
+
+  // 📄 planilha (CSV): lida aqui no aparelho; mostra o que vai entrar antes de importar
+  const csvRef = useRef<HTMLInputElement>(null)
+  const [imp, setImp] = useState<CatalogResult | { err: string } | null>(null)
+  const [busy, setBusy] = useState(false)
+  async function fromCsv(file: File | undefined) {
+    if (csvRef.current) csvRef.current.value = ''
+    if (!file) return
+    if (file.size > 2_000_000) { setImp({ err: 'A planilha passa de 2 MB.' }); return }
+    const r = catalogFoods(await file.text(), all)
+    setImp(r || { err: 'Não reconheci as colunas. A planilha precisa ter pelo menos nome, gramas (ou porção) e kcal. Salve como CSV.' })
+  }
+
   return (
     <section className={p.inner ? 'al-sub' : 'card'} aria-labelledby="al-meus">
       <div className="slbl" id="al-meus">Meus alimentos</div>
-      <p className="row-s" style={{ marginBottom: 8 }}>Para o que não está na tabela: copie do rótulo (por porção). Depois é só escrever o nome na refeição.</p>
-      {all.length > 8 && <input className="fi" value={q} onChange={e => setQ(e.target.value)} placeholder={`Buscar entre ${all.length} alimentos`} aria-label="Buscar em Meus alimentos" style={{ marginBottom: 8 }}/>}
-      {mine.map(x => <div key={x.id} className="md-row"><span className="md-t"><b>{x.name}</b><small>{x.portion} ({N1(x.portion_g)} g) · {K(x.kcal)} kcal{x.protein != null ? ` · ${N1(x.protein)} g de proteína` : ''}</small></span>
-        <button className="lnk-inline" onClick={() => setF({ id: x.id, name: x.name, portion: x.portion, portion_g: N1(x.portion_g), kcal: N1(x.kcal), protein: x.protein != null ? N1(x.protein) : '' })}>editar</button>
-        <button className="lnk-inline" onClick={() => { if (confirm(`Remover ${x.name}?`)) p.onStopFood(x).catch(() => {}) }}>remover</button></div>)}
-      <div className="onb-row" style={{ marginTop: 8 }}>
-        <label className="onb-f"><span>Nome</span><input className="fi" value={f.name} maxLength={60} onChange={e => setF(x => ({ ...x, name: e.target.value }))} placeholder="Barrinha de proteína"/></label>
-        <label className="onb-f"><span>Porção</span><input className="fi" value={f.portion} maxLength={30} onChange={e => setF(x => ({ ...x, portion: e.target.value }))}/></label>
-        <label className="onb-f"><span>Gramas da porção</span><input className="fi" inputMode="decimal" value={f.portion_g} onChange={e => setF(x => ({ ...x, portion_g: e.target.value }))}/></label>
-        <label className="onb-f"><span>kcal da porção</span><input className="fi" inputMode="decimal" value={f.kcal} onChange={e => setF(x => ({ ...x, kcal: e.target.value }))}/></label>
-        <label className="onb-f"><span>Proteína (g, opcional)</span><input className="fi" inputMode="decimal" value={f.protein} onChange={e => setF(x => ({ ...x, protein: e.target.value }))}/></label>
+      <p className="row-s" style={{ marginBottom: 8 }}>Para o que não está na tabela: copie do rótulo (por porção), tire foto da tabela nutricional ou importe uma planilha. Depois é só escrever o nome na refeição.</p>
+      <div className="md-acts fc-acts">
+        <button className="btn btn-g" disabled={lbl?.s === 'busy'} onClick={() => askPhoto(null)}>{lbl?.s === 'busy' ? 'Lendo o rótulo…' : '📷 Foto do rótulo'}</button>
+        <button className="btn btn-g" onClick={() => csvRef.current?.click()}>📄 Importar planilha</button>
+        <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden aria-label="Foto da tabela nutricional" onChange={e => fromLabel(e.target.files?.[0])}/>
+        <input ref={csvRef} type="file" accept=".csv,text/csv" hidden aria-label="Planilha de alimentos (CSV)" onChange={e => fromCsv(e.target.files?.[0])}/>
       </div>
-      <button className="btn btn-s" disabled={!ok} onClick={() => p.onSaveFood({ id: f.id, name: f.name, portion: f.portion, portion_g: num(f.portion_g), kcal: num(f.kcal), protein: f.protein.trim() ? num(f.protein) : null, carb: null, fat: null }).then(() => setF(blank)).catch(() => {})}>{f.id ? 'Salvar' : '+ Cadastrar'}</button>
+      {imp && <div className="fc-imp" role="status">
+        {'err' in imp ? <p className="al-warn">{imp.err}</p> : <>
+          <p><b>{imp.add.length} alimento(s) novo(s)</b>{imp.add.some(x => x.review) && <> · <span className="fc-flag">⚠ {imp.add.filter(x => x.review).length} para conferir</span></>}
+            {imp.dup.length > 0 && <> · {imp.dup.length} já estava(m) em Meus alimentos</>}{imp.bad.length > 0 && <> · {imp.bad.length} com problema</>}</p>
+          {imp.bad.length > 0 && <details><summary>Ver as linhas com problema</summary><ul className="fc-bad">{imp.bad.slice(0, 30).map((x, i) => <li key={i}>{x.line ? `Linha ${x.line}: ` : ''}{x.name} ({x.why})</li>)}</ul></details>}
+          <p className="row-s">Os marcados para conferir entram com os valores da planilha e um aviso, até você conferir o rótulo.</p>
+        </>}
+        <div className="md-acts">
+          {!('err' in imp) && imp.add.length > 0 && <button className="btn btn-p" disabled={busy} onClick={() => { setBusy(true); p.onImportFoods(imp.add).then(() => setImp(null)).catch(() => {}).finally(() => setBusy(false)) }}>{busy ? 'Importando…' : `Importar ${imp.add.length}`}</button>}
+          <button className="btn btn-g" onClick={() => setImp(null)}>{'err' in imp || !imp.add.length ? 'Fechar' : 'Cancelar'}</button>
+        </div>
+      </div>}
+      {toCheck.length > 0 && <div className="seg-mini fc-seg" role="group" aria-label="Mostrar">
+        <button className={only ? '' : 'on'} aria-pressed={!only} onClick={() => setOnly(false)}>Todos ({all.length})</button>
+        <button className={only ? 'on' : ''} aria-pressed={only} onClick={() => setOnly(true)}>⚠ Para conferir ({toCheck.length})</button>
+      </div>}
+      {all.length > 8 && <input className="fi" value={q} onChange={e => setQ(e.target.value)} placeholder={`Buscar entre ${all.length} alimentos`} aria-label="Buscar em Meus alimentos" style={{ marginBottom: 8 }}/>}
+      {shown.map(x => <div key={x.id} className={`md-row ${x.review ? 'fc-chk' : ''}`}><span className="md-t"><b>{x.name}{x.review && <> <span className="fc-flag">⚠ conferir</span></>}</b><small>{x.portion} ({N1(x.portion_g)} g) · {K(x.kcal)} kcal{x.protein != null ? ` · ${N1(x.protein)} g de proteína` : ''}</small>{x.review && <small className="fc-why">{x.review}</small>}</span>
+        {x.review && <button className="lnk-inline" onClick={() => askPhoto(x)} aria-label={`Foto do rótulo de ${x.name}`}>📷 rótulo</button>}
+        <button className="lnk-inline" onClick={() => edit(x)}>editar</button>
+        {x.review && <button className="lnk-inline" onClick={() => p.onSaveFood({ ...x, review: null }).catch(() => {})} aria-label={`Marcar ${x.name} como conferido`}>✓ conferido</button>}
+        <button className="lnk-inline" onClick={() => { if (confirm(`Remover ${x.name}?`)) p.onStopFood(x).catch(() => {}) }}>remover</button></div>)}
+      {!shown.length && (q.trim() || only) && <p className="row-s">Nada encontrado.</p>}
+      {shown.length < list.length && <button className="lnk" onClick={() => setMore(true)}>Ver todos ({list.length})</button>}
+      <div ref={formRef} className="fc-form">
+        {f.id && <p className="row-s">Editando <b>{f.name}</b>{f.review ? <> · falta conferir: {f.review}. Ao salvar, fica conferido.</> : null} <button className="lnk-inline" onClick={() => { setF(blank); setLbl(null) }}>cancelar</button></p>}
+        {lbl?.s === 'ok' && <p className="fc-ok" role="status">📷 Copiado do rótulo. Confira os números com a embalagem antes de salvar.{lbl.note ? ` ${lbl.note}` : ''}</p>}
+        {lbl?.s === 'err' && <p className="al-warn" role="alert">{lbl.msg}</p>}
+        <div className="onb-row" style={{ marginTop: 8 }}>
+          <label className="onb-f"><span>Nome</span><input className="fi" value={f.name} maxLength={60} onChange={e => setF(x => ({ ...x, name: e.target.value }))} placeholder="Barrinha de proteína"/></label>
+          <label className="onb-f"><span>Porção</span><input className="fi" value={f.portion} maxLength={30} onChange={e => setF(x => ({ ...x, portion: e.target.value }))}/></label>
+          <label className="onb-f"><span>Gramas da porção</span><input className="fi" inputMode="decimal" value={f.portion_g} onChange={e => setF(x => ({ ...x, portion_g: e.target.value }))}/></label>
+          <label className="onb-f"><span>kcal da porção</span><input className="fi" inputMode="decimal" value={f.kcal} onChange={e => setF(x => ({ ...x, kcal: e.target.value }))}/></label>
+          <label className="onb-f"><span>Proteína (g, opcional)</span><input className="fi" inputMode="decimal" value={f.protein} onChange={e => setF(x => ({ ...x, protein: e.target.value }))}/></label>
+          <label className="onb-f"><span>Carboidrato (g, opcional)</span><input className="fi" inputMode="decimal" value={f.carb} onChange={e => setF(x => ({ ...x, carb: e.target.value }))}/></label>
+          <label className="onb-f"><span>Gordura (g, opcional)</span><input className="fi" inputMode="decimal" value={f.fat} onChange={e => setF(x => ({ ...x, fat: e.target.value }))}/></label>
+        </div>
+        <button className="btn btn-s" disabled={!ok} onClick={save}>{f.id ? (f.review ? 'Salvar conferido' : 'Salvar') : '+ Cadastrar'}</button>
+      </div>
     </section>
   )
 }
