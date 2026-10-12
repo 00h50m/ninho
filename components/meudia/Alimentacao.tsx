@@ -6,10 +6,11 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Who } from '@/lib/types'
 import { fmtDate } from '@/lib/dates'
 import { bodySeries, type PKind, type PLog, type PMed, type PSettings } from '@/lib/meudia'
-import type { DietPlan, PlanRow } from '@/lib/dietPlan'
+import type { DietPlan, PlanFood, PlanRow } from '@/lib/dietPlan'
 import { readPlatePhoto } from '@/lib/services/aiFiles'
 import { PlanCard } from './Plano'
 import type { MdFocus } from './MeuDia'
+import { toSaved, type SavedMeal } from '@/lib/savedMeals'
 import { FOODS, type Food, type FoodUnit } from '@/lib/foods'
 import {
   ACTIVITIES, GOALS, MEALS, SAFE_MIN, calorieTarget, customToFood, dayFood, dayWord, etaDate, itemFor, kcalWeek, mealForTime, mealTotals, mealsOn, norm, parseMeal, weightTrend,
@@ -29,12 +30,17 @@ const UNIT_LABEL: Record<string, string> = {
 
 export interface FoodTabProps {
   householdId: string, me: Who, today: string, nowHM: string, logs: PLog[], profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean
+  saved: SavedMeal[], savedReady?: boolean
   meds: PMed[], settings: PSettings[], plans: PlanRow[], plansReady?: boolean, focus?: MdFocus
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
   onSaveProfile: (p: Omit<FoodProfile, 'who'>) => Promise<void>
   onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
   onStopFood: (f: CustomFood) => Promise<void>
+  onSaveFoods: (list: PlanFood[]) => Promise<void>
+  onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
+  onStopMeal: (m: SavedMeal) => Promise<void>
+  onUseMeal: (m: SavedMeal) => void
   onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
   onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
   onStopPlan: (p: PlanRow) => Promise<void>
@@ -182,6 +188,14 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
   const [meal, setMeal] = useState<Meal>(() => mealForTime(p.nowHM))
   const [text, setText] = useState(''), [items, setItems] = useState<MealItem[] | null>(null), [busy, setBusy] = useState(false)
   const [photo, setPhoto] = useState<'idle' | 'busy'>('idle'), [note, setNote] = useState<string | null>(null), [err, setErr] = useState<string | null>(null)
+  const [combo, setCombo] = useState(false)
+  const [from, setFrom] = useState<SavedMeal | null>(null)
+  const savedMine = p.saved.filter(m => m.who === p.me)
+  async function launch(m: SavedMeal) {
+    setBusy(true)
+    try { await p.onAdd('refeicao', m.kcal, { meal, text: m.name, items: m.items, saved_id: m.id }); p.onUseMeal(m) }
+    catch { /* aviso já mostrado */ } finally { setBusy(false) }
+  }
   const photoRef = useRef<HTMLInputElement>(null)
   async function fromPhoto(f: File | undefined) {
     if (!f) return
@@ -203,8 +217,9 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
     if (!items || !total) return
     setBusy(true)
     try {
-      await p.onAdd('refeicao', total.kcal, { meal, text: text.trim().slice(0, 500), items: items.filter(i => i.food_id || i.kcal > 0) })
-      setText(''); setItems(null); setNote(null)
+      await p.onAdd('refeicao', total.kcal, { meal, text: text.trim().slice(0, 500), items: items.filter(i => i.food_id || i.kcal > 0), ...(from ? { saved_id: from.id } : {}) })
+      if (from) p.onUseMeal(from)
+      setText(''); setItems(null); setNote(null); setFrom(null)
     } catch { /* aviso já mostrado */ } finally { setBusy(false) }
   }
   return (
@@ -213,14 +228,28 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
       <div className="onb-days wrap" role="radiogroup" aria-label="Refeição">
         {MEALS.map(([k, ic, l]) => <button key={k} role="radio" aria-checked={meal === k} className={`onb-day wide ${meal === k ? 'on' : ''}`} onClick={() => setMeal(k)}>{ic} {l}</button>)}
       </div>
+      {p.savedReady !== false && savedMine.length > 0 && !items && <div className="al-saved" role="group" aria-label="Refeições salvas">
+        <div className="al-saved-h">⭐ Refeições salvas</div>
+        {savedMine.map(m => <div key={m.id} className="al-sv">
+          <span className="al-sv-n"><b>{m.name}</b><small>{m.items.map(i => i.name).join(', ')}{p.hide ? '' : ` · ${K(m.kcal)} kcal`}</small></span>
+          <button className="btn btn-s" disabled={busy} onClick={() => launch(m)} aria-label={`Lançar ${m.name}`}>Lançar</button>
+          <button className="lnk-inline" onClick={() => { setItems(m.items); setText(m.name); setFrom(m) }} aria-label={`Ajustar ${m.name} antes de lançar`}>ajustar</button>
+          <button className="ib" aria-label={`Remover ${m.name} das salvas`} onClick={() => { if (confirm(`Remover "${m.name}" das refeições salvas?`)) p.onStopMeal(m).catch(() => {}) }}>✕</button>
+        </div>)}
+      </div>}
       <label className="onb-f" style={{ marginTop: 10 }}><span>O que você comeu?</span>
         <textarea className="fi al-text" rows={2} value={text} maxLength={500} onChange={e => { setText(e.target.value); setItems(null) }} placeholder="2 ovos mexidos, 1 pão francês com manteiga e café com leite"/></label>
       {!items && <div className="md-acts" style={{ marginTop: 0 }}>
         <button className="btn btn-s" disabled={!text.trim()} onClick={() => setItems(parseMeal(text, custom))}>Conferir</button>
         <input ref={photoRef} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={e => fromPhoto(e.target.files?.[0])}/>
         <button className="btn btn-g" disabled={photo === 'busy'} onClick={() => photoRef.current?.click()}>{photo === 'busy' ? 'Olhando a foto…' : '📷 Foto do prato'}</button>
+        {custom.length > 0 && <button className="btn btn-g" aria-expanded={combo} onClick={() => setCombo(v => !v)}>🧩 Montar com meus alimentos</button>}
       </div>}
-      {!items && <p className="row-s">Na foto, o que você escrever acima ajuda a IA (ex.: "frango e arroz integral"). A foto não fica guardada.</p>}
+      {!items && combo && <Combine foods={custom} hide={p.hide} onSaveMeal={p.onSaveMeal} onDone={async (its, label) => {
+        await p.onAdd('refeicao', mealTotals(its).kcal, { meal, text: (text.trim() || label).slice(0, 500), items: its })
+        setText(''); setCombo(false)
+      }}/>}
+      {!items && !combo && <p className="row-s">Na foto, o que você escrever acima ajuda a IA (ex.: "frango e arroz integral"). A foto não fica guardada.</p>}
       {err && <p className="row-s al-warn" role="alert">{err}</p>}
       {items && note && <p className="row-s">📷 {note}</p>}
       {items && <>
@@ -251,13 +280,62 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
           </li>
         })}</ul>
         {unknown > 0 && <p className="row-s al-warn">{unknown} item(ns) sem calorias: escolha um parecido ou ficam de fora.</p>}
+        <SaveAs items={items} initial={from?.name || text.trim()} existing={from} onSave={p.onSaveMeal}/>
         <div className="md-acts">
           <button className="btn btn-p" disabled={busy || !items.some(i => i.food_id || i.kcal > 0)} onClick={save}>{busy ? 'Salvando…' : p.hide ? 'Salvar refeição' : `Salvar refeição (${K(total!.kcal)} kcal)`}</button>
-          <button className="btn btn-g" onClick={() => setItems(null)}>Voltar ao texto</button>
+          <button className="btn btn-g" onClick={() => { setItems(null); setFrom(null) }}>Voltar ao texto</button>
         </div>
       </>}
     </section>
   )
+}
+
+/** "⭐ Salvar como refeição": guarda a combinação com um nome para lançar depois. */
+function SaveAs({ items, initial, existing, onSave }: { items: MealItem[], initial: string, existing?: SavedMeal | null, onSave: FoodTabProps['onSaveMeal'] }) {
+  const [open, setOpen] = useState(false), [name, setName] = useState(initial), [busy, setBusy] = useState(false), [done, setDone] = useState(false)
+  const data = toSaved(name, items)
+  if (!items.some(i => i.kcal > 0)) return null
+  if (done) return <p className="row-s" role="status">⭐ Salva em Refeições salvas.</p>
+  if (!open) return <button className="lnk-inline al-saveas" onClick={() => { setName(initial); setOpen(true) }}>{existing ? '⭐ Atualizar a refeição salva' : '⭐ Salvar como refeição (para lançar depois)'}</button>
+  return <div className="tk-add al-saveas-f">
+    <input className="fi" value={name} maxLength={60} onChange={e => setName(e.target.value)} placeholder="Ex.: Meu café de sempre" aria-label="Nome da refeição salva" autoFocus/>
+    <button className="btn btn-s" disabled={!data || busy} onClick={async () => { if (!data) return; setBusy(true); try { await onSave({ id: existing?.id, ...data }); setDone(true) } catch { /* aviso já mostrado */ } finally { setBusy(false) } }}>{busy ? 'Salvando…' : 'Salvar'}</button>
+    <button className="lnk-inline" onClick={() => setOpen(false)}>cancelar</button>
+  </div>
+}
+
+/** Montar a refeição combinando "Meus alimentos" por porção (½ em ½), vendo o total. */
+function Combine({ foods, hide, onDone, onSaveMeal }: { foods: CustomFood[], hide: boolean, onDone: (items: MealItem[], label: string) => Promise<void>, onSaveMeal: FoodTabProps['onSaveMeal'] }) {
+  const [q, setQ] = useState(''), [sel, setSel] = useState<Record<string, number>>({}), [busy, setBusy] = useState(false)
+  const shown = foods.filter(f => !q.trim() || norm(f.name).includes(norm(q))).slice(0, 40)
+  const chosen = foods.filter(f => sel[f.id] > 0)
+  const items = chosen.map(f => itemFor(customToFood(f), sel[f.id], 'porcao', `${N1(sel[f.id])} × ${f.portion} de ${f.name}`))
+  const total = mealTotals(items)
+  const step = (id: string, d: number) => setSel(x => ({ ...x, [id]: Math.max(0, Math.min(20, Math.round(((x[id] || 0) + d) * 2) / 2)) }))
+  return <div className="al-combo">
+    <input className="fi" value={q} onChange={e => setQ(e.target.value)} placeholder="Buscar em Meus alimentos" aria-label="Buscar em Meus alimentos"/>
+    <div className="al-chips" role="group" aria-label="Meus alimentos">
+      {shown.map(f => <button key={f.id} className={`al-chip ${sel[f.id] ? 'on' : ''}`} aria-pressed={!!sel[f.id]} onClick={() => step(f.id, sel[f.id] ? -sel[f.id] : 1)}>
+        {f.name}<small>{f.portion}{hide ? '' : ` · ${K(f.kcal)} kcal`}</small></button>)}
+      {!shown.length && <p className="row-s">Nada com esse nome em Meus alimentos.</p>}
+    </div>
+    {chosen.length > 0 && <>
+      <ul className="al-items">{chosen.map((f, i) => <li key={f.id} className="al-item">
+        <span className="al-cn"><b>{f.name}</b><small>{f.portion}</small></span>
+        <span className="al-step">
+          <button className="ib" aria-label={`Menos ${f.name}`} onClick={() => step(f.id, -0.5)}>−</button>
+          <span className="mono" aria-live="polite">{N1(sel[f.id])}×</span>
+          <button className="ib" aria-label={`Mais ${f.name}`} onClick={() => step(f.id, 0.5)}>+</button>
+        </span>
+        {!hide && <span className="al-k mono">{K(items[i].kcal)} kcal</span>}
+      </li>)}</ul>
+      <SaveAs items={items} initial={chosen.map(f => f.name).join(' + ').slice(0, 60)} onSave={onSaveMeal}/>
+      {!hide && <p className="row-s al-tot">Total: <b>{K(total.kcal)} kcal</b> · P {N1(total.p)} g · C {N1(total.c)} g · G {N1(total.f)} g</p>}
+      <div className="md-acts"><button className="btn btn-p" disabled={busy} onClick={async () => { setBusy(true); try { await onDone(items, chosen.map(f => f.name).join(', ')); setSel({}) } catch { /* aviso já mostrado */ } finally { setBusy(false) } }}>
+        {busy ? 'Salvando…' : hide ? 'Salvar refeição' : `Salvar refeição (${K(total.kcal)} kcal)`}</button>
+        <button className="btn btn-g" onClick={() => setSel({})}>Limpar</button></div>
+    </>}
+  </div>
 }
 
 function MealsToday(p: FoodTabProps & { hide: boolean }) {
@@ -306,7 +384,9 @@ function WeightCard(p: FoodTabProps & { prof: FoodProfile, series: Array<{ date:
 }
 
 function MyFoods(p: FoodTabProps & { inner?: boolean }) {
-  const mine = p.foods.filter(f => f.who === p.me)
+  const [q, setQ] = useState('')
+  const all = p.foods.filter(f => f.who === p.me)
+  const mine = all.filter(f => !q.trim() || norm(f.name).includes(norm(q)))
   const blank = { name: '', portion: '1 unidade', portion_g: '', kcal: '', protein: '' }
   const [f, setF] = useState<{ id?: string, name: string, portion: string, portion_g: string, kcal: string, protein: string }>(blank)
   const ok = f.name.trim() && num(f.portion_g) > 0 && num(f.kcal) >= 0 && !isNaN(num(f.kcal))
@@ -314,6 +394,7 @@ function MyFoods(p: FoodTabProps & { inner?: boolean }) {
     <section className={p.inner ? 'al-sub' : 'card'} aria-labelledby="al-meus">
       <div className="slbl" id="al-meus">Meus alimentos</div>
       <p className="row-s" style={{ marginBottom: 8 }}>Para o que não está na tabela: copie do rótulo (por porção). Depois é só escrever o nome na refeição.</p>
+      {all.length > 8 && <input className="fi" value={q} onChange={e => setQ(e.target.value)} placeholder={`Buscar entre ${all.length} alimentos`} aria-label="Buscar em Meus alimentos" style={{ marginBottom: 8 }}/>}
       {mine.map(x => <div key={x.id} className="md-row"><span className="md-t"><b>{x.name}</b><small>{x.portion} ({N1(x.portion_g)} g) · {K(x.kcal)} kcal{x.protein != null ? ` · ${N1(x.protein)} g de proteína` : ''}</small></span>
         <button className="lnk-inline" onClick={() => setF({ id: x.id, name: x.name, portion: x.portion, portion_g: N1(x.portion_g), kcal: N1(x.kcal), protein: x.protein != null ? N1(x.protein) : '' })}>editar</button>
         <button className="lnk-inline" onClick={() => { if (confirm(`Remover ${x.name}?`)) p.onStopFood(x).catch(() => {}) }}>remover</button></div>)}

@@ -28,7 +28,7 @@ create table public.puppy_accidents (
   dog_id uuid,
   household_id uuid,
   location text,
-  date date default current_date,
+  date date default (now() at time zone 'America/Sao_Paulo')::date,
   occurred_at timestamptz default now()
 );
 
@@ -52,14 +52,14 @@ insert into public.tasks (id, household_id, title, category, weight, frequency, 
 
 -- Conclusões antigas: completed_by vazio
 insert into public.task_completions (task_id, household_id, date) values
-  ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', current_date - 1),
-  ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', current_date - 2);
+  ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', (now() at time zone 'America/Sao_Paulo')::date - 1),
+  ('aaaaaaaa-0000-0000-0000-000000000001', '11111111-1111-1111-1111-111111111111', (now() at time zone 'America/Sao_Paulo')::date - 2);
 
 -- XP duplicado (clique duplo antigo) e XP normal
 insert into public.xp_history (household_id, amount, reason) values
-  ('11111111-1111-1111-1111-111111111111', 1, 'task:aaaaaaaa-0000-0000-0000-000000000001:' || to_char(current_date - 1, 'YYYY-MM-DD')),
-  ('11111111-1111-1111-1111-111111111111', 1, 'task:aaaaaaaa-0000-0000-0000-000000000001:' || to_char(current_date - 1, 'YYYY-MM-DD')),
-  ('11111111-1111-1111-1111-111111111111', 1, 'task:aaaaaaaa-0000-0000-0000-000000000001:' || to_char(current_date - 2, 'YYYY-MM-DD')),
+  ('11111111-1111-1111-1111-111111111111', 1, 'task:aaaaaaaa-0000-0000-0000-000000000001:' || to_char((now() at time zone 'America/Sao_Paulo')::date - 1, 'YYYY-MM-DD')),
+  ('11111111-1111-1111-1111-111111111111', 1, 'task:aaaaaaaa-0000-0000-0000-000000000001:' || to_char((now() at time zone 'America/Sao_Paulo')::date - 1, 'YYYY-MM-DD')),
+  ('11111111-1111-1111-1111-111111111111', 1, 'task:aaaaaaaa-0000-0000-0000-000000000001:' || to_char((now() at time zone 'America/Sao_Paulo')::date - 2, 'YYYY-MM-DD')),
   ('11111111-1111-1111-1111-111111111111', 5, null);
 
 insert into public.dogs (id, household_id, name, is_puppy) values
@@ -70,12 +70,12 @@ insert into public.dog_routines (id, dog_id, household_id, title, frequency, sch
   ('eeeeeeee-0000-0000-0000-000000000001', 'dddddddd-0000-0000-0000-000000000001', null, 'Ração manhã', 'daily', '07:00'),
   ('eeeeeeee-0000-0000-0000-000000000002', 'dddddddd-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Ração manhã', 'daily', '07:00');
 insert into public.dog_completions (routine_id, date) values
-  ('eeeeeeee-0000-0000-0000-000000000001', current_date - 1),
-  ('eeeeeeee-0000-0000-0000-000000000002', current_date - 1);
+  ('eeeeeeee-0000-0000-0000-000000000001', (now() at time zone 'America/Sao_Paulo')::date - 1),
+  ('eeeeeeee-0000-0000-0000-000000000002', (now() at time zone 'America/Sao_Paulo')::date - 1);
 
 insert into public.weekly_settings (household_id, week_start, energy, survival) values
-  ('11111111-1111-1111-1111-111111111111', date_trunc('week', current_date)::date, 'low', false);
+  ('11111111-1111-1111-1111-111111111111', date_trunc('week', (now() at time zone 'America/Sao_Paulo')::date)::date, 'low', false);
 insert into public.weekly_meetings (household_id, week_start, wins) values
-  ('11111111-1111-1111-1111-111111111111', date_trunc('week', current_date)::date - 7, 'Semana leve');
+  ('11111111-1111-1111-1111-111111111111', date_trunc('week', (now() at time zone 'America/Sao_Paulo')::date)::date - 7, 'Semana leve');
 insert into public.puppy_accidents (dog_id, household_id, location, date) values
-  ('dddddddd-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Sala', current_date);
+  ('dddddddd-0000-0000-0000-000000000002', '11111111-1111-1111-1111-111111111111', 'Sala', (now() at time zone 'America/Sao_Paulo')::date);

@@ -106,7 +106,7 @@ begin
   end if;
   -- Alimentação (026)
   -- e plano alimentar (027)
-  for t in select unnest(array['personal_food_profile','personal_foods','personal_diet_plans']) loop
+  for t in select unnest(array['personal_food_profile','personal_foods','personal_diet_plans','personal_saved_meals']) loop
     if to_regclass('public.' || t) is not null then
       execute format('drop policy if exists "allow_all_auth" on public.%I', t);
       execute format('drop policy if exists "household_member" on public.%I', t);

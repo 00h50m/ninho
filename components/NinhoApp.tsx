@@ -76,6 +76,7 @@ import { dosesToday, waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT, type
 import { buildTimeline } from '@/lib/timeline'
 import { mascotSay } from '@/lib/mascote'
 import { MascoteCard } from '@/components/Mascote'
+import { planFoods } from '@/lib/dietPlan'
 import { SobrouCard } from '@/components/SobrouCard'
 import { DayTimeline } from '@/components/DayTimeline'
 import * as cApi from '@/lib/services/caes'
@@ -1184,7 +1185,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── MEU DIA (de cada uma) ── */}
         {screen==='eu'&&<div className="scr">
           <div className="sh"><div><h2>Meu dia</h2><p>Água, sono, alimentação, treinos e corpo · só você vê o que não compartilhar</p></div></div>
-          {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
+          {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} saved={md.saved} savedReady={md.savedReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
             onCheckin={()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),300)}}
             onSaveGoal={g=>mdApi.saveGoal(householdId,me,g).then(md.reload).then(()=>showToast(g.id?'Objetivo salvo':'Objetivo criado 🎯')).catch(e=>{showError(toNinhoError(e,'salvar objetivo'));throw e})}
             onGoalStatus={(g,st)=>mdApi.setGoalStatus(g.id,st).then(md.reload).then(()=>showToast(st==='concluido'?'Parabéns! Objetivo concluído 🎉':'Objetivo arquivado')).catch(e=>{showError(toNinhoError(e,'atualizar objetivo'));throw e})}
@@ -1198,7 +1199,19 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             onSaveProfile={x=>mdApi.saveFoodProfile(householdId,me,x).then(md.reload).then(()=>showToast('Meta salva')).catch(e=>{showError(toNinhoError(e,'salvar perfil'));throw e})}
             onSaveFood={f=>mdApi.saveFood(householdId,me,f).then(md.reload).then(()=>showToast('Alimento salvo')).catch(e=>{showError(toNinhoError(e,'salvar alimento'));throw e})}
             onStopFood={f=>mdApi.stopFood(f.id).then(md.reload).then(()=>showToast('Alimento removido')).catch(e=>{showError(toNinhoError(e,'remover alimento'));throw e})}
-            onSavePlan={(pl,src)=>mdApi.savePlan(householdId,me,pl,src).then(md.reload).then(()=>showToast('Plano salvo')).catch(e=>{showError(toNinhoError(e,'salvar plano'));throw e})}
+            onSavePlan={async(pl,src)=>{
+              try{
+                await mdApi.savePlan(householdId,me,pl,src)
+                // cada alimento do plano entra em "Meus alimentos", com a porção e as calorias, para combinar as refeições
+                const n=await mdApi.saveFoods(householdId,me,planFoods(pl,md.foods.filter(f=>f.who===me))).catch(()=>0)
+                await md.reload()
+                showToast(n?`Plano salvo · ${n} alimento(s) em Meus alimentos 🥗`:'Plano salvo')
+              }catch(e){showError(toNinhoError(e,'salvar plano'));throw e}
+            }}
+            onSaveMeal={m=>mdApi.saveMeal(householdId,me,m).then(md.reload).then(()=>showToast(m.id?'Refeição salva atualizada ⭐':'Refeição salva ⭐ Lance com um toque quando quiser')).catch(e=>{showError(toNinhoError(e,'salvar refeição'));throw e})}
+            onStopMeal={m=>mdApi.stopMeal(m.id).then(md.reload).then(()=>showToast('Refeição removida das salvas')).catch(e=>{showError(toNinhoError(e,'remover refeição salva'));throw e})}
+            onUseMeal={m=>{mdApi.countMealUse(m.id,m.uses).then(md.reload).catch(()=>{})}}
+            onSaveFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>showToast(`${list.length} alimento(s) em Meus alimentos 🥗`)).catch(e=>{showError(toNinhoError(e,'lançar alimentos'));throw e})}
             onPlanRemind={(r,on)=>mdApi.setPlanRemind(r.id,on).then(md.reload).then(()=>showToast(on?'Lembretes das refeições ligados':'Lembretes desligados')).catch(e=>{showError(toNinhoError(e,'lembretes do plano'));throw e})}
             onStopPlan={r=>mdApi.stopPlan(r.id).then(md.reload).then(()=>showToast('Plano removido')).catch(e=>{showError(toNinhoError(e,'remover plano'));throw e})}/>
             :<div className="card empty"><span className="empty-icon">💧</span>Escolha quem está usando este aparelho para ver o seu Meu dia.</div>}

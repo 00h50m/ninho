@@ -17,8 +17,9 @@ import { WaterCups } from './WaterCups'
 import { GoalsCard } from './Objetivos'
 import { MoodCard } from './Humor'
 import { goalProgress, type PGoal } from '@/lib/goals'
-import type { CustomFood, FoodProfile } from '@/lib/nutricao'
-import type { DietPlan, PlanRow } from '@/lib/dietPlan'
+import type { CustomFood, FoodProfile, MealItem } from '@/lib/nutricao'
+import type { SavedMeal } from '@/lib/savedMeals'
+import type { DietPlan, PlanFood, PlanRow } from '@/lib/dietPlan'
 
 const first = (n: string) => (n || '').split(' ')[0]
 const fmtN = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
@@ -31,6 +32,7 @@ export interface MeuDiaProps {
   available: boolean, reason?: string, tab?: Tab, onTab?: (t: Tab) => void, focus?: MdFocus, me: Who, names: Names, today: string, nowHM: string
   settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean
   profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, householdId: string
+  saved: SavedMeal[], savedReady?: boolean
   goals: PGoal[], goalsReady?: boolean
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>, date?: string) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
@@ -42,6 +44,10 @@ export interface MeuDiaProps {
   onSaveProfile: (p: Omit<FoodProfile, 'who'>) => Promise<void>
   onSaveFood: (f: Omit<CustomFood, 'id' | 'who'> & { id?: string }) => Promise<void>
   onStopFood: (f: CustomFood) => Promise<void>
+  onSaveFoods: (list: PlanFood[]) => Promise<void>
+  onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
+  onStopMeal: (m: SavedMeal) => Promise<void>
+  onUseMeal: (m: SavedMeal) => void
   onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
   onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
   onStopPlan: (p: PlanRow) => Promise<void>

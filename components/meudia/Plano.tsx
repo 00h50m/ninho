@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
 import type { PKind, PLog, PMed, PSettings } from '@/lib/meudia'
-import { altToItem, defaultItems, planForDay, scaleItem, slotOf, type DietPlan, type PlanMeal, type PlanRow } from '@/lib/dietPlan'
+import { altToItem, defaultItems, planFoods, planForDay, scaleItem, slotOf, type DietPlan, type PlanFood, type PlanMeal, type PlanRow } from '@/lib/dietPlan'
 import { mealTotals, mealsOn, norm, parseMeal, type CustomFood, type MealItem } from '@/lib/nutricao'
 import { readPlanFile } from '@/lib/services/aiFiles'
 import type { MdFocus } from './MeuDia'
@@ -19,6 +19,7 @@ export interface PlanProps {
   plans: PlanRow[], plansReady?: boolean, hide: boolean
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
+  onSaveFoods: (list: PlanFood[]) => Promise<void>
   onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
   onStopPlan: (p: PlanRow) => Promise<void>
   onSaveMed: (m: { id?: string, name: string, dose: string | null, times: string[] }) => Promise<void>
@@ -109,6 +110,8 @@ function PlanToday(p: PlanProps & { row: PlanRow, picker: React.ReactNode, err: 
     catch { /* aviso já mostrado */ } finally { setQuick(null) }
   }
   const myMeds = p.meds.filter(m => m.who === p.me)
+  const pendingFoods = planFoods(row.plan, custom)
+  const [launching, setLaunching] = useState(false)
   const missingSup = row.plan.supplements.filter(s => !myMeds.some(m => norm(m.name) === norm(s.name)))
   const goal = (p.settings.find(s => s.who === p.me)?.water_goal_ml) ?? 2000
   const water = row.plan.water_l ? Math.round(row.plan.water_l * 1000) : null
@@ -138,6 +141,11 @@ function PlanToday(p: PlanProps & { row: PlanRow, picker: React.ReactNode, err: 
       {missingSup.length > 0 && <div className="pl-sup">
         <span>💊 Suplementos do plano: {row.plan.supplements.map(s => s.name).join(', ')}</span>
         <button className="lnk-inline" onClick={async () => { for (const s of missingSup) await p.onSaveMed({ name: s.name, dose: s.dose, times: s.time ? [s.time] : [] }).catch(() => {}) }}>Adicionar aos meus remédios e lembretes</button>
+      </div>}
+      {pendingFoods.length > 0 && <div className="pl-sup pl-foods">
+        <span>🥗 {pendingFoods.length} alimento(s) do plano ainda não estão em <b>Meus alimentos</b>. Lance todos, um por um, com a porção do plano{p.hide ? '' : ' e as calorias'}, para combinar as refeições como quiser.</span>
+        <button className="btn btn-s" disabled={launching} onClick={async () => { setLaunching(true); try { await p.onSaveFoods(pendingFoods) } catch { /* aviso já mostrado */ } finally { setLaunching(false) } }}>{launching ? 'Lançando…' : `Lançar ${pendingFoods.length} alimento(s)`}</button>
+        <details><summary>Ver a lista</summary><ul className="pl-fl">{pendingFoods.map(f => <li key={f.name}><b>{f.name}</b> · {f.portion}{p.hide ? '' : ` · ${K(f.kcal)} kcal`}<small> ({f.from})</small></li>)}</ul></details>
       </div>}
       {water && water !== goal && <div className="pl-sup"><span>💧 O plano pede {String(row.plan.water_l).replace('.', ',')} L de água por dia.</span>
         <button className="lnk-inline" onClick={() => p.onSaveSettings({ water_goal_ml: Math.min(8000, water) }).catch(() => {})}>Usar como minha meta</button></div>}
