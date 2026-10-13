@@ -11,8 +11,77 @@
   "theme_color": "#111110",
   "orientation": "any",
   "icons": [
-    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
-    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "+1 copo de água",
+      "short_name": "+1 copo",
+      "description": "Registra um copo de água agora",
+      "url": "/?ir=copo&source=atalho",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Registrar refeição",
+      "short_name": "Refeição",
+      "description": "Abre o registro de refeição",
+      "url": "/?ir=refeicao&source=atalho",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Cardápio de hoje",
+      "short_name": "Cardápio",
+      "description": "O cardápio da semana, no dia de hoje",
+      "url": "/?ir=cardapio&source=atalho",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Foto do rótulo",
+      "short_name": "Rótulo",
+      "description": "Cadastrar um alimento pela tabela nutricional",
+      "url": "/?ir=rotulo&source=atalho",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
   ]
 }

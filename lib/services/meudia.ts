@@ -133,6 +133,10 @@ export async function saveMenu(householdId: string, who: Who, weekStart: string,
   must(await supabase.from('personal_menus').update({ active: false }).eq('household_id', householdId).eq('who', who).eq('active', true).select('id'), 'trocar cardápio')
   must(await supabase.from('personal_menus').insert({ household_id: householdId, who, week_start: weekStart, menu, prefs: prefs?.trim() ? prefs.trim().slice(0, 300) : null }).select('id'), 'salvar cardápio')
 }
+/** Cardápio com uma refeição trocada (mesma linha, mesmo dono). */
+export async function updateMenu(id: string, menu: Menu): Promise<void> {
+  must(await supabase.from('personal_menus').update({ menu }).eq('id', id).select('id'), 'trocar refeição')
+}
 export async function stopMenu(id: string): Promise<void> {
   must(await supabase.from('personal_menus').update({ active: false }).eq('id', id).select('id'), 'apagar cardápio')
 }

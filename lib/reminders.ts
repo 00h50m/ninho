@@ -5,8 +5,9 @@ import type { Names, Who } from './types'
 import { addDays, dowOf } from './dates'
 
 import { WATER_TIMES, waterBehind, waterLine } from './water'
+import { bedReminder, bedtime } from './sono'
 
-export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao'
+export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao' | 'dormir'
 export const RKINDS: Array<[RKind, string, string, string]> = [
   ['remedio', '💊', 'Remédios e vitaminas', 'No horário de cada dose, se ainda não marcou'],
   ['refeicao', '🍽️', 'Refeições do plano', 'No horário de cada refeição do plano alimentar (se ligou no plano), se ainda não marcou'],
@@ -17,9 +18,10 @@ export const RKINDS: Array<[RKind, string, string, string]> = [
   ['desafio', '🤝', 'Desafio em dupla', 'Às 21h, se o dia ainda não foi marcado'],
   ['agua', '💧', 'Água', 'De 9h30 às 20h, só quando estiver atrás do ritmo, com botão "+1 copo"'],
   ['checkin', '💬', 'Check-in da noite', 'Às 21h30, se ainda não fez o check-in'],
+  ['dormir', '🌙', 'Hora de dormir', '30 min antes da hora de deitar para a sua meta de sono (pelo horário em que costuma acordar). Vale mesmo no horário de silêncio'],
 ]
 export type RPrefs = Record<RKind, boolean>
-export const DEFAULT_RPREFS: RPrefs = { remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false }
+export const DEFAULT_RPREFS: RPrefs = { remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false, dormir: false }
 export const prefsOf = (x: unknown): RPrefs => ({ ...DEFAULT_RPREFS, ...(x && typeof x === 'object' ? x as Partial<RPrefs> : {}) })
 
 export interface RemState {
@@ -27,6 +29,8 @@ export interface RemState {
   meds: Array<{ id: string, who: Who, name: string, dose: string | null, times: string[] }>
   medTaken: Array<{ who: Who, med_id: string, time: string | null }>
   water: Array<{ who: Who, ml: number, goal: number, cup?: number }>
+  /** horário em que costuma acordar e a meta de sono, por pessoa */
+  sleep?: Array<{ who: Who, wake: string | null, goal: number }>
   routines: Array<{ id: string, title: string, scheduled_time: string | null, weekdays: number[] | null, assign_mode: string, start_date?: string | null, paused_until?: string | null, reminder_min?: number | null }>
   routineDone: string[]
   sprint: { id: string, area: string, participants: Who[], endMs: number } | null
@@ -78,6 +82,13 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
       out.push({ who: w.who, kind: 'agua', ref: `agua:${t}`, title: '💧 Hora de um copo de água', body: waterLine(w.ml, w.goal, cup), url: '/?ir=agua', water: cup })
     }
   }
+  // Hora de dormir: 30 min antes de deitar (precisa de algumas noites registradas com o horário de acordar)
+  for (const z of s.sleep || []) {
+    if (!z.wake) continue
+    const t = bedReminder(z.wake, z.goal)
+    if (!due(t, s.hm, win)) continue
+    push([z.who], 'dormir', `dormir:${t}`, '🌙 Hora de desacelerar', `Para dormir ${String(z.goal).replace('.', ',')} h e acordar às ${z.wake}, deite até ${bedtime(z.wake, z.goal)}. Telas de lado 😴`, '/?ir=meudia')
+  }
   // Rotinas no horário
   const dow = dowOf(s.date)
   for (const r of s.routines) {
@@ -123,7 +134,8 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
 
 /** O que vai para um aparelho: da pessoa dele, ligado nas preferências e fora do silêncio. */
 export function forDevice(list: Reminder[], sub: { who: Who, reminders: unknown, quiet_start: string, quiet_end: string }, hm: string): Reminder[] {
-  if (inQuiet(hm, sub.quiet_start || '22:00', sub.quiet_end || '07:00')) return []
+  // "hora de dormir" é pedido pela própria pessoa e costuma cair no horário de silêncio: passa
+  const quiet = inQuiet(hm, sub.quiet_start || '22:00', sub.quiet_end || '07:00')
   const p = prefsOf(sub.reminders)
-  return list.filter(r => r.who === sub.who && p[r.kind])
+  return list.filter(r => r.who === sub.who && p[r.kind] && (!quiet || r.kind === 'dormir'))
 }

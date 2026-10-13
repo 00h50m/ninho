@@ -21,7 +21,8 @@ export async function POST(req: Request) {
   const kcal = Number(body?.kcal), protein = Number(body?.protein), start = String(body?.start || '')
   if (!(kcal >= 800 && kcal <= 6000) || !(protein >= 20 && protein <= 400) || !/^\d{4}-\d{2}-\d{2}$/.test(start)) return NextResponse.json({ error: 'Meta inválida.' }, { status: 400 })
   try {
-    const r = await readMenu(db, body.householdId, m.who, { kcal, protein, prefs: String(body?.prefs || '').slice(0, 300), start }, { apiKey: process.env.ANTHROPIC_API_KEY, baseURL: process.env.ANTHROPIC_BASE_URL })
+    const sw = body?.swap && /^\d{4}-\d{2}-\d{2}$/.test(String(body.swap.date)) && typeof body.swap.meal === 'string' ? { date: String(body.swap.date), meal: String(body.swap.meal).slice(0, 10), reason: String(body.swap.reason || '').slice(0, 200) } : undefined
+    const r = await readMenu(db, body.householdId, m.who, { kcal, protein, prefs: String(body?.prefs || '').slice(0, 300), start, swap: sw }, { apiKey: process.env.ANTHROPIC_API_KEY, baseURL: process.env.ANTHROPIC_BASE_URL })
     if (r.ok === true) return NextResponse.json(r.menu)
     const fail = r as { status: number, message: string }
     return NextResponse.json({ error: fail.message }, { status: fail.status })

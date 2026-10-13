@@ -50,6 +50,7 @@ export interface FoodTabProps {
   onSaveMenu: (start: string, menu: Menu, prefs: string | null) => Promise<void>
   onStopMenu: (m: MenuRow) => Promise<void>
   onMenuToShopping: (lines: ShopLine[]) => Promise<void>
+  onUpdateMenu: (m: MenuRow, menu: Menu) => Promise<void>
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void
@@ -67,9 +68,12 @@ export function FoodTab(p: FoodTabProps) {
     const w = p.focus?.what
     if (!w) return
     const t = setTimeout(() => {
-      const el = document.getElementById(w === 'refeicao' ? 'al-add' : 'pl-hoje') || document.getElementById('pl-novo')
+      const id = w === 'refeicao' ? 'al-add' : w === 'cardapio' ? 'mn-t' : w === 'rotulo' ? 'al-meus' : 'pl-hoje'
+      const el = document.getElementById(id) || document.getElementById('pl-novo')
       el?.closest('.card')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
       if (w === 'refeicao') (document.querySelector('.al-text') as HTMLTextAreaElement | null)?.focus({ preventScroll: true })
+      // a câmera só abre com um toque da pessoa: deixa o botão da foto do rótulo pronto (em foco)
+      if (w === 'rotulo') (document.querySelector('.fc-acts .btn') as HTMLButtonElement | null)?.focus({ preventScroll: true })
     }, 150)
     return () => clearTimeout(t)
   }, [p.focus?.n]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -108,7 +112,7 @@ export function FoodTab(p: FoodTabProps) {
       </nav>
       <PlanCard {...p} hide={hide}/>
       <MenuCard householdId={p.householdId} me={p.me} today={p.today} menus={p.menus} menusReady={p.menusReady} kcal={t.kcal} protein={proteinTarget(prof, w).g} hide={hide}
-        onSaveMenu={p.onSaveMenu} onStopMenu={p.onStopMenu} onMenuToShopping={p.onMenuToShopping} onAdd={p.onAdd}/>
+        onSaveMenu={p.onSaveMenu} onStopMenu={p.onStopMenu} onMenuToShopping={p.onMenuToShopping} onUpdateMenu={p.onUpdateMenu} onAdd={p.onAdd}/>
       <MealForm {...p} hide={hide}/>
       <MealsToday {...p} hide={hide}/>
 

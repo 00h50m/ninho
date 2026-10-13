@@ -263,6 +263,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const [mdTab,setMdTab]=useState<MdTab>('hoje'),[mdFocus,setMdFocus]=useState<MdFocus>(null)
   /** Pop-up de água: >0 = aberto pelo lembrete (força); o próprio pop-up decide se abre sozinho */
   const [aguaPop,setAguaPop]=useState(0)
+  /** Atalho do ícone "+1 copo": registra assim que o Meu dia carregar e mostra o pop-up (dá para desfazer) */
+  const [wantCup,setWantCup]=useState(false)
   /** Abre uma parte do Meu dia (e, se pedido, rola até um cartão). */
   const goMd=(t:MdTab,what?:NonNullable<MdFocus>['what'])=>{setTab('eu');setMdTab(t);if(what)setMdFocus({what,n:Date.now()})}
   useEffect(()=>{
@@ -273,6 +275,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     switch(ir){
       case 'meudia':goMd('hoje');break
       case 'agua':setAguaPop(p=>p+1);break
+      case 'copo':setWantCup(true);break
+      case 'refeicao':goMd('comida','refeicao');break
+      case 'cardapio':goMd('comida','cardapio');break
+      case 'rotulo':goMd('comida','rotulo');break
       case 'alimentacao':goMd('comida','plano');break
       case 'rotinas':setTab('rotinas');setRotView('rotinas');break
       case 'caes':setTab('caes');break
@@ -285,6 +291,13 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[])
+  useEffect(()=>{
+    if(!wantCup||!md.available||!me)return
+    setWantCup(false)
+    const cup=md.settings.find(x=>x.who===me)?.cup_ml||250
+    mdAdd(me,'agua',cup).then(()=>{showToast(`💧 +${cup} ml`);setAguaPop(p=>p+1)}).catch(e=>showError(toNinhoError(e,'registrar água')))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  },[wantCup,md.available,me])
   useEffect(()=>{if(wantSprint&&sp.available){setWantSprint(false);if(sp.active)setSprintOpen(true)}},[wantSprint,sp.available,sp.active])
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
@@ -1220,6 +1233,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             onSaveMenu={(start,menu,prefs)=>mdApi.saveMenu(householdId,me,start,menu,prefs).then(md.reload).then(()=>showToast('Cardápio da semana pronto 🗓️')).catch(e=>{showError(toNinhoError(e,'salvar cardápio'));throw e})}
             onStopMenu={m=>mdApi.stopMenu(m.id).then(md.reload).then(()=>showToast('Cardápio apagado')).catch(e=>{showError(toNinhoError(e,'apagar cardápio'));throw e})}
             onMenuToShopping={lines=>mdApi.menuToShopping(householdId,me,lines).then(r=>{casa.reloadShopping();showToast(`🛒 ${r.added} na lista de compras${r.had?` · ${r.had} já estava(m)`:''}`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}
+            onUpdateMenu={(m,menu)=>mdApi.updateMenu(m.id,menu).then(md.reload).then(()=>showToast('Refeição trocada ↻')).catch(e=>{showError(toNinhoError(e,'trocar refeição'));throw e})}
             onImportFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>{const r=list.filter(x=>x.review).length;showToast(`${list.length} alimento(s) importado(s)${r?` · ${r} para conferir`:''} 🥗`)}).catch(e=>{showError(toNinhoError(e,'importar alimentos'));throw e})}
             onPlanRemind={(r,on)=>mdApi.setPlanRemind(r.id,on).then(md.reload).then(()=>showToast(on?'Lembretes das refeições ligados':'Lembretes desligados')).catch(e=>{showError(toNinhoError(e,'lembretes do plano'));throw e})}
             onStopPlan={r=>mdApi.stopPlan(r.id).then(md.reload).then(()=>showToast('Plano removido')).catch(e=>{showError(toNinhoError(e,'remover plano'));throw e})}/>

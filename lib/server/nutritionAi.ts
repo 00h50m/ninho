@@ -7,7 +7,7 @@ import { PLAN_SCHEMA, PLAN_SYSTEM, PLATE_SCHEMA, PLATE_SYSTEM, plateToItems, val
 import type { CustomFood } from '@/lib/nutricao'
 import { BODY_SCHEMA, BODY_SYSTEM, validateBody, type BodyScan } from '@/lib/bodyScan'
 import { LABEL_SCHEMA, LABEL_SYSTEM, validateLabel, type LabelRead } from '@/lib/foodLabel'
-import { MENU_SCHEMA, MENU_SYSTEM, menuContext, validateMenu, type Menu } from '@/lib/cardapio'
+import { MENU_SCHEMA, MENU_SYSTEM, SWAP_SCHEMA, applySwap, menuContext, menuFromDb, swapAsk, validateMenu, type Menu } from '@/lib/cardapio'
 import { cleanItems } from '@/lib/savedMeals'
 import { homeClock } from '@/lib/dates'
 import { AI_MODEL } from './ai'
@@ -19,6 +19,7 @@ export const PLATE_DAILY_LIMIT = 30
 export const BODY_DAILY_LIMIT = 10
 export const LABEL_DAILY_LIMIT = 40
 export const MENU_DAILY_LIMIT = 6
+export const SWAP_DAILY_LIMIT = 30
 export const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'] as const
 /** Tamanho máximo em base64 de um arquivo mandado de uma vez (o corpo do pedido na Vercel vai até ~4,5 MB). */
 export const MAX_B64 = 4_300_000
@@ -162,8 +163,8 @@ export async function readLabel(db: SupabaseClient, householdId: string, image: 
  * Cardápio de 7 dias a partir de hoje, com o plano, os alimentos e as refeições salvas de quem pede.
  * Só monta e devolve: quem grava é o app (com as regras do banco), depois que a pessoa vê.
  */
-export async function readMenu(db: SupabaseClient, householdId: string, who: string, o: { kcal: number, protein: number, prefs: string, start: string }, opts: AiOpts = {}): Promise<{ ok: true, menu: Menu } | Fail> {
-  if (!(await underLimit(db, householdId, 'cardapio', MENU_DAILY_LIMIT, opts.now ?? new Date()))) return { ok: false, status: 429, message: `Limite de ${MENU_DAILY_LIMIT} cardápios por dia. Tente amanhã.` }
+export async function readMenu(db: SupabaseClient, householdId: string, who: string, o: { kcal: number, protein: number, prefs: string, start: string, swap?: { date: string, meal: string, reason: string } }, opts: AiOpts = {}): Promise<{ ok: true, menu: Menu } | Fail> {
+  if (!o.swap && !(await underLimit(db, householdId, 'cardapio', MENU_DAILY_LIMIT, opts.now ?? new Date()))) return { ok: false, status: 429, message: `Limite de ${MENU_DAILY_LIMIT} cardápios por dia. Tente amanhã.` }
   const [pl, sv] = await Promise.all([
     db.from('personal_diet_plans').select('plan').eq('household_id', householdId).eq('who', who).eq('active', true).limit(1).maybeSingle(),
     db.from('personal_saved_meals').select('id,who,name,items,kcal,uses').eq('household_id', householdId).eq('who', who).eq('active', true).order('uses', { ascending: false }),
@@ -171,6 +172,7 @@ export async function readMenu(db: SupabaseClient, householdId: string, who: str
   const foods = await customFoods(db, householdId, who)
   const plan = pl.error || !pl.data ? null : validatePlan((pl.data as any).plan)
   const saved = sv.error ? [] : ((sv.data || []) as any[]).map(x => ({ ...x, kcal: Number(x.kcal), items: cleanItems(x.items) }))
+  if (o.swap) return swapMeal(db, householdId, who, { ...o, swap: o.swap }, plan, foods, saved, opts)
   const r = await ask(db, householdId, 'cardapio', opts, {
     system: MENU_SYSTEM, schema: MENU_SCHEMA, effort: 'low', maxTokens: 16000,
     content: [{ type: 'text', text: menuContext({ plan, foods, saved, kcal: o.kcal, protein: o.protein, prefs: o.prefs, start: o.start }) }],
@@ -179,4 +181,20 @@ export async function readMenu(db: SupabaseClient, householdId: string, who: str
   const menu = validateMenu(r.json, o.start, foods)
   if (!menu) return { ok: false, status: 422, message: 'A IA não conseguiu montar o cardápio agora. Tente de novo.' }
   return { ok: true, menu }
+}
+
+/** Troca uma refeição do cardápio ativo de quem pede (lido do banco, não do aparelho). */
+async function swapMeal(db: SupabaseClient, householdId: string, who: string, o: { kcal: number, protein: number, prefs: string, start: string, swap: { date: string, meal: string, reason: string } }, plan: ReturnType<typeof validatePlan>, foods: CustomFood[], saved: any[], opts: AiOpts): Promise<{ ok: true, menu: Menu } | Fail> {
+  if (!(await underLimit(db, householdId, 'cardapio_troca', SWAP_DAILY_LIMIT, opts.now ?? new Date()))) return { ok: false, status: 429, message: `Limite de ${SWAP_DAILY_LIMIT} trocas por dia. Tente amanhã.` }
+  const row = await db.from('personal_menus').select('menu').eq('household_id', householdId).eq('who', who).eq('active', true).order('created_at', { ascending: false }).limit(1).maybeSingle()
+  const menu = row.error || !row.data ? null : menuFromDb((row.data as any).menu)
+  const cur = menu?.days.find(d => d.date === o.swap.date)?.meals.find(m => m.meal === o.swap.meal)
+  if (!menu || !cur) return { ok: false, status: 404, message: 'Não achei essa refeição no cardápio. Recarregue o app.' }
+  const r = await ask(db, householdId, 'cardapio_troca', opts, {
+    system: MENU_SYSTEM, schema: SWAP_SCHEMA, effort: 'low', maxTokens: 3000,
+    content: [{ type: 'text', text: menuContext({ plan, foods, saved, kcal: o.kcal, protein: o.protein, prefs: o.prefs, start: o.start }) + '\n\n' + swapAsk(cur, o.swap.date, o.swap.reason) }],
+  })
+  if (r.ok === false) return r
+  const next = applySwap(menu, o.swap.date, cur.meal, r.json, foods)
+  return next ? { ok: true, menu: next } : { ok: false, status: 422, message: 'A IA não conseguiu trocar agora. Tente de novo.' }
 }

@@ -3,6 +3,8 @@
 // treinos (com cargas) e evolução física. Cada uma escolhe o que a outra vê.
 import type { CatalogFood } from '@/lib/foodCatalog'
 import { ExportCard } from './Exportar'
+import { MonthReportView } from './Relatorio'
+import { bedtime, usualWake } from '@/lib/sono'
 import type { Menu, MenuRow, ShopLine } from '@/lib/cardapio'
 import { useEffect, useMemo, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
@@ -29,7 +31,7 @@ const fmtN = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
 import { MD_TABS, type MdTab } from '@/lib/nav'
 type Tab = MdTab
 /** Pedido vindo do menu ou das ações rápidas: rolar até um cartão (n muda a cada pedido). */
-export type MdFocus = { what: 'plano' | 'comi' | 'refeicao' | 'peso' | 'foto', n: number } | null
+export type MdFocus = { what: 'plano' | 'comi' | 'refeicao' | 'peso' | 'foto' | 'cardapio' | 'rotulo', n: number } | null
 
 export interface MeuDiaProps {
   available: boolean, reason?: string, tab?: Tab, onTab?: (t: Tab) => void, focus?: MdFocus, me: Who, names: Names, today: string, nowHM: string
@@ -53,6 +55,7 @@ export interface MeuDiaProps {
   onSaveMenu: (start: string, menu: Menu, prefs: string | null) => Promise<void>
   onStopMenu: (m: MenuRow) => Promise<void>
   onMenuToShopping: (lines: ShopLine[]) => Promise<void>
+  onUpdateMenu: (m: MenuRow, menu: Menu) => Promise<void>
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void
@@ -205,6 +208,7 @@ function SleepCard(p: MeuDiaProps & { s: PSettings, run: (f: () => Promise<void>
   return (
     <section className="card md-card md-wide" aria-labelledby="md-sono">
       <div className="slbl" id="md-sono">😴 Sono {w.onGoal > 0 && <span className="chip amber">🌙 {w.onGoal} noite{w.onGoal > 1 ? 's' : ''} na meta</span>}</div>
+      {(() => { const wk = usualWake(logs, me, today); return wk ? <p className="row-s sl-bed">🌙 Você costuma acordar às <b>{wk}</b>: para dormir {fmtN(s.sleep_goal_h)} h, deite até <b>{bedtime(wk, s.sleep_goal_h)}</b>. O lembrete fica em Ajustes › Notificações › 🌙 Hora de dormir.</p> : null })()}
       <div className="sl-top">
         {night ? <div className="sl-night">
           <svg className="sl-ring" viewBox="0 0 80 80" role="img" aria-label={`${fmtN(h)} horas, ${pct}% da meta de ${fmtN(s.sleep_goal_h)} h`}>
@@ -353,6 +357,7 @@ function Workouts(p: MeuDiaProps) {
 }
 
 function Settings(p: MeuDiaProps & { s: PSettings }) {
+  const [rep, setRep] = useState(false)
   const [goal, setGoal] = useState(String(p.s.water_goal_ml)), [cup, setCup] = useState(String(p.s.cup_ml)), [sleep, setSleep] = useState(String(p.s.sleep_goal_h).replace('.', ','))
   const [share, setShare] = useState(p.s.share), [care, setCare] = useState(p.s.selfcare), [newCare, setNewCare] = useState('')
   const [med, setMed] = useState<{ id?: string, name: string, dose: string, times: string }>({ name: '', dose: '', times: '08:00' })
@@ -409,7 +414,8 @@ function Settings(p: MeuDiaProps & { s: PSettings }) {
         </div>
         <button className="btn btn-s" disabled={!quit.title.trim()} onClick={() => p.onSaveQuit({ id: quit.id, title: quit.title, reason: quit.reason || null }).then(() => setQuit({ title: '', reason: '' })).catch(() => {})}>{quit.id ? 'Salvar' : '+ Começar'}</button>
       </section>}
-      <ExportCard householdId={p.householdId} me={p.me} foods={p.foods} saved={p.saved} today={p.today}/>
+      <ExportCard householdId={p.householdId} me={p.me} foods={p.foods} saved={p.saved} today={p.today} report={() => setRep(true)}/>
+      {rep && <MonthReportView householdId={p.householdId} me={p.me} name={p.names[p.me]} today={p.today} prof={p.profiles.find(x => x.who === p.me) || null} settings={p.s} plans={p.plans} onClose={() => setRep(false)}/>}
     </>
   )
 }

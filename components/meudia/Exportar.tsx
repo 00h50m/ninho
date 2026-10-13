@@ -9,7 +9,7 @@ import type { SavedMeal } from '@/lib/savedMeals'
 import type { PLog } from '@/lib/meudia'
 import type { Who } from '@/lib/types'
 
-export function ExportCard({ householdId, me, foods, saved, today }: { householdId: string, me: Who, foods: CustomFood[], saved: SavedMeal[], today: string }) {
+export function ExportCard({ householdId, me, foods, saved, today, report }: { householdId: string, me: Who, foods: CustomFood[], saved: SavedMeal[], today: string, report?: () => void }) {
   const [busy, setBusy] = useState<ExportKind | null>(null), [err, setErr] = useState<string | null>(null)
   const [logs, setLogs] = useState<PLog[] | null>(null)
   async function download(k: ExportKind) {
@@ -27,7 +27,8 @@ export function ExportCard({ householdId, me, foods, saved, today }: { household
   return (
     <section className="card" aria-labelledby="md-exp">
       <div className="slbl" id="md-exp">⬇️ Exportar meus dados</div>
-      <p className="row-s">Planilhas (CSV) com todo o seu histórico, para guardar ou levar à nutricionista. Abrem no Excel e no Google Planilhas. Só os seus dados.</p>
+      <p className="row-s">O relatório do mês resume peso, alimentação, plano, água, sono e treinos para levar à nutricionista (salve em PDF ou compartilhe). As planilhas (CSV) trazem todo o seu histórico e abrem no Excel e no Google Planilhas. Só os seus dados.</p>
+      {report && <div className="md-acts ex-acts"><button className="btn btn-p" onClick={report}>📄 Relatório do mês (PDF)</button></div>}
       <div className="md-acts ex-acts">
         {EXPORTS.map(([k, l]) => <button key={k} className="btn btn-g" disabled={!!busy} onClick={() => download(k)}>{busy === k ? 'Montando…' : l}</button>)}
       </div>

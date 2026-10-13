@@ -7,6 +7,7 @@ import { DEFAULT_NAMES } from '@/lib/constants'
 import { remainingMs } from '@/lib/sprint'
 import { dueReminders, forDevice, type RemState, type Reminder } from '@/lib/reminders'
 import { validatePlan } from '@/lib/dietPlan'
+import { usualWake } from '@/lib/sono'
 import { signWater, waterSecret } from './waterToken'
 import { deliver, must, type NotifyDeps, type Report, type Subscription } from './notify'
 
@@ -20,11 +21,11 @@ const soft = async <T>(q: PromiseLike<{ data: T[] | null, error: any }>): Promis
 export async function loadRemState(db: SupabaseClient, householdId: string, now: Date): Promise<RemState> {
   const { date, hm } = homeClock(now)
   const hh = (t: string, cols: string) => db.from(t).select(cols).eq('household_id', householdId)
-  const [profiles, meds, logs, settings, routines, runs, sprints, dogs, health, events, challenges, marks, checkins, plans] = await Promise.all([
+  const [profiles, meds, logs, settings, routines, runs, sprints, dogs, health, events, challenges, marks, checkins, plans, nights] = await Promise.all([
     soft<any>(hh('profiles', 'display_name,role')),
     soft<any>(hh('personal_meds', 'id,who,name,dose,times').eq('active', true)),
     soft<any>(hh('personal_logs', 'who,kind,value,data').eq('date', date).in('kind', ['remedio', 'agua', 'refeicao'])),
-    soft<any>(hh('personal_settings', 'who,water_goal_ml,cup_ml')),
+    soft<any>(hh('personal_settings', 'who,water_goal_ml,cup_ml,sleep_goal_h')),
     soft<any>(hh('routines', 'id,title,scheduled_time,weekdays,assign_mode,start_date,paused_until,reminder_min,active')),
     soft<any>(hh('routine_runs', 'routine_id').eq('date', date).eq('status', 'done')),
     soft<any>(hh('sprints', 'id,area,participants,duration_min,started_at,paused_at,paused_ms,ended_at').is('ended_at', null)),
@@ -35,6 +36,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     soft<any>(hh('challenge_marks', 'challenge_id').eq('date', date)),
     soft<any>(hh('daily_checkins', 'who,mood,energy').eq('date', date)),
     soft<any>(hh('personal_diet_plans', 'id,who,plan').eq('active', true).eq('remind', true)),
+    soft<any>(hh('personal_logs', 'who,kind,date,data').eq('kind', 'sono').gte('date', addDays(date, -14))),
   ])
   const g = profiles.find(p => p.role === 'g'), s = profiles.find(p => p.role === 's')
   const names: Names = { g: g?.display_name || DEFAULT_NAMES.g, s: s?.display_name || DEFAULT_NAMES.s }
@@ -45,6 +47,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     meds: meds.map(m => ({ id: m.id, who: m.who, name: m.name, dose: m.dose, times: m.times || [] })),
     medTaken: logs.filter(l => l.kind === 'remedio').map(l => ({ who: l.who, med_id: l.data?.med_id, time: l.data?.time ?? null })),
     water: (['g', 's'] as Who[]).map(w => ({ who: w, ml: logs.filter(l => l.kind === 'agua' && l.who === w).reduce((a, l) => a + Number(l.value || 0), 0), goal: Number(settings.find(x => x.who === w)?.water_goal_ml || 2000), cup: Number(settings.find(x => x.who === w)?.cup_ml || 250) })),
+    sleep: (['g', 's'] as Who[]).map(w => ({ who: w, wake: usualWake(nights, w, date), goal: Number(settings.find(x => x.who === w)?.sleep_goal_h || 8) })),
     routines: routines.filter(r => r.active !== false),
     routineDone: runs.map(r => r.routine_id),
     sprint: sp ? { id: sp.id, area: sp.area, participants: sp.participants || [], endMs: now.getTime() + remainingMs(sp, now.getTime()) } : null,

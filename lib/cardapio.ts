@@ -131,3 +131,27 @@ export function shoppingList(menu: Menu, from = ''): ShopLine[] {
     return { key, title: v.title.slice(0, 80), qty: qty.slice(0, 30), g: Math.round(v.g) }
   }).sort((a, b) => a.title.localeCompare(b.title, 'pt-BR'))
 }
+
+// ── Trocar uma refeição ──────────────────────────────────────────────
+export const SWAP_SCHEMA = {
+  type: 'object', additionalProperties: false, required: ['meal'],
+  properties: { meal: (MENU_SCHEMA.properties.days.items.properties.meals.items) },
+} as const
+
+/** Pedido de troca: a refeição atual, a meta dela e o motivo (opcional, marcado como dado). */
+export function swapAsk(m: MenuMeal, date: string, reason: string): string {
+  const t = mealTotals(m.items), p = Math.round(m.items.reduce((a, i) => a + (i.p || 0), 0))
+  return [`Troque só esta refeição do dia ${date} por outra opção diferente, do mesmo tipo ("${m.meal}"), com calorias parecidas (${t.kcal} kcal, ±10%) e proteína parecida (${p} g).`,
+    `Refeição atual: ${m.items.map(i => `${i.name} (${i.text || `${i.g} g`})`).join(', ')}.`,
+    reason.trim() ? `O que a pessoa quer mudar: <motivo>${reason.trim().slice(0, 200)}</motivo>` : 'Sem motivo informado: só varie.'].join('\n')
+}
+
+/** Confere a refeição nova (mesmo formato do cardápio) e devolve o cardápio com ela no lugar. */
+export function applySwap(menu: Menu, date: string, meal: Meal, raw: unknown, custom: CustomFood[] = []): Menu | null {
+  const one = validateMenu({ days: [{ meals: [{ ...((raw as any)?.meal || {}), meal }] }] }, date, custom)
+  const nm = one?.days[0]?.meals[0]
+  if (!nm) return null
+  let hit = false
+  const days = menu.days.map(d => d.date !== date ? d : { ...d, meals: d.meals.map(m => { if (m.meal !== meal || hit) return m; hit = true; return nm }) })
+  return hit ? { ...menu, days } : null
+}

@@ -75,7 +75,7 @@ export async function readLabelPhoto(householdId: string, file: File) {
 }
 
 /** Cardápio da semana com a IA (o servidor lê o plano, os alimentos e as salvas de quem pede). */
-export const buildMenu = (householdId: string, o: { kcal: number, protein: number, prefs: string, start: string }) =>
+export const buildMenu = (householdId: string, o: { kcal: number, protein: number, prefs: string, start: string, swap?: { date: string, meal: string, reason: string } }) =>
   post<import('@/lib/cardapio').Menu>('/api/ai/cardapio', { householdId, ...o })
 
 /** Código de barras → alimento (base pública Open Food Facts, sem IA). */

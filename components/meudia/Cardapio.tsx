@@ -4,7 +4,9 @@
 import { useState } from 'react'
 import { buildMenu } from '@/lib/services/aiFiles'
 import { dayTotals, shoppingList, type Menu, type MenuRow, type ShopLine } from '@/lib/cardapio'
-import { MEALS, mealTotals, type MealItem } from '@/lib/nutricao'
+import { MEALS, mealTotals, type Meal, type MealItem } from '@/lib/nutricao'
+import { addDays } from '@/lib/dates'
+import { marmitaPlan } from '@/lib/marmita'
 import type { PKind } from '@/lib/meudia'
 import type { Who } from '@/lib/types'
 
@@ -17,6 +19,7 @@ export function MenuCard(p: {
   onSaveMenu: (start: string, menu: Menu, prefs: string | null) => Promise<void>
   onStopMenu: (m: MenuRow) => Promise<void>
   onMenuToShopping: (lines: ShopLine[]) => Promise<void>
+  onUpdateMenu: (m: MenuRow, menu: Menu) => Promise<void>
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
 }) {
   const row = p.menus.find(m => m.who === p.me) || null
@@ -28,7 +31,19 @@ export function MenuCard(p: {
   const day = days.find(d => d.date === sel) || days.find(d => d.date === p.today) || days[0]
   const [shop, setShop] = useState<{ lines: ShopLine[], off: Set<string> } | null>(null)
   const [busy, setBusy] = useState<string | null>(null)
+  // ↻ trocar uma refeição (a IA sugere outra dentro do plano)
+  const [swap, setSwap] = useState<{ key: string, reason: string, err?: string } | null>(null)
+  // 🥡 modo marmita
+  const [mar, setMar] = useState<{ from: string, days: number, meals: Meal[] } | null>(null)
   if (p.menusReady === false) return null
+
+  async function doSwap(date: string, meal: Meal) {
+    if (!row || !swap) return
+    setBusy('swap:' + meal)
+    const r = await buildMenu(p.householdId, { kcal: p.kcal, protein: p.protein, prefs: row.prefs || '', start: row.week_start, swap: { date, meal, reason: swap.reason } })
+    if (r.ok === false) { setSwap(s => s && { ...s, err: r.error }); setBusy(null); return }
+    try { await p.onUpdateMenu(row, r.data); setSwap(null) } catch { /* aviso já mostrado */ } finally { setBusy(null) }
+  }
 
   async function build() {
     setSt({ s: 'busy' })
@@ -66,8 +81,18 @@ export function MenuCard(p: {
           {!p.hide && (() => { const t = dayTotals(day); return <p className="row-s mn-tot">{day.date === p.today ? 'Hoje' : `${wd(day.date)}, ${day.date.slice(8, 10)}/${day.date.slice(5, 7)}`}: <b>{K(t.kcal)} kcal</b> · <b>{t.p} g</b> de proteína</p> })()}
           {day.meals.map(m => <div key={m.meal + m.name} className="mn-meal">
             <div className="mn-mh"><b>{MEALS.find(x => x[0] === m.meal)?.[1]} {m.name}</b>{!p.hide && <small className="mono">{K(mealTotals(m.items).kcal)} kcal</small>}
+              <button className="lnk-inline" aria-expanded={swap?.key === day.date + m.meal} onClick={() => setSwap(swap?.key === day.date + m.meal ? null : { key: day.date + m.meal, reason: '' })} aria-label={`Trocar ${m.name}`}>↻ trocar</button>
               {day.date === p.today && <button className="btn btn-s" disabled={busy === m.meal} onClick={() => launch(m.items, m.meal, m.name)}>{busy === m.meal ? 'Lançando…' : 'Lançar'}</button>}</div>
             <ul>{m.items.map((i, k) => <li key={k}>{i.name} <small>{i.text && i.text !== i.name ? `· ${i.text}` : `· ${i.g} g`}{p.hide ? '' : ` · ${i.kcal} kcal`}</small></li>)}</ul>
+            {swap?.key === day.date + m.meal && <div className="mn-swap">
+              <label className="onb-f"><span>O que quer mudar? (opcional)</span>
+                <input className="fi" value={swap.reason} maxLength={200} onChange={e => setSwap({ ...swap, reason: e.target.value, err: undefined })} placeholder="ex.: sem ovo, algo mais rápido, com peixe"/></label>
+              <div className="md-acts">
+                <button className="btn btn-p" disabled={busy === 'swap:' + m.meal} onClick={() => doSwap(day.date, m.meal)}>{busy === 'swap:' + m.meal ? 'Trocando…' : `↻ Trocar ${m.name.toLowerCase()}`}</button>
+                <button className="btn btn-g" onClick={() => setSwap(null)}>Cancelar</button>
+              </div>
+              {swap.err && <p className="al-warn" role="alert">{swap.err}</p>}
+            </div>}
           </div>)}
         </div>}
         {row.menu.note && <p className="row-s">💡 {row.menu.note}</p>}
@@ -81,11 +106,43 @@ export function MenuCard(p: {
           </div>
         </div> : <div className="md-acts">
           <button className="btn btn-s" onClick={() => setShop({ lines: shoppingList(row.menu, p.today), off: new Set() })}>🛒 Lista de compras</button>
+          <button className="btn btn-s" aria-expanded={!!mar} onClick={() => setMar(mar ? null : { from: days.some(d => d.date === addDays(p.today, 1)) ? addDays(p.today, 1) : p.today, days: 4, meals: ['almoco', 'jantar'] })}>🥡 Modo marmita</button>
           {!redo && <button className="btn btn-g" onClick={() => setRedo(true)}>↻ Montar outro</button>}
           <button className="lnk-inline" onClick={() => { if (confirm('Apagar este cardápio?')) p.onStopMenu(row).catch(() => {}) }}>apagar</button>
         </div>}
+        {mar && <Marmitas menu={row.menu} hide={p.hide} st={mar} onChange={setMar}/>}
         {redo && form}
       </>}
     </section>
+  )
+}
+
+/** 🥡 Modo marmita: o que cozinhar de uma vez, quanto (pronto e cru), os potes e a ordem. */
+function Marmitas({ menu, hide, st, onChange }: { menu: Menu, hide: boolean, st: { from: string, days: number, meals: Meal[] }, onChange: (s: { from: string, days: number, meals: Meal[] } | null) => void }) {
+  const plan = marmitaPlan(menu, st.from, st.days, st.meals)
+  const G = (g: number) => g >= 1000 ? `${String(Math.round(g / 100) / 10).replace('.', ',')} kg` : `${g} g`
+  const toggle = (m: Meal) => onChange({ ...st, meals: st.meals.includes(m) ? st.meals.filter(x => x !== m) : [...st.meals, m] })
+  return (
+    <div className="mn-mar" role="group" aria-labelledby="mn-mar-t">
+      <div className="mn-mh"><b id="mn-mar-t">🥡 Marmitas</b><button className="lnk-inline" onClick={() => onChange(null)}>fechar</button></div>
+      <div className="mn-mar-opts">
+        <span className="row-s">Começando</span>
+        {menu.days.slice(0, 3).map(d => <button key={d.date} className={`onb-day ${st.from === d.date ? 'on' : ''}`} aria-pressed={st.from === d.date} onClick={() => onChange({ ...st, from: d.date })}>{wd(d.date)} {d.date.slice(8, 10)}</button>)}
+        <span className="row-s">por</span>
+        {[3, 4, 5].map(n => <button key={n} className={`onb-day ${st.days === n ? 'on' : ''}`} aria-pressed={st.days === n} onClick={() => onChange({ ...st, days: n })}>{n} dias</button>)}
+      </div>
+      <div className="mn-mar-opts">
+        {(['almoco', 'jantar', 'lanche'] as Meal[]).map(m => <label key={m} className="rt-toggle mn-chk"><input type="checkbox" checked={st.meals.includes(m)} onChange={() => toggle(m)}/><span>{MEALS.find(x => x[0] === m)?.[2]}</span></label>)}
+      </div>
+      {!plan.potes.length ? <p className="row-s">Nada para preparar nesses dias e refeições.</p> : <>
+        <p className="row-s"><b>{plan.potes.length} pote{plan.potes.length > 1 ? 's' : ''}</b> · cozinhe tudo de uma vez:</p>
+        <ul className="mn-cook">{plan.cook.map(c => <li key={c.key}><b>{c.name}</b> <span className="mono">{G(c.g)}</span>{c.rawG ? <small> pronto · ≈ {G(c.rawG)} cru</small> : <small> pronto</small>}<small> · {c.portions} porç{c.portions > 1 ? 'ões' : 'ão'}</small></li>)}</ul>
+        <ol className="mn-steps">{plan.steps.map(s => <li key={s}>{s}</li>)}</ol>
+        <details className="mn-potes"><summary>Ver os potes ({plan.potes.length})</summary>
+          <ul>{plan.potes.map(pt => <li key={pt.date + pt.meal}><b>{pt.label}</b>{pt.date >= (plan.freezeFrom || '9999') ? <small> · congelar</small> : null}<small> · {pt.items.map(i => `${i.name}${hide ? '' : ` ${i.g} g`}`).join(' + ')}</small></li>)}</ul>
+        </details>
+        {plan.fresh.length > 0 && <p className="row-s">Na hora (não vai no pote): {plan.fresh.join(', ')}.</p>}
+      </>}
+    </div>
   )
 }
