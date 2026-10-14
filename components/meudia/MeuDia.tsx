@@ -5,6 +5,7 @@ import type { CatalogFood } from '@/lib/foodCatalog'
 import { ExportCard } from './Exportar'
 import { MonthReportView } from './Relatorio'
 import { bedtime, usualWake } from '@/lib/sono'
+import { cargaTip, cargaTips } from '@/lib/carga'
 import type { Menu, MenuRow, ShopLine } from '@/lib/cardapio'
 import { useEffect, useMemo, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
@@ -317,6 +318,7 @@ function WorkoutSheet(p: MeuDiaProps & { onClose: () => void }) {
             <input className="fi" inputMode="numeric" value={e.reps ?? ''} aria-label="Repetições" onChange={x => setE(i, { reps: num(x.target.value) })}/>
             <input className="fi" inputMode="decimal" value={e.kg ?? ''} aria-label="Carga em kg" onChange={x => setE(i, { kg: num(x.target.value) })}/>
             <button className="onb-sv" aria-label={`Remover exercício ${i + 1}`} onClick={() => setEx(l => l.filter((_, j) => j !== i))}>✕</button>
+            {(() => { const t = e.name.trim() ? cargaTip(p.logs, p.me, e.name, p.today) : null; return t ? <p className="wk-tip">📈 Última: {t.last}. {t.text}{(e.kg !== t.nextKg || (t.nextReps != null && e.reps !== t.nextReps)) && <> <button className="lnk-inline" onClick={() => setE(i, { kg: t.nextKg, ...(t.nextReps != null ? { reps: t.nextReps } : {}) })}>usar</button></>}</p> : null })()}
           </div>)}
         </div>
         {ex.length < 20 && <button className="lnk-inline" onClick={() => setEx(l => [...l, { name: '', sets: 3, reps: 10, kg: null }])}>+ Exercício</button>}
@@ -334,9 +336,15 @@ function Workouts(p: MeuDiaProps) {
   const sel = exName || names[0] || ''
   const series = sel ? loadSeries(p.logs, p.me, sel) : []
   const ch = change(series)
+  const tips = cargaTips(p.logs, p.me, p.today)
   return (
     <>
       <div className="rt-actions"><button className="btn btn-p" onClick={() => setOpen(true)}>+ Registrar treino</button></div>
+      {tips.length > 0 && <section className="card" aria-labelledby="md-prox">
+        <div className="slbl" id="md-prox">📈 Próxima carga</div>
+        <ul className="wk-tips">{tips.slice(0, 8).map(t => <li key={t.name} className={`wk-tip-${t.kind}`}><b>{t.name}</b>{t.kind === 'subir' && <span className="chip green">subir</span>}<small>Última: {t.last}. {t.text}</small></li>)}</ul>
+        <p className="row-s">Faixa de 8 a 12 repetições: quando faz 12 em 2 treinos seguidos, a carga sobe. É sugestão; quem decide é você (e seu professor).</p>
+      </section>}
       {names.length > 0 && <section className="card" aria-labelledby="md-carga">
         <div className="slbl" id="md-carga">Evolução da carga {ch != null && <span className={`chip ${ch > 0 ? 'green' : ''}`}>{ch > 0 ? '+' : ''}{fmtN(ch)} kg</span>}</div>
         <select className="fi" style={{ maxWidth: 280, marginBottom: 10 }} value={sel} onChange={e => setExName(e.target.value)} aria-label="Exercício">{names.map(n => <option key={n} value={n}>{n}</option>)}</select>

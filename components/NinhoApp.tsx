@@ -63,6 +63,8 @@ import { isOfflineError } from '@/lib/offline'
 import * as mdApi from '@/lib/services/meudia'
 import { MeuDiaView, MeuDiaCard, type MdFocus } from '@/components/meudia/MeuDia'
 import { AguaPopup } from '@/components/meudia/AguaPopup'
+import { Busca } from '@/components/Busca'
+import type { SearchHit, SearchItem } from '@/lib/search'
 import type { MdTab } from '@/lib/nav'
 import { useNos } from '@/hooks/useNos'
 import { useFaxinao } from '@/hooks/useFaxinao'
@@ -265,6 +267,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const [aguaPop,setAguaPop]=useState(0)
   /** Atalho do ícone "+1 copo": registra assim que o Meu dia carregar e mostra o pop-up (dá para desfazer) */
   const [wantCup,setWantCup]=useState(false)
+  /** 🔍 Busca em tudo (lupa no topo ou Ctrl/⌘+K) */
+  const [busca,setBusca]=useState(false)
+  useEffect(()=>{
+    const k=(e:KeyboardEvent)=>{if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='k'){e.preventDefault();setBusca(true)}}
+    window.addEventListener('keydown',k);return()=>window.removeEventListener('keydown',k)
+  },[])
   /** Abre uma parte do Meu dia (e, se pedido, rola até um cartão). */
   const goMd=(t:MdTab,what?:NonNullable<MdFocus>['what'])=>{setTab('eu');setMdTab(t);if(what)setMdFocus({what,n:Date.now()})}
   useEffect(()=>{
@@ -298,6 +306,17 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     mdAdd(me,'agua',cup).then(()=>{showToast(`💧 +${cup} ml`);setAguaPop(p=>p+1)}).catch(e=>showError(toNinhoError(e,'registrar água')))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[wantCup,md.available,me])
+  function pickSearch(h:SearchHit){
+    switch(h.kind){
+      case 'tarefa':{const t=tasks.find((x:any)=>x.id===h.id);if(t)openModal('task',t);break}
+      case 'compra':goCasa('compras');break
+      case 'agenda':{const e=(ag.events||[]).find((x:any)=>x.id===h.id);setTab('casa');setCasaView('agenda');if(e)openModal('event',{event:e,kind:e.kind});break}
+      case 'rotina':setTab('rotinas');setRotView('rotinas');break
+      case 'cao':setTab('caes');break
+      case 'alimento':goMd('comida','rotulo');break
+      case 'salva':goMd('comida','refeicao');break
+    }
+  }
   useEffect(()=>{if(wantSprint&&sp.available){setWantSprint(false);if(sp.active)setSprintOpen(true)}},[wantSprint,sp.available,sp.active])
   function pickPerson(w:Who){setPerson(w);try{localStorage.setItem('ninho.person',w)}catch{}}
 
@@ -1023,6 +1042,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {settings.survival&&<button className="chip coral" onClick={toggleSurvival} title="Modo sobrevivência ativo">🛡</button>}
             <span className="chip chip-hide">Nv{lv.l} · {xp} XP</span>
             <span className="chip amber" title={`${streak} dias seguidos`}>🔥 {streak}</span>
+            <button className="ib top-search" onClick={()=>setBusca(true)} aria-label="Buscar no Ninho" title="Buscar (Ctrl+K)">🔍</button>
             <button className={`av av-${me||'g'} top-prof mob-only`} onClick={()=>go('ajustes')} aria-label="Perfil e ajustes">{initials(names[me||'g'])}</button>
           </div>
         </div>
@@ -1740,6 +1760,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {md.available&&me&&<AguaPopup key={aguaPop} me={me} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} force={aguaPop>0}
         onAdd={ml=>mdAdd(me,'agua',ml).then(()=>showToast(`💧 +${ml} ml`)).catch(e=>{showError(toNinhoError(e,'registrar água'));throw e})}
         onUndo={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'desfazer'));throw e})} onClose={()=>{}}/>}
+      {busca&&<Busca onClose={()=>setBusca(false)} onPick={pickSearch} items={([] as SearchItem[]).concat(
+        tasks.filter((t:any)=>t.active!==false).map((t:any)=>({kind:'tarefa' as const,id:t.id,title:t.title,sub:t.assigned_to?firstName(names[t.assigned_to as Who]):undefined})),
+        (casa.shop||[]).map((i:any)=>({kind:'compra' as const,id:i.id,title:i.title,sub:[i.qty,i.checked_at?'no carrinho':null].filter(Boolean).join(' · ')||undefined})),
+        (ag.events||[]).map((e:any)=>({kind:'agenda' as const,id:e.id,title:e.title,sub:`${e.date.slice(8,10)}/${e.date.slice(5,7)}${e.time?` às ${String(e.time).slice(0,5)}`:''}`})),
+        (rot.routines||[]).map((r:any)=>({kind:'rotina' as const,id:r.id,title:r.title})),
+        (dogs||[]).map((d:any)=>({kind:'cao' as const,id:d.id,title:d.name})),
+        me?md.foods.filter(f=>f.who===me).map(f=>({kind:'alimento' as const,id:f.id,title:f.name,sub:`${f.portion} · ${Math.round(f.kcal)} kcal`})):[],
+        me?md.saved.filter(x=>x.who===me).map(x=>({kind:'salva' as const,id:x.id,title:x.name,sub:`${Math.round(x.kcal)} kcal`})):[],
+      )}/>}
       {toast&&<div className={`toast ${toast.kind==='err'?'err':''}`} role={toast.kind==='err'?'alert':'status'}>
         <span className="toast-m">{toast.msg}</span>
         {toast.undo&&<button onClick={toast.undo}>Desfazer</button>}

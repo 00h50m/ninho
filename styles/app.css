@@ -1526,3 +1526,19 @@ html.rp-open body{overflow:hidden}
   .rp-print{max-width:none;color:CanvasText}
   .rp-s{break-inside:avoid}
 }
+
+/* Progressão de carga */
+.wk-tip{grid-column:1/-1;margin:-2px 0 6px;font-size:12px;color:var(--sub)}
+.wk-tips{list-style:none;margin:0 0 8px;padding:0;display:grid;gap:6px}
+.wk-tips li{display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px;border-bottom:1px solid var(--bd);padding:6px 0}
+.wk-tips li:last-child{border-bottom:0}
+.wk-tips small{flex:1 1 100%;color:var(--sub);font-size:12.5px}
+
+/* Busca em tudo */
+.bs-in{width:100%;margin-bottom:10px}
+.bs-res{display:grid;gap:10px;min-height:120px}
+.bs-g ul{list-style:none;margin:4px 0 0;padding:0;display:grid;gap:2px}
+.bs-i{display:flex;flex-direction:column;align-items:flex-start;width:100%;text-align:left;background:transparent;border:0;border-radius:var(--r);padding:8px 10px;min-height:var(--touch);color:var(--tx);font:inherit;cursor:pointer}
+.bs-i:hover,.bs-i:focus-visible{background:var(--sf)}
+.bs-i small{color:var(--sub);font-size:12px}
+.top-search{font-size:15px}

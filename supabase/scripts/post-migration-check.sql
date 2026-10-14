@@ -49,7 +49,7 @@ begin
     -- Cães (migration 020)
     ('dogs','food_g_day'), ('dog_health','next_date'), ('puppy_accidents','notes'),
     -- Meu dia (migration 021)
-    ('personal_settings','share'), ('personal_logs','kind'), ('personal_meds','times'), ('daily_checkins','thanks'), ('weekly_meetings','agreements'), ('couple_challenges','goal'), ('challenge_marks','date'), ('push_subscriptions','quiet_start'), ('push_log','ref'), ('telegram_pending','actions'), ('personal_quits','started_on'), ('personal_food_profile','hide_numbers'), ('personal_foods','portion_g'), ('personal_diet_plans','remind'), ('personal_photos','thumb'), ('ai_upload_parts','idx'), ('personal_goals','due_date'), ('faxinoes','steps'), ('personal_saved_meals','items'), ('personal_menus','menu'), ('personal_food_profile','protein_g_kg')
+    ('personal_settings','share'), ('personal_logs','kind'), ('personal_meds','times'), ('daily_checkins','thanks'), ('weekly_meetings','agreements'), ('couple_challenges','goal'), ('challenge_marks','date'), ('push_subscriptions','quiet_start'), ('push_log','ref'), ('telegram_pending','actions'), ('personal_quits','started_on'), ('personal_food_profile','hide_numbers'), ('personal_foods','portion_g'), ('personal_diet_plans','remind'), ('personal_photos','thumb'), ('ai_upload_parts','idx'), ('personal_goals','due_date'), ('faxinoes','steps'), ('personal_saved_meals','items'), ('personal_menus','menu'), ('personal_food_profile','protein_g_kg'), ('telegram_links','agua'), ('telegram_log','ref')
   ) v(t, c) loop
     insert into ninho_check("check", status, detalhe)
     select 'coluna ' || r.t || '.' || r.c,

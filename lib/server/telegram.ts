@@ -15,6 +15,7 @@ import { SHOP_CATS, guessCategory, normalize, parseEntry } from '@/lib/shopping'
 import { loadHousehold, morningPayloads, must, weeklyPayload } from './notify'
 import { execute as executeAi, type Understood } from './telegramAi'
 import { meuDiaWeekLines } from './weekReport'
+import { menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
 import { sobrouAlerts, type SobrouResumo } from '@/lib/sobrou'
 import { addDays } from '@/lib/dates'
 import type { AiAction } from '@/lib/telegramAi'
@@ -76,6 +77,7 @@ export const ADD_PROMPT = 'O que vai na lista? Mande os itens separados por vír
 export const HELP = [
   'Escreva do seu jeito, por exemplo: “comprei leite e café”, “a Zelda tomou a V10 hoje”, “lembra a Sabrina de pagar a internet sexta”, “bebi um copo de água”, “lavei a louça”, “almocei arroz, feijão e frango”. Eu mostro o que entendi e você confirma.',
   '📷 Mande a foto do prato (com “almoço”, “jantar”… na legenda, se quiser) e eu estimo as calorias.',
+  '💧 /agua — a água de hoje, com o botão “+1 copo” (os lembretes de água no Telegram ligam no app: Ajustes › Telegram)',
   '🏷️ Foto da tabela nutricional com “rótulo” na legenda (ex.: “rótulo iogurte grego”): eu cadastro em Meus alimentos, ou confiro o que já está lá.',
   '🧹 “faxinão: banheiro, cozinha, roupa de cama, quintal” — eu organizo na melhor ordem e divido entre vocês (fica no app para conferir).',
   '🗓️ “organiza meu dia: dentista 14h30, pagar o boleto, mercado” — eu monto o dia em ordem e você confirma.',
@@ -271,6 +273,7 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   if (!cmd.startsWith('/') && String(msg.reply_to_message?.text || '').startsWith(ADD_PROMPT.slice(0, 20))) { await shoppingAdd(deps, link, text); return }
 
   if (cmd === '/hoje') await sendToday(deps, link, date)
+  else if (cmd === '/agua' || cmd === '/água') { const w = await waterStatus(deps.db, link, date); await send(deps, chatId, w.text, { reply_markup: w.reply_markup }) }
   else if (cmd === '/adicionar') await send(deps, chatId, ADD_PROMPT, { reply_markup: { force_reply: true, input_field_placeholder: 'leite, pão, café' } })
   else if (cmd === '/menu') await send(deps, chatId, 'Menu aberto aqui embaixo. 👇', { reply_markup: MENU })
   else if (cmd === '/compras' || cmd === '/lista') await (arg ? shoppingAdd(deps, link, arg) : shoppingList(deps, link))
@@ -369,6 +372,30 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
     await sendToday(deps, link, date)
     return
   }
+  // 💧 +1 copo (lembrete de água ou /agua): cada toque é um copo
+  const am = data.match(/^agua:(\d{2,4})$/)
+  if (am) {
+    const key = `${chatId}:${data}:${cq.message?.message_id}`
+    if (inflight.has(key)) { await deps.tg('answerCallbackQuery', { callback_query_id: cq.id }); return }
+    inflight.add(key)
+    try {
+      const r = await waterTap(deps.db, link, Number(am[1]), date)
+      await deps.tg('answerCallbackQuery', { callback_query_id: cq.id, text: r.ok ? `💧 +${am[1]} ml` : 'Não deu para registrar' })
+      if (cq.message?.message_id && r.ok) await deps.tg('editMessageText', { chat_id: chatId, message_id: cq.message.message_id, text: r.text, reply_markup: r.reply_markup })
+      else await send(deps, chatId, r.text)
+    } finally { inflight.delete(key) }
+    return
+  }
+  // ✓ Lançar <refeição> do cardápio de hoje (bom dia)
+  const mm = data.match(/^mn:(\d{4}-\d{2}-\d{2}):(cafe|almoco|lanche|jantar|ceia)$/)
+  if (mm) {
+    const msg = await menuTap(deps.db, link, mm[1], mm[2], date)
+    const kb = cq.message?.reply_markup?.inline_keyboard as Array<Array<{ callback_data?: string }>> | undefined
+    await deps.tg('answerCallbackQuery', { callback_query_id: cq.id, text: msg.slice(0, 190) })
+    if (kb && cq.message?.message_id && !msg.startsWith('⚠️')) await deps.tg('editMessageReplyMarkup', { chat_id: chatId, message_id: cq.message.message_id, reply_markup: { inline_keyboard: kb.filter(row => !row.some(b => b.callback_data === data)) } })
+    await send(deps, chatId, msg)
+    return
+  }
   const dm = data.match(/^(ok|no):([0-9a-f-]{36})$/)
   if (dm) { await decide(deps, cq, link, dm[1] === 'ok', dm[2]); return }
   const m = data.match(/^([tdm]):([0-9a-f-]{36})$/)
@@ -419,14 +446,17 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
         const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind, day: clock.date }).select('id').maybeSingle()
         if (claim.error) { if (claim.error.code === '23505') { report.skipped++; continue } throw new Error(claim.error.message) }
         const p = morning ? morning(l.who) : weekly!
-        // manhã: avisos do Sobrou · domingo: o Meu dia da semana (só de quem recebe)
+        // bom dia: o cardápio de hoje (se houver), com "Lançar" por refeição
+        const menu = kind === 'morning' ? await menuForMorning(deps.db, l, clock.date).catch(() => null) : null
+        // manhã: cardápio e avisos do Sobrou · domingo: o Meu dia da semana (só de quem recebe)
         let more = ''
-        if (kind === 'morning' && money.length) more = `\n\n${money.join('\n')}`
+        if (kind === 'morning' && menu) more += `\n\n${menu.text}`
+        if (kind === 'morning' && money.length) more += `\n\n${money.join('\n')}`
         if (kind === 'weekly') {
           const lines = await (deps.meuDiaWeek ?? ((h, w, d) => meuDiaWeekLines(deps.db, h, w, d)))(householdId, l.who, clock.date).catch(() => [] as string[])
           if (lines.length) more = `\n\n🌿 Seu Meu dia na semana\n${lines.join('\n')}`
         }
-        const extra = kind === 'morning' ? { reply_markup: { inline_keyboard: [[{ text: '📋 Ver e concluir', callback_data: 'hoje' }]] } } : {}
+        const extra = kind === 'morning' ? { reply_markup: { inline_keyboard: [...(menu?.rows || []), [{ text: '📋 Ver e concluir', callback_data: 'hoje' }]] } } : {}
         const r = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${p.title}\n${p.body}${more}`.slice(0, 4000), ...extra })
         if (r.ok) { report.sent++; await deps.db.from('telegram_log').update({ status: 'sent' }).eq('id', (claim.data as any).id) }
         else {

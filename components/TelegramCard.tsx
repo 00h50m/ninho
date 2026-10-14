@@ -9,7 +9,8 @@ import { logError, toNinhoError } from '@/lib/errors'
 const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || ''
 const first = (n: string) => (n || '').split(' ')[0]
 
-interface LinkRow { id: string, who: Who, chat_id: number | null, linked_at: string | null, morning: boolean, weekly: boolean, active: boolean }
+/** agua (034): lembrete de água com "+1 copo"; ausente = o banco ainda não tem a coluna */
+interface LinkRow { id: string, who: Who, chat_id: number | null, linked_at: string | null, morning: boolean, weekly: boolean, active: boolean, agua?: boolean }
 
 export function TelegramCard({ householdId, me, names, onToast, onError, onNeedIdentity }: {
   householdId: string, me: Who | null, names: Names
@@ -21,10 +22,13 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
   const poll = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const load = useCallback(async () => {
-    const r = await supabase.from('telegram_links').select('id,who,chat_id,linked_at,morning,weekly,active').eq('household_id', householdId).not('chat_id', 'is', null)
+    const q = (cols: string) => supabase.from('telegram_links').select(cols).eq('household_id', householdId).not('chat_id', 'is', null)
+    let r = await q('id,who,chat_id,linked_at,morning,weekly,active,agua')
+    // sem a migration 034: carrega sem a água
+    if (r.error && /agua/.test(r.error.message || '')) r = await q('id,who,chat_id,linked_at,morning,weekly,active')
     if (r.error) { logError('carregar Telegram', r.error); setLinks([]); return [] }
-    setLinks(r.data as LinkRow[])
-    return r.data as LinkRow[]
+    setLinks(r.data as unknown as LinkRow[])
+    return r.data as unknown as LinkRow[]
   }, [householdId])
 
   useEffect(() => { load(); return () => { if (poll.current) clearInterval(poll.current) } }, [load])
@@ -63,7 +67,7 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
     } catch { /* cancelou */ }
   }
 
-  async function setPref(l: LinkRow, k: 'morning' | 'weekly', v: boolean) {
+  async function setPref(l: LinkRow, k: 'morning' | 'weekly' | 'agua', v: boolean) {
     setLinks(p => (p || []).map(x => x.id === l.id ? { ...x, [k]: v } : x))
     const r = await supabase.from('telegram_links').update({ [k]: v }).eq('id', l.id).select('id')
     if (r.error) { setLinks(p => (p || []).map(x => x.id === l.id ? l : x)); onError(toNinhoError(r.error, 'salvar Telegram').userMessage) }
@@ -87,7 +91,7 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
   return (
     <div className="card" style={{ marginBottom: 14 }}>
       <div className="slbl">Telegram <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--faint)' }}>@{BOT}</span></div>
-      <div className="row-s" style={{ marginBottom: 4 }}>Bom dia, resumo de domingo e comandos: /hoje para ver e concluir, /compras para a lista, /dicas para a IA.</div>
+      <div className="row-s" style={{ marginBottom: 4 }}>Bom dia (com o cardápio de hoje), resumo de domingo e comandos: /hoje para ver e concluir, /compras para a lista, /agua para a água, /dicas para a IA.</div>
       {order.map(w => {
         const mine = of(w), code = codes[w], isMe = w === me
         return <div key={w} className="tg-person">
@@ -117,6 +121,10 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
               <div><div className="row-t">🏆 Resumo de domingo</div></div>
               <button className={`switch ${l.weekly ? 'on' : ''}`} style={l.weekly ? { background: 'var(--gdk)' } : undefined} onClick={() => setPref(l, 'weekly', !l.weekly)} role="switch" aria-checked={l.weekly} aria-label={`Resumo no Telegram da ${first(names[w])}`} />
             </div>
+            {l.agua !== undefined && <div className="row">
+              <div><div className="row-t">💧 Lembretes de água</div><div className="row-s">Só quando estiver atrás do ritmo, com o botão “+1 copo”. A qualquer hora: /agua</div></div>
+              <button className={`switch ${l.agua ? 'on' : ''}`} style={l.agua ? { background: 'var(--gdk)' } : undefined} onClick={() => setPref(l, 'agua', !l.agua)} role="switch" aria-checked={!!l.agua} aria-label={`Lembretes de água no Telegram da ${first(names[w])}`} />
+            </div>}
             <div className="row"><button className="btn btn-g btn-w" onClick={() => disconnect(l)}>Desconectar</button></div>
           </div>)}
         </div>
