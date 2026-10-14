@@ -10,7 +10,7 @@ import type { Who } from '@/lib/types'
 import type { PKind, PLog } from '@/lib/meudia'
 
 export function useMeuDia(householdId: string, today: string) {
-  const [data, setData] = useState<api.MeuDiaData>({ available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], goals: [], saved: [], menus: [] })
+  const [data, setData] = useState<api.MeuDiaData>({ available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], goals: [], saved: [], menus: [], recipes: [] })
   const from = addDays(today, -180)
   const reload = useCallback(async () => {
     try { setData(await api.loadMeuDia(householdId, from)) } catch (e: any) { logError('carregar Meu dia', e); setData(d => d.available ? d : { ...d, reason: [e?.code, e?.message].filter(Boolean).join(' · ') || 'erro ao carregar' }) }
@@ -29,9 +29,11 @@ export function useMeuDia(householdId: string, today: string) {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_saved_meals', filter: f }, () => { reload() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_goals', filter: f }, () => { reload() })
       .on('postgres_changes', { event: '*', schema: 'public', table: 'personal_menus', filter: f }, () => { reload() })
-      .subscribe()
+    // receitas (035): só quando a tabela existe
+    if (data.recipesReady) ch.on('postgres_changes', { event: '*', schema: 'public', table: 'personal_recipes', filter: f }, () => { reload() })
+    ch.subscribe()
     return () => { supabase.removeChannel(ch) }
-  }, [householdId, data.available, reload])
+  }, [householdId, data.available, data.recipesReady, reload])
 
   /** Registro com resposta na hora. */
   const add = useCallback(async (who: Who, kind: PKind, value: number | null, payload: Record<string, any> = {}, date = today) => {

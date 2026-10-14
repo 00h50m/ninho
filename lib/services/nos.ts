@@ -5,6 +5,7 @@ import { NinhoError, isMissingTable, logError } from '@/lib/errors'
 import { addDays } from '@/lib/dates'
 import type { Who } from '@/lib/types'
 import type { Agreement, Challenge, CheckinRow, NosFacts } from '@/lib/nos'
+import { monthEnd, type CoupleMonthInput } from '@/lib/casalMes'
 
 function must<T>(r: { data: T | null, error: any }, ctx: string): T {
   if (r.error) { logError(ctx, r.error); throw new NinhoError(r.error, ctx) }
@@ -90,4 +91,27 @@ export async function saveAgreements(householdId: string, weekStart: string, agr
 export async function taskFromAgreement(householdId: string, text: string, who: Who | 'both'): Promise<string> {
   const r = must(await supabase.from('tasks').insert({ household_id: householdId, title: text.slice(0, 80), category: 'general', weight: 'light', frequency: 'once', assigned_to: who === 'both' ? null : who, active: true }).select('id').single(), 'criar tarefa do combinado') as { id: string }
   return r.id
+}
+
+/** Resumo do mês do casal: tudo do mês (AAAA-MM) até hoje. O que faltar no banco vem vazio. */
+export async function loadCoupleMonth(householdId: string, month: string, today: string): Promise<CoupleMonthInput> {
+  const from = `${month}-01`, to = monthEnd(month)
+  const hh = (t: string, cols: string) => supabase.from(t).select(cols).eq('household_id', householdId)
+  const [tasks, dogs, runs, sprints, checkins, meetings, challenges] = await Promise.all([
+    hh('task_completions', 'date,completed_by').gte('date', from).lte('date', to).limit(5000),
+    hh('dog_completions', 'date,completed_by').gte('date', from).lte('date', to).limit(5000),
+    hh('routine_runs', 'date').eq('status', 'done').gte('date', from).lte('date', to).limit(5000),
+    hh('sprints', 'date,status,done_task_ids').gte('date', from).lte('date', to),
+    hh('daily_checkins', 'date,who,mood').gte('date', from).lte('date', to),
+    hh('weekly_meetings', 'week_start,agreements').gte('week_start', from).lte('week_start', to),
+    hh('couple_challenges', 'title,status,ended_at').eq('status', 'done').gte('ended_at', from),
+  ])
+  return {
+    month, today,
+    tasks: soft(tasks as any, 'resumo: tarefas'), dogs: soft(dogs as any, 'resumo: cães'), runs: soft(runs as any, 'resumo: rotinas'),
+    sprints: (soft(sprints as any, 'resumo: sprints') as any[]).map(s => ({ date: s.date, status: s.status, done: (s.done_task_ids || []).length })),
+    checkins: soft(checkins as any, 'resumo: check-ins'),
+    meetings: (soft(meetings as any, 'resumo: reuniões') as any[]).map(m => ({ week_start: m.week_start, agreements: Array.isArray(m.agreements) ? m.agreements : [] })),
+    challenges: soft(challenges as any, 'resumo: desafios'),
+  }
 }

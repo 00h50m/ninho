@@ -74,9 +74,25 @@ export function DogProfileSheet({ dog, today, saving, onSave, onDelete, onClose 
   )
 }
 
-export function DogHealthBlock({ dog, records, today, names, onRecord, onEdit, onBuyFood }: {
+/** Ração acabando: "🛒 pôr na lista" e "Comprei saco novo" (o estoque passa a ser o saco + o que sobrou). */
+export function FoodLow({ dog, left, onBuyFood, onNewBag }: { dog: Dog, left: number, onBuyFood: (dog: Dog) => void, onNewBag?: (dog: Dog, kg: number) => void }) {
+  const [open, setOpen] = useState(false), [kg, setKg] = useState(String(dog.food_stock_kg || 15).replace('.', ','))
+  const v = Number(kg.replace(',', '.'))
+  return <span className="fl-acts">
+    <button className="lnk-inline" onClick={() => onBuyFood(dog)}>🛒 pôr na lista</button>
+    {onNewBag && !open && <button className="lnk-inline" onClick={() => setOpen(true)}>comprei saco novo</button>}
+    {onNewBag && open && <span className="fl-bag">
+      <input className="fi" inputMode="decimal" value={kg} onChange={e => setKg(e.target.value)} aria-label={`Quantos kg tem o saco novo de ${dog.name}`} autoFocus/>
+      <span>kg</span>
+      <button className="btn btn-s" disabled={!(v > 0 && v <= 100)} onClick={() => { onNewBag(dog, v); setOpen(false) }}>Salvar</button>
+      <button className="lnk-inline" onClick={() => setOpen(false)}>cancelar</button>
+    </span>}
+  </span>
+}
+
+export function DogHealthBlock({ dog, records, today, names, onRecord, onEdit, onBuyFood, onNewBag }: {
   dog: Dog, records: HealthRecord[], today: string, names: Names
-  onRecord: (kind: HealthKind) => void, onEdit: (r: HealthRecord) => void, onBuyFood: (dog: Dog) => void
+  onRecord: (kind: HealthKind) => void, onEdit: (r: HealthRecord) => void, onBuyFood: (dog: Dog) => void, onNewBag?: (dog: Dog, kg: number) => void
 }) {
   const [open, setOpen] = useState(false)
   const mine = records.filter(r => r.dog_id === dog.id)
@@ -92,7 +108,7 @@ export function DogHealthBlock({ dog, records, today, names, onRecord, onEdit, o
       {(dog.food_brand || dog.food_g_day) && <div className={`dh-food ${left != null && left <= 7 ? 'low' : ''}`}>
         🍖 {dog.food_brand || 'Ração'}{dog.food_g_day ? ` · ${dog.food_g_day} g/dia` : ''}{dog.meals_day ? ` em ${dog.meals_day} refeições` : ''}
         {left != null && <> · <b>{left === 0 ? 'estoque acabou' : `estoque para ~${left} dia${left === 1 ? '' : 's'}`}</b></>}
-        {left != null && left <= 7 && <button className="lnk-inline" onClick={() => onBuyFood(dog)}>🛒 pôr na lista</button>}
+        {left != null && left <= 7 && <FoodLow dog={dog} left={left} onBuyFood={onBuyFood} onNewBag={onNewBag}/>}
       </div>}
       <div className="slbl" style={{ marginTop: 10 }}>Saúde</div>
       {next.length === 0 ? <div className="row-s">Nada previsto para os próximos 60 dias.</div> :

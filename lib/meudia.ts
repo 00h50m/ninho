@@ -106,6 +106,30 @@ export function bodySeries(logs: PLog[], who: Who, field: string): Array<{ date:
     .sort((a, b) => a.date.localeCompare(b.date) || 0)
     .filter((x, i, arr) => i === arr.length - 1 || arr[i + 1].date !== x.date) // um valor por dia (o último)
 }
+/** Valor mais perto da data (até `gap` dias antes ou depois; empate fica com o anterior). */
+export function nearest(series: Array<{ date: string, v: number }>, date: string, gap = 14): { date: string, v: number } | null {
+  let best: { date: string, v: number } | null = null, bd = Infinity
+  for (const x of series) {
+    const d = Math.abs(dayNum(x.date) - dayNum(date))
+    if (d <= gap && (d < bd || (d === bd && x.date < date))) { best = x; bd = d }
+  }
+  return best
+}
+
+/**
+ * Fotos lado a lado: peso e medidas perto de cada data (até 14 dias) e a diferença.
+ * Só entram as medidas que existem nas duas pontas.
+ */
+export function photoCompare(logs: PLog[], who: Who, before: string, after: string): { days: number, rows: Array<{ key: string, label: string, unit: string, a: number, b: number, diff: number }> } {
+  const rows = BODY_FIELDS.flatMap(([key, label, unit]) => {
+    const s = bodySeries(logs, who, key)
+    const a = nearest(s, before), b = nearest(s, after)
+    if (!a || !b || a.date === b.date) return []
+    return [{ key, label, unit, a: a.v, b: b.v, diff: Math.round((b.v - a.v) * 10) / 10 }]
+  })
+  return { days: Math.abs(dayNum(after) - dayNum(before)), rows }
+}
+
 export function change(series: Array<{ v: number }>): number | null {
   return series.length >= 2 ? Math.round((series[series.length - 1].v - series[0].v) * 10) / 10 : null
 }

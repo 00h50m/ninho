@@ -1,11 +1,11 @@
 'use client'
 // Aba Compras: lista compartilhada ao vivo. Uma adiciona ou risca, a outra vê na hora.
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import type { NinhoError } from '@/lib/errors'
 import { toNinhoError } from '@/lib/errors'
 import * as casa from '@/lib/services/casa'
-import { SHOP_CATS, buyAgain, groupOpen, guessCategory, parseEntry, qtyLabel, shoppingCounts, type ShoppingItem } from '@/lib/shopping'
+import { SHOP_CATS, buyAgain, groupOpen, marketView, guessCategory, parseEntry, qtyLabel, shoppingCounts, type ShoppingItem } from '@/lib/shopping'
 import { Sheet } from '@/components/ui/Sheet'
 
 const first = (n: string) => (n || '').split(' ')[0]
@@ -31,7 +31,24 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   const parsed = parseEntry(text)
   const guessed = parsed.title ? guessCategory(parsed.title) : 'outros'
   const chosenCat = cat ?? guessed
+  const [market, setMarket] = useState(false)
+  const [cartOpen, setCartOpen] = useState(false)
+  // o modo mercado fica lembrado neste aparelho
+  useEffect(() => { try { setMarket(localStorage.getItem('ninho.mercado') === '1') } catch { /* sem storage */ } }, [])
+  function toggleMarket() {
+    setMarket(m => { try { localStorage.setItem('ninho.mercado', m ? '0' : '1') } catch { /* sem storage */ } return !m })
+  }
+  // no mercado a tela não apaga (quando o aparelho deixa)
+  useEffect(() => {
+    if (!market) return
+    let lock: any = null, gone = false
+    const ask = async () => { try { if (document.visibilityState === 'visible') lock = await (navigator as any).wakeLock?.request('screen') } catch { /* não deixou */ } }
+    const onVis = () => { if (!gone && document.visibilityState === 'visible') ask() }
+    ask(); document.addEventListener('visibilitychange', onVis)
+    return () => { gone = true; document.removeEventListener('visibilitychange', onVis); try { lock?.release() } catch { /* já solto */ } }
+  }, [market])
   const groups = useMemo(() => groupOpen(items), [items])
+  const mv = useMemo(() => marketView(items), [items])
   const again = useMemo(() => buyAgain(history, items), [history, items])
   const c = shoppingCounts(items)
 
@@ -131,6 +148,7 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
     <div className="narrow">
       <div className="sh">
         <div><h2>Compras</h2><p>{c.open === 0 ? 'Lista vazia' : `${c.toBuy} para comprar${c.checked ? ` · ${c.checked} no carrinho` : ''}`} · ao vivo entre vocês</p></div>
+        {c.open > 0 && <div className="sh-a"><button className={`btn ${market ? 'btn-p' : 'btn-s'}`} aria-pressed={market} onClick={toggleMarket}>{market ? '✓ Modo mercado' : '🛒 Modo mercado'}</button></div>}
       </div>
 
       {state === 'error' && <div className="card loaderr" role="alert">
@@ -139,7 +157,9 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
         <button className="btn btn-p" onClick={() => onReload()}>Tentar novamente</button>
       </div>}
 
-      {state !== 'error' && <>
+      {state !== 'error' && market && c.open > 0 && <MarketMode mv={mv} busy={busy} names={names} cartOpen={cartOpen} setCartOpen={setCartOpen} onToggle={toggle} onFinish={finish} onExit={toggleMarket}/>}
+
+      {state !== 'error' && !(market && c.open > 0) && <>
         <div className="shop-add">
           <input ref={inputRef} className="fi" value={text} onChange={e => setText(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') submit() }}
             placeholder="Adicionar item (ex.: 2 kg arroz)" aria-label="Adicionar item" maxLength={90} enterKeyHint="done"/>
@@ -196,6 +216,40 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   )
 }
 
+
+/** Modo mercado: letras grandes, só o que falta (por corredor), barra de progresso e o carrinho no fim. */
+function MarketMode({ mv, busy, names, cartOpen, setCartOpen, onToggle, onFinish, onExit }: {
+  mv: ReturnType<typeof marketView>, busy: Set<string>, names: Names, cartOpen: boolean, setCartOpen: (f: (v: boolean) => boolean) => void
+  onToggle: (it: ShoppingItem) => void, onFinish: () => void, onExit: () => void
+}) {
+  const pct = mv.total ? Math.round(mv.done / mv.total * 100) : 0
+  return <div className="mk">
+    <div className="mk-prog" aria-live="polite">
+      <div className="mk-n"><b className="mono">{mv.done}</b> de <b className="mono">{mv.total}</b> no carrinho</div>
+      <div className="bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso da compra"><div className="barf" style={{ width: `${pct}%`, background: 'var(--pri)' }}/></div>
+    </div>
+    {mv.groups.length === 0 ? <div className="card empty"><span className="empty-icon">🎉</span>Tudo no carrinho!</div>
+      : <div className="card">{mv.groups.map(g => <div key={g.cat}>
+        <div className="cdiv">{g.label}<span className="n">{g.items.length}</span></div>
+        {g.items.map(it => <button key={it.id} className="mk-row" disabled={busy.has(it.id) || it.id.startsWith('tmp:')} onClick={() => onToggle(it)} aria-label={`Pôr ${it.title} no carrinho`}>
+          <span className="mk-chk" aria-hidden="true"/>
+          <span className="mk-t">{it.title}{it.running_low && <small className="tag-low">⚠ acabando</small>}{it.assigned_to && <small className="tag-by">🛒 {first(names[it.assigned_to])}</small>}</span>
+          {qtyLabel(it) && <span className="mk-q mono">{qtyLabel(it)}</span>}
+        </button>)}
+      </div>)}</div>}
+    {mv.cart.length > 0 && <div className="card mk-cart">
+      <button className="mk-cart-h" aria-expanded={cartOpen} onClick={() => setCartOpen(v => !v)}>🛒 No carrinho ({mv.cart.length}) <span aria-hidden="true">{cartOpen ? '▴' : '▾'}</span></button>
+      {cartOpen && mv.cart.map(it => <button key={it.id} className="mk-row done" disabled={busy.has(it.id)} onClick={() => onToggle(it)} aria-label={`Tirar ${it.title} do carrinho`}>
+        <span className="mk-chk on" aria-hidden="true">✓</span><span className="mk-t">{it.title}</span>{qtyLabel(it) && <span className="mk-q mono">{qtyLabel(it)}</span>}
+      </button>)}
+    </div>}
+    <div className="md-acts">
+      {mv.done > 0 && <button className="btn btn-p" onClick={onFinish}>✓ Finalizar compra ({mv.done})</button>}
+      <button className="btn btn-g" onClick={onExit}>Sair do modo mercado</button>
+    </div>
+    <p className="row-s" style={{ textAlign: 'center' }}>A tela fica acesa enquanto o modo mercado está ligado.</p>
+  </div>
+}
 
 const UNITS = ['un', 'kg', 'g', 'L', 'ml', 'pct', 'cx', 'dz']
 

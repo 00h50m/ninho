@@ -10,13 +10,14 @@ import type { MoodRow } from '@/lib/humor'
 import { cleanItems, type SavedMeal } from '@/lib/savedMeals'
 import { guessCategory } from '@/lib/shopping'
 import { menuFromDb, type Menu, type MenuRow } from '@/lib/cardapio'
+import { recipeFromDb, type Recipe } from '@/lib/receitas'
 
 function must<T>(r: { data: T | null, error: any }, ctx: string): T {
   if (r.error) { logError(ctx, r.error); throw new NinhoError(r.error, ctx) }
   return r.data as T
 }
 
-export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, goals: PGoal[], goalsReady?: boolean, saved: SavedMeal[], savedReady?: boolean, menus: MenuRow[], menusReady?: boolean, reason?: string }
+export interface MeuDiaData { available: boolean, settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean, profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, goals: PGoal[], goalsReady?: boolean, saved: SavedMeal[], savedReady?: boolean, menus: MenuRow[], menusReady?: boolean, recipes: Recipe[], recipesReady?: boolean, reason?: string }
 
 const FOOD_COLS = 'id,who,name,portion,portion_g,kcal,protein,carb,fat'
 /** Coluna que ainda não existe no banco (migration nova não executada). */
@@ -36,7 +37,7 @@ async function loadProfiles(householdId: string) {
 }
 
 export async function loadMeuDia(householdId: string, from: string): Promise<MeuDiaData> {
-  const [s, l, m, q, fp, ff, dp, gl, sm, mn] = await Promise.all([
+  const [s, l, m, q, fp, ff, dp, gl, sm, mn, rc] = await Promise.all([
     supabase.from('personal_settings').select('who,water_goal_ml,cup_ml,sleep_goal_h,share,selfcare').eq('household_id', householdId),
     supabase.from('personal_logs').select('id,who,date,kind,value,data,created_at').eq('household_id', householdId).gte('date', from).order('date').limit(4000),
     supabase.from('personal_meds').select('id,who,name,dose,times,active').eq('household_id', householdId).eq('active', true).order('name'),
@@ -47,10 +48,11 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     supabase.from('personal_goals').select('id,who,title,kind,unit,start_value,target,start_date,due_date,status').eq('household_id', householdId).neq('status', 'arquivado').order('created_at'),
     supabase.from('personal_saved_meals').select('id,who,name,items,kcal,uses').eq('household_id', householdId).eq('active', true).order('uses', { ascending: false }).order('name'),
     supabase.from('personal_menus').select('id,who,week_start,menu,prefs').eq('household_id', householdId).eq('active', true).order('created_at', { ascending: false }),
+    supabase.from('personal_recipes').select('id,who,name,servings,items,steps,kcal').eq('household_id', householdId).eq('active', true).order('name'),
   ])
   const e = s.error || l.error || m.error
   if (e) {
-    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], goals: [], saved: [], menus: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
+    if (isMissingTable(e)) { logError('Meu dia indisponível', e); return { available: false, settings: [], logs: [], meds: [], quits: [], profiles: [], foods: [], plans: [], goals: [], saved: [], menus: [], recipes: [], reason: [e.code, e.message].filter(Boolean).join(' · ') } }
     must({ data: null, error: e }, 'carregar Meu dia')
   }
   // "Parar de…" (migration 025) é opcional: sem a tabela, o resto do Meu dia segue normal
@@ -66,6 +68,8 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
   // Refeições salvas (migration 031) também são opcionais
   if (sm.error && !isMissingTable(sm.error)) must({ data: null, error: sm.error }, 'carregar refeições salvas')
   if (mn.error && !isMissingTable(mn.error)) must({ data: null, error: mn.error }, 'carregar cardápio')
+  // Receitas (035) também são opcionais
+  if (rc.error && !isMissingTable(rc.error)) must({ data: null, error: rc.error }, 'carregar receitas')
   return {
     available: true, settings: (s.data || []) as PSettings[], logs: ((l.data || []) as any[]).map(x => ({ ...x, value: x.value == null ? null : Number(x.value) })), meds: (m.data || []) as PMed[],
     quits: q.error ? [] : (q.data || []) as PQuit[], quitsReady: !q.error,
@@ -81,6 +85,8 @@ export async function loadMeuDia(householdId: string, from: string): Promise<Meu
     // Cardápio da semana (033) também é opcional
     menus: mn.error ? [] : ((mn.data || []) as any[]).flatMap(x => { const menu = menuFromDb(x.menu); return menu ? [{ ...x, menu }] : [] }) as MenuRow[],
     menusReady: !mn.error,
+    recipes: rc.error ? [] : ((rc.data || []) as any[]).flatMap(x => { const r = recipeFromDb(x); return r ? [r] : [] }),
+    recipesReady: !rc.error,
   }
 }
 
@@ -180,6 +186,15 @@ export async function saveMeal(householdId: string, who: Who, m: { id?: string, 
 }
 export async function stopMeal(id: string): Promise<void> {
   must(await supabase.from('personal_saved_meals').update({ active: false }).eq('id', id).select('id'), 'remover refeição salva')
+}
+/** Receita (035): nova ou editada. */
+export async function saveRecipe(householdId: string, who: Who, r: { id?: string, name: string, servings: number, items: Recipe['items'], steps: string | null, kcal: number }): Promise<void> {
+  const row = { name: r.name, servings: r.servings, items: r.items, steps: r.steps, kcal: r.kcal, updated_at: new Date().toISOString() }
+  if (r.id) must(await supabase.from('personal_recipes').update(row).eq('id', r.id).select('id'), 'salvar receita')
+  else must(await supabase.from('personal_recipes').insert({ ...row, household_id: householdId, who }).select('id'), 'salvar receita')
+}
+export async function stopRecipe(id: string): Promise<void> {
+  must(await supabase.from('personal_recipes').update({ active: false }).eq('id', id).select('id'), 'remover receita')
 }
 /** Conta mais um uso (as mais usadas aparecem primeiro). Falhar aqui não atrapalha o registro. */
 export async function countMealUse(id: string, uses: number): Promise<void> {

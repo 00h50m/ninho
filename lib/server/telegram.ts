@@ -15,7 +15,7 @@ import { SHOP_CATS, guessCategory, normalize, parseEntry } from '@/lib/shopping'
 import { loadHousehold, morningPayloads, must, weeklyPayload } from './notify'
 import { execute as executeAi, type Understood } from './telegramAi'
 import { meuDiaWeekLines } from './weekReport'
-import { menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
+import { foodLines, menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
 import { sobrouAlerts, type SobrouResumo } from '@/lib/sobrou'
 import { addDays } from '@/lib/dates'
 import type { AiAction } from '@/lib/telegramAi'
@@ -441,6 +441,7 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
     try {
       const morning = kind === 'morning' ? await morningPayloads(deps.db, householdId, clock.date, clock.hm) : null
       const weekly = kind === 'weekly' ? await weeklyPayload(deps.db, householdId, clock.date) : null
+      const racao = kind === 'morning' ? await foodLines(deps.db, householdId, clock.date).catch(() => [] as string[]) : []
       for (const l of list) {
         if (!isWho(l.who)) continue
         const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind, day: clock.date }).select('id').maybeSingle()
@@ -451,6 +452,7 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
         // manhã: cardápio e avisos do Sobrou · domingo: o Meu dia da semana (só de quem recebe)
         let more = ''
         if (kind === 'morning' && menu) more += `\n\n${menu.text}`
+        if (kind === 'morning' && racao.length) more += `\n\n${racao.join('\n')}`
         if (kind === 'morning' && money.length) more += `\n\n${money.join('\n')}`
         if (kind === 'weekly') {
           const lines = await (deps.meuDiaWeek ?? ((h, w, d) => meuDiaWeekLines(deps.db, h, w, d)))(householdId, l.who, clock.date).catch(() => [] as string[])

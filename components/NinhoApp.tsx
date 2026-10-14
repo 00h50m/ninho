@@ -56,6 +56,7 @@ import { SprintPanel, type SprintStart } from '@/components/sprint/SprintPanel'
 import { useAgenda } from '@/hooks/useAgenda'
 import * as agApi from '@/lib/services/agenda'
 import { AgendaView, EventSheet } from '@/components/casa/Agenda'
+import { AgendaCelular } from '@/components/casa/AgendaCelular'
 import { useCaes } from '@/hooks/useCaes'
 import { useMeuDia } from '@/hooks/useMeuDia'
 import { enqueue, flush as flushOutbox, newId, readOutbox, writeOutbox, type OutItem } from '@/lib/outbox'
@@ -75,6 +76,7 @@ import { guessCategory } from '@/lib/shopping'
 import * as nosApi from '@/lib/services/nos'
 import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as nosTimeline, type Agreement, type AgendaSection, type Challenge } from '@/lib/nos'
 import { ChallengeCard, ChallengesView, CheckinHistory, DayNoteCard, TimelineCard, TogetherCard } from '@/components/nos/NosViews'
+import { CoupleMonthCard } from '@/components/nos/ResumoMes'
 import { dosesToday, waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT, type Dose } from '@/lib/meudia'
 import { buildTimeline } from '@/lib/timeline'
 import { mascotSay } from '@/lib/mascote'
@@ -84,8 +86,8 @@ import { SobrouCard } from '@/components/SobrouCard'
 import { SobrouGuide } from '@/components/SobrouGuide'
 import { DayTimeline } from '@/components/DayTimeline'
 import * as cApi from '@/lib/services/caes'
-import { DogAvatar, DogHealthBlock, DogProfileSheet, HealthSheet, PuppyPanel } from '@/components/caes/DogPanels'
-import { kindInfo, upcomingCare, type AccidentRow, type HealthKind, type HealthRecord } from '@/lib/caes'
+import { DogAvatar, DogHealthBlock, DogProfileSheet, FoodLow, HealthSheet, PuppyPanel } from '@/components/caes/DogPanels'
+import { foodAlerts, foodLeftLabel, kindInfo, newBag as newBagStock, upcomingCare, type AccidentRow, type HealthKind, type HealthRecord } from '@/lib/caes'
 import { bills as agBills, agendaEntries, kindIcon, type EventKind, type HouseEvent } from '@/lib/agenda'
 import { areaLabel, fmtClock, remainingMs, type Sprint } from '@/lib/sprint'
 import { firstName, initials, wCls, byCat, catIc, QuickTime, TaskFormModal, SuggModal, PetModal, DogModal, RoutineModal, EnergyModal, MeetingModal } from '@/components/AppModals'
@@ -750,6 +752,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   async function buyFood(dog:Dog){
     try{const r=await casaApi.addShoppingItem(householdId,`Ração ${dog.food_brand||dog.name}`.trim(),null,'pets',me);await casa.reloadShopping();showToast(r.created?'Ração na lista de compras':'A ração já está na lista')}
     catch(e){showError(toNinhoError(e,'adicionar à lista'))}}
+  /** "Comprei saco novo": estoque = saco + o que sobrou, a partir de hoje. */
+  function newBag(dog:Dog,kg:number){
+    const d=newBagStock(dog,kg,today)
+    save('atualizar ração',async()=>{await api.updateDog(dog.id,d);setDogs(p=>p.map(x=>x.id===dog.id?{...x,...d}:x))},`Ração da ${dog.name} renovada 🍖`)}
   async function fixAccident(a:AccidentRow,patch:{location:string,occurred_at:string,date:string,notes:string|null}){
     const p:any={...patch};if(!cz.available)delete p.notes
     try{await cApi.updateAccident(a.id,p);await cz.reload();data.reloadAccidents?.();showToast('Registro corrigido')}catch(e){showError(toNinhoError(e,'corrigir acidente'))}}
@@ -1183,6 +1189,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                     </button>
                   )
                 })}
+                {foodAlerts(dogs,today,7).map(({dog,left})=><div key={dog.id} className={`care-i fl-home ${left<=2?'late':''}`}>
+                  <span>🍖 Ração da {dog.name}: <b>{foodLeftLabel(left)}</b></span>
+                  <FoodLow dog={dog} left={left} onBuyFood={buyFood} onNewBag={newBag}/>
+                </div>)}
                 {(care.length>0||healthSoon.some(r=>r.next_date!<=addDays(today,14)))&&<div className="care">
                   <div className="care-l">Cuidados próximos</div>
                   {healthSoon.filter(r=>r.next_date!<=addDays(today,14)).slice(0,4).map(r=><button key={r.id} className="care-i" onClick={()=>go('caes')}><span>{kindInfo(r.kind)[1]} {dogName(r.dog_id)}: {r.title}</span><span className={`mono ${r.late?'late':''}`}>{r.late?'atrasado':r.next_date===today?'hoje':fmtDate(r.next_date!)}</span></button>)}
@@ -1223,7 +1233,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── MEU DIA (de cada uma) ── */}
         {screen==='eu'&&<div className="scr">
           <div className="sh"><div><h2>Meu dia</h2><p>Água, sono, alimentação, treinos e corpo · só você vê o que não compartilhar</p></div></div>
-          {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} saved={md.saved} savedReady={md.savedReady} menus={md.menus} menusReady={md.menusReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
+          {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} saved={md.saved} savedReady={md.savedReady} menus={md.menus} menusReady={md.menusReady} recipes={md.recipes} recipesReady={md.recipesReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
             onCheckin={()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),300)}}
             onSaveGoal={g=>mdApi.saveGoal(householdId,me,g).then(md.reload).then(()=>showToast(g.id?'Objetivo salvo':'Objetivo criado 🎯')).catch(e=>{showError(toNinhoError(e,'salvar objetivo'));throw e})}
             onGoalStatus={(g,st)=>mdApi.setGoalStatus(g.id,st).then(md.reload).then(()=>showToast(st==='concluido'?'Parabéns! Objetivo concluído 🎉':'Objetivo arquivado')).catch(e=>{showError(toNinhoError(e,'atualizar objetivo'));throw e})}
@@ -1249,6 +1259,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             onSaveMeal={m=>mdApi.saveMeal(householdId,me,m).then(md.reload).then(()=>showToast(m.id?'Refeição salva atualizada ⭐':'Refeição salva ⭐ Lance com um toque quando quiser')).catch(e=>{showError(toNinhoError(e,'salvar refeição'));throw e})}
             onStopMeal={m=>mdApi.stopMeal(m.id).then(md.reload).then(()=>showToast('Refeição removida das salvas')).catch(e=>{showError(toNinhoError(e,'remover refeição salva'));throw e})}
             onUseMeal={m=>{mdApi.countMealUse(m.id,m.uses).then(md.reload).catch(()=>{})}}
+            onSaveRecipe={r=>mdApi.saveRecipe(householdId,me,r).then(md.reload).then(()=>showToast(r.id?'Receita salva':'Receita salva 📖')).catch(e=>{showError(toNinhoError(e,'salvar receita'));throw e})}
+            onStopRecipe={r=>mdApi.stopRecipe(r.id).then(md.reload).then(()=>showToast('Receita removida')).catch(e=>{showError(toNinhoError(e,'remover receita'));throw e})}
+            onRecipeToShopping={lines=>mdApi.menuToShopping(householdId,me,lines).then(r=>{casa.reloadShopping();showToast(`🛒 ${r.added} na lista de compras${r.had?` · ${r.had} já estava(m)`:''}`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}
             onSaveFoods={list=>mdApi.saveFoods(householdId,me,list).then(md.reload).then(()=>showToast(`${list.length} alimento(s) em Meus alimentos 🥗`)).catch(e=>{showError(toNinhoError(e,'lançar alimentos'));throw e})}
             onSaveMenu={(start,menu,prefs)=>mdApi.saveMenu(householdId,me,start,menu,prefs).then(md.reload).then(()=>showToast('Cardápio da semana pronto 🗓️')).catch(e=>{showError(toNinhoError(e,'salvar cardápio'));throw e})}
             onStopMenu={m=>mdApi.stopMenu(m.id).then(md.reload).then(()=>showToast('Cardápio apagado')).catch(e=>{showError(toNinhoError(e,'apagar cardápio'));throw e})}
@@ -1301,7 +1314,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             setItems={casa.setShop} onReload={casa.reloadShopping} extras={casa.shopExtras} requireMe={requireMe} toast={(m,u)=>showToast(m,u)} fail={(e,r)=>showError(e,r)} onFinished={onShoppingFinished}/>
           :casaView==='agenda'?<AgendaView available={ag.available} events={ag.events} maint={casa.maint} dogCare={dogCareAgenda} onOpenDogs={()=>go('caes')} today={today} names={names} sobrouUrl={ag.sobrouUrl}
             onNew={k=>openModal('event',{event:null,kind:k})} onEdit={e=>openModal('event',{event:e,kind:e.kind})} onDone={eventDone} onPaid={billPaid}
-            onOpenMaint={()=>goCasa('manutencao')} onSaveSobrou={saveSobrou}/>
+            onOpenMaint={()=>goCasa('manutencao')} onSaveSobrou={saveSobrou}
+            footer={<AgendaCelular householdId={householdId} onToast={m=>showToast(m)} onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}/>}/>
           :casaView==='manutencao'?<>
             <div className="sh"><div><h2>Manutenção</h2><p>De tempos em tempos: casa, cães, carro e saúde</p></div></div>
             <MaintenanceSection items={casa.maint} log={casa.maintLog} today={today} names={names} state={casa.maintState} error={casa.maintError} actions={maintActions}
@@ -1421,6 +1435,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             :<div className="card empty"><span className="empty-icon">🤝</span>Desafios em dupla precisam da atualização do banco (migration 022).</div>)}
           {nosView==='historico'&&<div className="wgrid">
             <div className="col">
+              <CoupleMonthCard householdId={householdId} today={today} names={names} onToast={m=>showToast(m)}/>
               {nos.available&&<CheckinHistory rows={nos.checkins} names={names} today={today}/>}
               <div className="card">
                 <div className="slbl">Últimas 4 semanas</div>
@@ -1528,7 +1543,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                       <button className="ib" onClick={()=>openModal(cz.available?'dogprofile':'dog',dog)} title={`Editar ${dog.name}`} aria-label={`Editar ${dog.name}`}>✎</button>
                     </div>
                     {cz.available&&<DogHealthBlock dog={dog} records={cz.records} today={today} names={names}
-                      onRecord={(k:HealthKind)=>openModal('health',{dog,record:null,kind:k})} onEdit={r=>openModal('health',{dog,record:r,kind:r.kind})} onBuyFood={buyFood}/>}
+                      onRecord={(k:HealthKind)=>openModal('health',{dog,record:null,kind:k})} onEdit={r=>openModal('health',{dog,record:r,kind:r.kind})} onBuyFood={buyFood} onNewBag={newBag}/>}
                     {dog.routines.length===0&&<div style={{fontSize:13,color:'var(--sub)',padding:'4px 0'}}>Nenhuma rotina ainda</div>}
                     {daily.length>0&&<><div className="slbl">Rotina diária</div>{daily.map(r=>dogRow(r,{dog}))}</>}
                     {periodic.length>0&&<>

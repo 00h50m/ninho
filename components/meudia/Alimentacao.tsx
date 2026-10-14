@@ -25,6 +25,8 @@ import { MenuCard } from './Cardapio'
 import { BarcodeBox } from './Barcode'
 import type { Menu, MenuRow, ShopLine } from '@/lib/cardapio'
 import { WeekBars } from './SleepBars'
+import { RecipesCard } from './Receitas'
+import type { Recipe } from '@/lib/receitas'
 
 const K = (v: number) => Math.round(v).toLocaleString('pt-BR')
 const N1 = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
@@ -39,6 +41,7 @@ export interface FoodTabProps {
   householdId: string, me: Who, today: string, nowHM: string, logs: PLog[], profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean
   saved: SavedMeal[], savedReady?: boolean
   menus: MenuRow[], menusReady?: boolean
+  recipes: Recipe[], recipesReady?: boolean
   meds: PMed[], settings: PSettings[], plans: PlanRow[], plansReady?: boolean, focus?: MdFocus
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
@@ -54,6 +57,9 @@ export interface FoodTabProps {
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void
+  onSaveRecipe: (r: { id?: string, name: string, servings: number, items: MealItem[], steps: string | null, kcal: number }) => Promise<void>
+  onStopRecipe: (r: Recipe) => Promise<void>
+  onRecipeToShopping: (lines: Array<{ title: string, qty: string }>) => Promise<void>
   onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
   onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
   onStopPlan: (p: PlanRow) => Promise<void>
@@ -107,7 +113,7 @@ export function FoodTab(p: FoodTabProps) {
       <ProteinCard prof={prof} weight={w} eatenP={d.p} kcalLeft={d.left} foods={p.foods.filter(f => f.who === p.me)} nowHM={p.nowHM} onAdd={p.onAdd}/>
 
       <nav className="md-jump" aria-label="Ir para">
-        {([['pl-hoje', '📋 Plano'], ['mn-t', '🗓️ Cardápio'], ['al-add', '✍️ Registrar'], ['al-hoje', '🍽️ Refeições de hoje'], ['al-semana', '📊 Semana'], ['al-peso', '⚖️ Peso'], ['al-meus', '🥗 Meus alimentos']] as Array<[string, string]>)
+        {([['pl-hoje', '📋 Plano'], ['mn-t', '🗓️ Cardápio'], ['al-add', '✍️ Registrar'], ['al-hoje', '🍽️ Refeições de hoje'], ['rc-t', '📖 Receitas'], ['al-semana', '📊 Semana'], ['al-peso', '⚖️ Peso'], ['al-meus', '🥗 Meus alimentos']] as Array<[string, string]>)
           .map(([id, l]) => <button key={id} className="fc" onClick={() => (document.getElementById(id) || (id === 'pl-hoje' ? document.getElementById('pl-novo') : null))?.closest('.card, details')?.scrollIntoView({ behavior: 'smooth', block: 'start' })}>{l}</button>)}
       </nav>
       <PlanCard {...p} hide={hide}/>
@@ -115,6 +121,7 @@ export function FoodTab(p: FoodTabProps) {
         onSaveMenu={p.onSaveMenu} onStopMenu={p.onStopMenu} onMenuToShopping={p.onMenuToShopping} onUpdateMenu={p.onUpdateMenu} onAdd={p.onAdd}/>
       <MealForm {...p} hide={hide}/>
       <MealsToday {...p} hide={hide}/>
+      <RecipesCard {...p} hide={hide}/>
 
       {!hide && <section className="card" aria-labelledby="al-semana">
         <div className="slbl" id="al-semana">Calorias da semana</div>

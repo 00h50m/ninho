@@ -65,6 +65,25 @@ export function foodDaysLeft(d: { food_stock_kg?: number | null, food_stock_on?:
   return Math.max(0, total - Math.max(0, dayNum(today) - dayNum(d.food_stock_on)))
 }
 
+/** Quanto de ração sobrou (kg), pela conta do estoque. */
+export function foodLeftKg(d: { food_stock_kg?: number | null, food_stock_on?: string | null, food_g_day?: number | null }, today: string): number | null {
+  if (d.food_stock_kg == null || !d.food_stock_on || !d.food_g_day) return null
+  const used = Math.max(0, dayNum(today) - dayNum(d.food_stock_on)) * d.food_g_day / 1000
+  return Math.max(0, Math.round((Number(d.food_stock_kg) - used) * 10) / 10)
+}
+
+/** "Comprei saco novo": o estoque passa a ser o saco + o que sobrou, contando a partir de hoje. */
+export function newBag(d: { food_stock_kg?: number | null, food_stock_on?: string | null, food_g_day?: number | null }, bagKg: number, today: string): { food_stock_kg: number, food_stock_on: string } {
+  const left = foodLeftKg(d, today) || 0
+  return { food_stock_kg: Math.round((Math.max(0, bagKg) + left) * 10) / 10, food_stock_on: today }
+}
+
+/** Cães com a ração acabando (até `within` dias), quem acaba antes primeiro. */
+export function foodAlerts<T extends { id: string, name: string, food_stock_kg?: number | null, food_stock_on?: string | null, food_g_day?: number | null }>(dogs: T[], today: string, within = 7): Array<{ dog: T, left: number }> {
+  return dogs.flatMap(dog => { const left = foodDaysLeft(dog, today); return left != null && left <= within ? [{ dog, left }] : [] }).sort((a, b) => a.left - b.left)
+}
+export const foodLeftLabel = (left: number) => left === 0 ? 'acabou' : left === 1 ? 'acaba amanhã' : `dá para ~${left} dias`
+
 // ── Filhote ──────────────────────────────────────────────────────────
 export interface AccidentRow { id: string, dog_id: string, location: string, date: string, occurred_at: string, notes?: string | null }
 export type Period = 'madrugada' | 'manha' | 'tarde' | 'noite'

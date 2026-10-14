@@ -1542,3 +1542,55 @@ html.rp-open body{overflow:hidden}
 .bs-i:hover,.bs-i:focus-visible{background:var(--sf)}
 .bs-i small{color:var(--sub);font-size:12px}
 .top-search{font-size:15px}
+
+/* Receitas */
+.rc-row{border-top:1px solid var(--bd)}
+.rc-row:first-of-type{border-top:0}
+.rc-row .al-sv{border-top:0}
+.rc-launch,.rc-detail{padding:2px 0 10px;display:grid;gap:8px}
+.rc-ings{margin:0;padding-left:18px;display:grid;gap:2px;font-size:13.5px}
+.rc-steps{margin:0;white-space:pre-wrap;font-size:13.5px;color:var(--sub)}
+.rc-form{display:grid;gap:8px}
+.rc-text{min-height:96px}
+.rc-in{flex:1 1 160px;min-width:0}
+
+/* Agenda no celular */
+.ag-cel{margin-top:18px}
+.ag-cel-how{margin:8px 0 2px;font-size:13.5px}
+.ag-cel-how summary{cursor:pointer;color:var(--sub)}
+.ag-cel-how ol{margin:6px 0 0;padding-left:18px;display:grid;gap:4px}
+
+/* Ração acabando */
+.fl-acts{display:inline-flex;flex-wrap:wrap;align-items:center;gap:4px 10px}
+.fl-bag{display:inline-flex;align-items:center;gap:6px}
+.fl-bag .fi{width:72px}
+.fl-home{flex-wrap:wrap;gap:4px 10px;cursor:default}
+
+/* Modo mercado */
+.mk{display:grid;gap:12px}
+.mk-prog{display:grid;gap:6px}
+.mk-n{font-size:15px}
+.mk-row{display:flex;align-items:center;gap:12px;width:100%;min-height:56px;padding:10px 4px;background:transparent;border:0;border-top:1px solid var(--bd);color:var(--tx);font:inherit;text-align:left;cursor:pointer}
+.mk-row:first-of-type{border-top:0}
+.mk-row:disabled{opacity:.6}
+.mk-chk{flex:0 0 28px;height:28px;border-radius:50%;border:2px solid var(--bd2);display:grid;place-items:center;font-size:14px}
+.mk-chk.on{background:var(--gdk);border-color:var(--gdk);color:var(--on-green)}
+.mk-t{flex:1;min-width:0;font-size:18px;display:flex;flex-wrap:wrap;align-items:center;gap:4px 8px}
+.mk-t small{font-size:12px}
+.mk-q{font-size:15px;color:var(--sub)}
+.mk-row.done .mk-t{text-decoration:line-through;color:var(--sub)}
+.mk-cart-h{display:flex;justify-content:space-between;width:100%;background:transparent;border:0;color:var(--tx);font:inherit;font-weight:600;padding:4px 0;min-height:var(--touch);cursor:pointer}
+
+/* Fotos lado a lado: números */
+.co-nums{width:100%;border-collapse:collapse;font-size:13.5px;margin-top:10px}
+.co-nums caption{text-align:left;color:var(--sub);font-size:12.5px;padding-bottom:4px}
+.co-nums th,.co-nums td{border-bottom:1px solid var(--bd);padding:6px 4px;text-align:right}
+.co-nums th[scope=row],.co-nums thead th:first-child{text-align:left;font-weight:500}
+.co-nums thead th{color:var(--sub);font-weight:500;font-size:12px}
+.co-nums-empty{margin-top:8px}
+
+/* Resumo do mês do casal */
+.cm-nav{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.cm-m{text-transform:capitalize;font-size:15px;text-align:center;flex:1}
+.cm-sub{color:var(--faint)}
+.cm-l{list-style:none;margin:12px 0;padding:0;display:grid;gap:6px;font-size:13.5px}

@@ -4,7 +4,7 @@
 // As fotos são privadas e têm compartilhamento próprio ("Fotos de evolução").
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fmtDate } from '@/lib/dates'
-import { BODY_FIELDS, bodySeries, change } from '@/lib/meudia'
+import { BODY_FIELDS, bodySeries, change, photoCompare } from '@/lib/meudia'
 import * as api from '@/lib/services/meudia'
 import { readBodyFile, shrink } from '@/lib/services/aiFiles'
 import { Sheet } from '@/components/ui/Sheet'
@@ -146,8 +146,22 @@ function Compare(p: MeuDiaProps & { mine: api.PPhoto[], dates: string[] }) {
         <div className="co-pair">
           {[before, after].map((d, i) => { const ph = p.mine.find(x => x.date === d && x.pose === pose)!; return <figure key={i}><FullPhoto id={ph.id} thumb={ph.thumb} alt={`${i ? 'Depois' : 'Antes'}: ${poseLabel(pose)}, ${fullDate(d)}`}/><figcaption>{i ? 'Depois' : 'Antes'} · {fullDate(d)}</figcaption></figure> })}
         </div>}
+      {withPose.length >= 2 && before && after && before !== after && <CompareNumbers {...p} before={before < after ? before : after} after={before < after ? after : before}/>}
     </div>
   )
+}
+
+const N1 = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',')
+/** Peso e medidas perto de cada foto (até 14 dias) e a diferença, sem julgar se subir ou descer é bom. */
+function CompareNumbers(p: MeuDiaProps & { before: string, after: string }) {
+  const c = photoCompare(p.logs, p.me, p.before, p.after)
+  if (!c.rows.length) return <p className="row-s co-nums-empty">Registre peso ou medidas perto das datas das fotos para ver os números aqui.</p>
+  return <table className="co-nums">
+    <caption>Em {c.days} dia{c.days === 1 ? '' : 's'} · valores registrados perto de cada foto</caption>
+    <thead><tr><th scope="col">Medida</th><th scope="col">Antes</th><th scope="col">Depois</th><th scope="col">Diferença</th></tr></thead>
+    <tbody>{c.rows.map(r => <tr key={r.key}><th scope="row">{r.label}</th><td className="mono">{N1(r.a)}</td><td className="mono">{N1(r.b)}</td>
+      <td className="mono">{r.diff === 0 ? 'igual' : `${r.diff > 0 ? '+' : '−'}${N1(Math.abs(r.diff))} ${r.unit}`}</td></tr>)}</tbody>
+  </table>
 }
 
 function FullPhoto({ id, thumb, alt }: { id: string, thumb: string, alt: string }) {

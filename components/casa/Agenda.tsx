@@ -1,7 +1,7 @@
 'use client'
 // Agenda da casa: compromissos domésticos e manutenções que vencem, mais os
 // vencimentos simples (pago/pendente) com atalho para o Sobrou!. Sem módulo financeiro.
-import { useState } from 'react'
+import { useState, type ReactNode } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
 import { fmtDate } from '@/lib/dates'
@@ -10,7 +10,8 @@ import type { EventInput } from '@/lib/services/agenda'
 
 const first = (n: string) => (n || '').split(' ')[0]
 
-export function AgendaView({ available, events, maint, dogCare = [], today, names, sobrouUrl, onNew, onEdit, onDone, onPaid, onOpenMaint, onOpenDogs, onSaveSobrou }: {
+export function AgendaView({ available, events, maint, dogCare = [], today, names, sobrouUrl, onNew, onEdit, onDone, onPaid, onOpenMaint, onOpenDogs, onSaveSobrou, footer }: {
+  footer?: ReactNode
   available: boolean, events: HouseEvent[], maint: Array<{ id: string, title: string, next_due: string, category: string }>
   dogCare?: Array<{ id: string, title: string, date: string, icon: string }>, onOpenDogs?: () => void
   today: string, names: Names, sobrouUrl: string | null
@@ -77,6 +78,7 @@ export function AgendaView({ available, events, maint, dogCare = [], today, name
           </> : <button className="lnk-inline" onClick={() => setEditUrl(true)}>{sobrouUrl ? 'Trocar o link do Sobrou!' : 'Configurar o link do Sobrou!'}</button>}
         </div>
       </div>
+      {footer}
     </div>
   )
 }

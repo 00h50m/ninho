@@ -25,6 +25,7 @@ import { MoodCard } from './Humor'
 import { goalProgress, type PGoal } from '@/lib/goals'
 import type { CustomFood, FoodProfile, MealItem } from '@/lib/nutricao'
 import type { SavedMeal } from '@/lib/savedMeals'
+import type { Recipe } from '@/lib/receitas'
 import type { DietPlan, PlanFood, PlanRow } from '@/lib/dietPlan'
 
 const first = (n: string) => (n || '').split(' ')[0]
@@ -40,6 +41,7 @@ export interface MeuDiaProps {
   profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, householdId: string
   saved: SavedMeal[], savedReady?: boolean
   menus: MenuRow[], menusReady?: boolean
+  recipes: Recipe[], recipesReady?: boolean
   goals: PGoal[], goalsReady?: boolean
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>, date?: string) => Promise<void>
   onRemove: (l: PLog) => Promise<void>
@@ -60,6 +62,9 @@ export interface MeuDiaProps {
   onSaveMeal: (m: { id?: string, name: string, items: MealItem[], kcal: number }) => Promise<void>
   onStopMeal: (m: SavedMeal) => Promise<void>
   onUseMeal: (m: SavedMeal) => void
+  onSaveRecipe: (r: { id?: string, name: string, servings: number, items: MealItem[], steps: string | null, kcal: number }) => Promise<void>
+  onStopRecipe: (r: Recipe) => Promise<void>
+  onRecipeToShopping: (lines: Array<{ title: string, qty: string }>) => Promise<void>
   onSavePlan: (plan: DietPlan, source: string | null) => Promise<void>
   onPlanRemind: (p: PlanRow, remind: boolean) => Promise<void>
   onStopPlan: (p: PlanRow) => Promise<void>

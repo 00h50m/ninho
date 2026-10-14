@@ -7,6 +7,7 @@ import { dueReminders } from '@/lib/reminders'
 import { waterLine } from '@/lib/water'
 import { menuFromDb } from '@/lib/cardapio'
 import { MEALS, mealTotals } from '@/lib/nutricao'
+import { foodAlerts, foodLeftLabel } from '@/lib/caes'
 import { loadRemState } from './reminders'
 import type { BotDeps, TgReport } from './telegram'
 
@@ -92,4 +93,11 @@ export async function menuTap(db: SupabaseClient, link: Link, date: string, meal
   const kcal = mealTotals(m.items).kcal
   const r = await db.from('personal_logs').insert({ household_id: link.household_id, who: link.who, date, kind: 'refeicao', value: kcal, data: { meal: m.meal, text: `${m.name} (cardápio)`, items: m.items, via: 'telegram', menu_ref: ref } })
   return r.error ? '⚠️ Não consegui lançar agora. Tente de novo.' : `🍽️ ${m.name} lançado (${kcal.toLocaleString('pt-BR')} kcal).`
+}
+
+/** Bom dia: ração acabando (até 5 dias). Sem as colunas do estoque, não mostra nada. */
+export async function foodLines(db: SupabaseClient, householdId: string, date: string): Promise<string[]> {
+  const r = await db.from('dogs').select('id,name,food_g_day,food_stock_kg,food_stock_on').eq('household_id', householdId).eq('active', true).not('food_stock_on', 'is', null)
+  if (r.error) return []
+  return foodAlerts(((r.data || []) as any[]).map(d => ({ ...d, food_g_day: Number(d.food_g_day) || null })), date, 5).map(a => `🍖 Ração da ${a.dog.name}: ${foodLeftLabel(a.left)}`)
 }

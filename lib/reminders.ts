@@ -13,7 +13,7 @@ export const RKINDS: Array<[RKind, string, string, string]> = [
   ['refeicao', '🍽️', 'Refeições do plano', 'No horário de cada refeição do plano alimentar (se ligou no plano), se ainda não marcou'],
   ['rotina', '🔁', 'Rotinas', 'Das rotinas com lembrete escolhido (Rotinas › editar), se ainda não foi feita'],
   ['sprint', '⏱', 'Fim do sprint', 'Quando o tempo do Sprint do Ninho acaba'],
-  ['caes', '🐾', 'Saúde dos cães', 'Vacina, vermífugo e consulta: na véspera e no dia, às 9h'],
+  ['caes', '🐾', 'Cães', 'Vacina, vermífugo e consulta na véspera e no dia; ração acabando (5, 3 e 1 dia antes). Às 9h'],
   ['agenda', '📅', 'Agenda da casa', '1 hora antes; vencimentos na véspera e no dia'],
   ['desafio', '🤝', 'Desafio em dupla', 'Às 21h, se o dia ainda não foi marcado'],
   ['agua', '💧', 'Água', 'De 9h30 às 20h, só quando estiver atrás do ritmo, com botão "+1 copo"'],
@@ -35,6 +35,8 @@ export interface RemState {
   routineDone: string[]
   sprint: { id: string, area: string, participants: Who[], endMs: number } | null
   dogHealth: Array<{ id: string, title: string, dog: string, next_date: string }>
+  /** ração: quantos dias ainda dá, por cão (só quem tem o estoque preenchido) */
+  dogFood?: Array<{ id: string, dog: string, left: number }>
   events: Array<{ id: string, title: string, date: string, time: string | null, who: string | null, kind: string, paid: boolean | null, done_at: string | null }>
   challenges: Array<{ id: string, title: string }>   // desafios "marcamos no app" ainda sem o dia de hoje
   checkins: Who[]                                     // quem já fez check-in hoje
@@ -110,6 +112,11 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
     for (const h of s.dogHealth) {
       if (h.next_date === s.date) push(both, 'caes', `caes:${h.id}:${h.next_date}:0`, `🐾 ${h.dog}: ${h.title}`, 'É hoje.', '/?ir=caes')
       else if (h.next_date === tomorrow) push(both, 'caes', `caes:${h.id}:${h.next_date}:1`, `🐾 ${h.dog}: ${h.title}`, 'É amanhã.', '/?ir=caes')
+    }
+    // Ração acabando: 5, 3 e 1 dia antes e no dia em que acaba (não repete todo dia)
+    for (const f of s.dogFood || []) {
+      if (![5, 3, 1, 0].includes(f.left)) continue
+      push(both, 'caes', `racao:${f.id}:${s.date}`, `🍖 Ração da ${f.dog} ${f.left === 0 ? 'acabou' : f.left === 1 ? 'acaba amanhã' : `acaba em ~${f.left} dias`}`, 'Toque para pôr na lista de compras ou marcar o saco novo.', '/?ir=caes')
     }
   }
   // Agenda: 1 h antes; sem horário às 8h30; vencimento na véspera (19h) e no dia (9h)

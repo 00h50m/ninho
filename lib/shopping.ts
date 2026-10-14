@@ -112,6 +112,17 @@ export function groupOpen(items: ShoppingItem[]): Array<{ cat: string, label: st
 }
 
 /**
+ * Modo mercado: só o que falta, na ordem dos corredores (SHOP_CATS), e o que já está
+ * no carrinho separado no fim. `done`/`total` alimentam a barra de progresso.
+ */
+export function marketView(items: ShoppingItem[]): { groups: Array<{ cat: string, label: string, items: ShoppingItem[] }>, cart: ShoppingItem[], done: number, total: number } {
+  const all = groupOpen(items)
+  const groups = all.map(g => ({ ...g, items: g.items.filter(i => !i.checked_at) })).filter(g => g.items.length)
+  const cart = all.flatMap(g => g.items.filter(i => !!i.checked_at)).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)))
+  return { groups, cart, done: cart.length, total: cart.length + groups.reduce((a, g) => a + g.items.length, 0) }
+}
+
+/**
  * "Comprar de novo": itens das últimas compras que não estão na lista,
  * do mais frequente para o menos frequente.
  */
