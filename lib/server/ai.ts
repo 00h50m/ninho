@@ -67,7 +67,7 @@ export async function loadWeekFacts(db: SupabaseClient, householdId: string, now
   const today = homeClock(now).date
   const weekStart = weekStartOf(today)
   const h = await loadHousehold(db, householdId, today)
-  const plan = planToday(h.tasks, h.dogs, today, { split: h.split })
+  const plan = planToday(h.tasks, h.dogs, today, { split: h.split, busy: h.busy })
   const [scoresRaw, settings, meeting] = await Promise.all([
     db.rpc('ninho_weekly_scores', { p_household_id: householdId, p_week_start: weekStart }).then(r => must(r, 'placar')),
     db.from('weekly_settings').select('energy').eq('household_id', householdId).eq('week_start', weekStart).maybeSingle().then(r => r.data as any),

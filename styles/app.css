@@ -1594,3 +1594,27 @@ html.rp-open body{overflow:hidden}
 .cm-m{text-transform:capitalize;font-size:15px;text-align:center;flex:1}
 .cm-sub{color:var(--faint)}
 .cm-l{list-style:none;margin:12px 0;padding:0;display:grid;gap:6px;font-size:13.5px}
+
+/* Ideias de presente */
+.gf{display:grid;gap:14px}
+.gf-priv{margin:0;font-size:13px;color:var(--sub)}
+.gf-date{display:flex;align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--bd)}
+.gf-date:first-of-type{border-top:0}
+.gf-when{flex:0 0 52px;font-size:14px}
+.gf-dt{flex:1;min-width:0;display:flex;flex-direction:column}
+.gf-dt small,.gf-it small{color:var(--sub);font-size:12.5px}
+.gf-sug{margin-top:10px}
+.gf-form{display:grid;gap:8px;margin:6px 0 12px}
+.gf-list{list-style:none;margin:10px 0 0;padding:0}
+.gf-idea{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 0;border-top:1px solid var(--bd)}
+.gf-idea:first-child{border-top:0}
+.gf-it{flex:1 1 200px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.gf-note{font-style:italic}
+.gf-idea.dado .gf-it b{color:var(--sub)}
+.gf-acts{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+
+/* Compromissos no dia */
+.tag-cf{color:var(--cor-tx);font-weight:500}
+.tag-day{color:var(--sub)}
+.why.cf{color:var(--cor-tx)}
+.ag-busy-h{display:block;margin:-2px 0 8px}

@@ -40,7 +40,7 @@ export function AgendaView({ available, events, maint, dogCare = [], today, name
               <button className="chk" aria-label={`Marcar ${it.title} como feito`} onClick={() => onDone(it.event!, true)}>✓</button>
               <button className="ag-b" onClick={() => onEdit(it.event!)}>
                 <span className="ag-t">{it.icon} {it.title}</span>
-                <span className="ag-m">{it.time || 'dia todo'} · {kindLabel(it.event.kind)}{who(it.event.who) ? ` · ${who(it.event.who)}` : ''}{it.late ? ` · era ${fmtDate(it.date)}` : ''}</span>
+                <span className="ag-m">{it.time ? `${it.time}${it.event.end_time ? `–${it.event.end_time.slice(0, 5)}` : ''}` : 'dia todo'} · {kindLabel(it.event.kind)}{who(it.event.who) ? ` · ${who(it.event.who)}` : ''}{it.late ? ` · era ${fmtDate(it.date)}` : ''}</span>
               </button>
             </div>
           ) : (
@@ -91,7 +91,8 @@ export function EventSheet({ event, kind, today, names, saving, onSave, onDelete
   const set = (p: Partial<EventInput>) => setD(x => ({ ...x, ...p }))
   const bill = d.kind === 'vencimento'
   const linkOk = !d.link?.trim() || /^https?:\/\//i.test(d.link.trim())
-  const valid = d.title.trim() && d.date && linkOk
+  const endBad = !!(d.time && d.end_time && d.end_time <= d.time)
+  const valid = d.title.trim() && d.date && linkOk && !endBad
   return (
     <Sheet title={event ? (bill ? 'Editar vencimento' : 'Editar evento') : bill ? 'Novo vencimento' : 'Novo evento'} onClose={onClose} footer={<>
       {event && <button className="btn btn-danger" disabled={saving} onClick={() => onDelete(event)}>Apagar</button>}
@@ -103,8 +104,10 @@ export function EventSheet({ event, kind, today, names, saving, onSave, onDelete
       <label className="onb-f" style={{ marginTop: 12 }}><span>{bill ? 'Nome (ex.: conta de luz)' : 'O quê'}</span><input className="fi" value={d.title} maxLength={80} autoFocus onChange={e => set({ title: e.target.value })} placeholder={bill ? 'Conta de luz' : 'Ex.: vacina da Zelda'}/></label>
       <div className="onb-row">
         <label className="onb-f"><span>{bill ? 'Vence em' : 'Data'}</span><input className="fi" type="date" value={d.date} onChange={e => set({ date: e.target.value })}/></label>
-        {!bill && <label className="onb-f"><span>Horário</span><input className="fi" type="time" value={d.time || ''} onChange={e => set({ time: e.target.value || null })}/></label>}
+        {!bill && <label className="onb-f"><span>Horário</span><input className="fi" type="time" value={d.time || ''} onChange={e => set({ time: e.target.value || null, ...(e.target.value ? {} : { end_time: null }) })}/></label>}
+        {!bill && d.time && <label className="onb-f"><span>Até</span><input className="fi" type="time" value={d.end_time || ''} min={d.time} onChange={e => set({ end_time: e.target.value || null })} aria-invalid={endBad}/></label>}
       </div>
+      {!bill && d.time && <small className="row-s ag-busy-h">{endBad ? 'O fim precisa ser depois do começo.' : 'Com horário e “quem vai”, as tarefas desse horário passam para a outra (sem fim marcado, conta 1 hora).'}</small>}
       <div className="onb-q">{bill ? 'Quem cuida' : 'Quem vai'}</div>
       <div className="onb-days wrap" role="radiogroup" aria-label="Quem">
         {([null, 'g', 's', 'both'] as const).map(w => <button key={String(w)} role="radio" aria-checked={d.who === w} className={`onb-day wide ${d.who === w ? 'on' : ''}`} onClick={() => set({ who: w })}>{w === null ? '—' : w === 'both' ? 'As duas' : first(names[w])}</button>)}

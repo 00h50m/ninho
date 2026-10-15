@@ -15,7 +15,7 @@ import { SHOP_CATS, guessCategory, normalize, parseEntry } from '@/lib/shopping'
 import { loadHousehold, morningPayloads, must, weeklyPayload } from './notify'
 import { execute as executeAi, type Understood } from './telegramAi'
 import { meuDiaWeekLines } from './weekReport'
-import { foodLines, menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
+import { foodLines, giftAdd, giftList, menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
 import { sobrouAlerts, type SobrouResumo } from '@/lib/sobrou'
 import { addDays } from '@/lib/dates'
 import type { AiAction } from '@/lib/telegramAi'
@@ -88,6 +88,7 @@ export const HELP = [
   '/compras — a lista de compras',
   '/compras leite, 2 kg arroz — adiciona itens (ou mande "+leite")',
   '/dicas — sugestões da IA para a semana',
+  '/presente fone azul — anota uma ideia de presente (só você vê) · /presentes — a sua lista',
   '/menu — mostra o menu de novo',
   '/sair — desliga esta conversa do Ninho',
 ].join('\n')
@@ -132,7 +133,7 @@ interface TodayView { text: string, buttons: Array<Array<{ text: string, callbac
 
 export async function todayView(db: SupabaseClient, link: Link, date: string): Promise<TodayView> {
   const h = await loadHousehold(db, link.household_id, date)
-  const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split })
+  const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy })
   const mine = plan.items.filter(i => plan.ownerOfItem(i) === link.who)
   const pend = mine.filter(i => !i.completed_today).sort((a, b) => (hhmm(a.scheduled_time) || '99').localeCompare(hhmm(b.scheduled_time) || '99'))
   const maint = dueForPerson(h.maint as MaintenanceItem[], link.who, date)
@@ -192,7 +193,7 @@ async function doneByName(deps: BotDeps, link: Link, arg: string, date: string) 
   const q = normalize(arg)
   if (!q) return send(deps, link.chat_id, 'Diga o nome: /feito louça')
   const h = await loadHousehold(deps.db, link.household_id, date)
-  const plan = planToday(h.tasks, h.dogs, date, { focus: false, split: h.split })
+  const plan = planToday(h.tasks, h.dogs, date, { focus: false, split: h.split, busy: h.busy })
   const pend = plan.items.filter(i => !i.completed_today)
   const title = (i: typeof pend[number]) => i.task ? i.task.title : i.dog!.title
   const hits = pend.filter(i => normalize(title(i)).includes(q))
@@ -278,6 +279,8 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   else if (cmd === '/menu') await send(deps, chatId, 'Menu aberto aqui embaixo. 👇', { reply_markup: MENU })
   else if (cmd === '/compras' || cmd === '/lista') await (arg ? shoppingAdd(deps, link, arg) : shoppingList(deps, link))
   else if (cmd === '/feito') await doneByName(deps, link, arg, date)
+  else if (cmd === '/presente') await send(deps, chatId, await giftAdd(deps.db, link, arg).catch(() => '⚠️ Não consegui anotar agora. Tente de novo.'))
+  else if (cmd === '/presentes') await send(deps, chatId, await giftList(deps.db, link, date).catch(() => '⚠️ Não consegui abrir a lista agora.'))
   else if (cmd === '/dicas') {
     if (!deps.tips) { await send(deps, chatId, 'A IA ainda não foi configurada no servidor.'); return }
     await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })

@@ -22,7 +22,7 @@ const soft = async <T>(q: PromiseLike<{ data: T[] | null, error: any }>): Promis
 export async function loadRemState(db: SupabaseClient, householdId: string, now: Date): Promise<RemState> {
   const { date, hm } = homeClock(now)
   const hh = (t: string, cols: string) => db.from(t).select(cols).eq('household_id', householdId)
-  const [profiles, meds, logs, settings, routines, runs, sprints, dogs, health, events, challenges, marks, checkins, plans, nights, food] = await Promise.all([
+  const [profiles, meds, logs, settings, routines, runs, sprints, dogs, health, events, challenges, marks, checkins, plans, nights, food, gDates, gIdeas] = await Promise.all([
     soft<any>(hh('profiles', 'display_name,role')),
     soft<any>(hh('personal_meds', 'id,who,name,dose,times').eq('active', true)),
     soft<any>(hh('personal_logs', 'who,kind,value,data').eq('date', date).in('kind', ['remedio', 'agua', 'refeicao'])),
@@ -40,6 +40,9 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     soft<any>(hh('personal_logs', 'who,kind,date,data').eq('kind', 'sono').gte('date', addDays(date, -14))),
     // estoque de ração em consulta separada: sem as colunas, o resto dos cães segue normal
     soft<any>(hh('dogs', 'id,name,food_g_day,food_stock_kg,food_stock_on').eq('active', true).not('food_stock_on', 'is', null)),
+    // datas especiais (036): sem a tabela, vem vazio
+    soft<any>(hh('gift_dates', 'id,who,title,month,day,for_who')),
+    soft<any>(hh('gift_ideas', 'id,who,for_who,date_id,status').neq('status', 'dado')),
   ])
   const g = profiles.find(p => p.role === 'g'), s = profiles.find(p => p.role === 's')
   const names: Names = { g: g?.display_name || DEFAULT_NAMES.g, s: s?.display_name || DEFAULT_NAMES.s }
@@ -54,6 +57,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     routines: routines.filter(r => r.active !== false),
     routineDone: runs.map(r => r.routine_id),
     sprint: sp ? { id: sp.id, area: sp.area, participants: sp.participants || [], endMs: now.getTime() + remainingMs(sp, now.getTime()) } : null,
+    gifts: { dates: gDates, ideas: gIdeas },
     dogFood: food.flatMap(d => { const left = foodDaysLeft({ ...d, food_g_day: Number(d.food_g_day) || null }, date); return left == null ? [] : [{ id: d.id, dog: d.name, left }] }),
     dogHealth: health.filter(h => dogs.some(d => d.id === h.dog_id)).map(h => ({ id: h.id, title: h.title, dog: dogName(h.dog_id), next_date: h.next_date })),
     events,

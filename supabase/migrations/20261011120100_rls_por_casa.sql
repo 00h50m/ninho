@@ -17,7 +17,7 @@ begin
   foreach t in array array[
     'tasks','task_completions','dogs','dog_completions','weekly_settings','weekly_meetings',
     'xp_history','puppy_accidents','push_subscriptions','shopping_items','maintenance_items',
-    'maintenance_log','task_skips','telegram_links',
+    'maintenance_log','task_skips','task_handoffs','telegram_links',
     'household_setup','onboarding_progress','routines','routine_steps','daily_checkins','household_days',
     'routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs','routine_templates','sprints','house_events','dog_health','couple_challenges','challenge_marks','faxinoes'] loop
     if to_regclass('public.' || t) is null then continue; end if;
@@ -114,6 +114,15 @@ begin
       execute format('drop policy if exists "personal_write" on public.%I', t);
       execute format('create policy "personal_read" on public.%I for select to authenticated using (who = public.ninho_my_who(household_id) or (public.ninho_is_member(household_id) and public.ninho_personal_shared(household_id, who, %L)))', t, 'refeicao');
       execute format('create policy "personal_write" on public.%I for all to authenticated using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id))', t);
+    end if;
+  end loop;
+  -- Ideias de presente (036): só da dona, sem compartilhamento (é surpresa)
+  for t in select unnest(array['gift_dates','gift_ideas']) loop
+    if to_regclass('public.' || t) is not null then
+      execute format('drop policy if exists "allow_all_auth" on public.%I', t);
+      execute format('drop policy if exists "household_member" on public.%I', t);
+      execute format('drop policy if exists "owner_only" on public.%I', t);
+      execute format('create policy "owner_only" on public.%I for all to authenticated using (who = public.ninho_my_who(household_id)) with check (who = public.ninho_my_who(household_id))', t);
     end if;
   end loop;
 end $$;

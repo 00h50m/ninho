@@ -1,11 +1,11 @@
 // Acesso ao Supabase. Toda função confere `error` e lança NinhoError quando o banco recusa.
 // Nenhuma usa service_role: só a chave anon do app e o login anônimo atual.
 import { supabase } from '@/lib/supabase'
-import { NinhoError, logError } from '@/lib/errors'
+import { NinhoError, isMissingTable, logError } from '@/lib/errors'
 import { addDays } from '@/lib/dates'
 import type { Accident, CompletionRow, Dog, Energy, HistoryWeek, Meeting, Names, Task, Who } from '@/lib/types'
 import { DEFAULT_NAMES } from '@/lib/constants'
-import type { SkipRow } from '@/lib/build'
+import type { HandoffRow, SkipRow } from '@/lib/build'
 import { EMPTY_SCORES, EMPTY_STREAKS, type AchievementStats, type Streaks, type WeeklyScores } from '@/lib/gamification'
 
 type Res<T> = { data: T | null, error: unknown }
@@ -50,7 +50,7 @@ export async function loadTasks(householdId: string, today: string) {
   const old = onceIds.length
     ? await run('carregar conclusões antigas', supabase.from('task_completions').select('id,task_id,date,completed_by').eq('household_id', householdId).in('task_id', onceIds).lt('date', since))
     : []
-  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])], skips: await loadSkips(householdId, today) }
+  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])], skips: await loadSkips(householdId, today), handoffs: await loadHandoffs(householdId, today) }
 }
 
 /** Pular/adiar do último mês (o período mais longo). Sem a migration 008, segue sem pausas. */
@@ -58,6 +58,21 @@ export async function loadSkips(householdId: string, today: string): Promise<Ski
   const r = await supabase.from('task_skips').select('id,task_id,date,kind,skipped_by').eq('household_id', householdId).gte('date', addDays(today, -31))
   if (r.error) { logError('carregar tarefas puladas', r.error); return [] }
   return (r.data || []) as SkipRow[]
+}
+
+/** "Passar só hoje" (036). Sem a migration, segue sem. */
+export async function loadHandoffs(householdId: string, today: string): Promise<HandoffRow[]> {
+  const r = await supabase.from('task_handoffs').select('id,task_id,date,to_who,by_who').eq('household_id', householdId).eq('date', today)
+  if (r.error) { if (!isMissingTable(r.error)) logError('carregar tarefas passadas', r.error); return [] }
+  return (r.data || []) as HandoffRow[]
+}
+/** A tarefa vai para `to` só neste dia (a responsável de sempre não muda). */
+export async function handoffTask(householdId: string, taskId: string, date: string, to: Who, by: Who | null): Promise<HandoffRow> {
+  return await run('passar só hoje', supabase.from('task_handoffs')
+    .upsert({ household_id: householdId, task_id: taskId, date, to_who: to, by_who: by }, { onConflict: 'task_id,date' }).select('id,task_id,date,to_who,by_who').single()) as HandoffRow
+}
+export async function unhandoffTask(id: string) {
+  await run('desfazer passar só hoje', supabase.from('task_handoffs').delete().eq('id', id).select('id'))
 }
 
 /** Pular (skip) ou deixar para amanhã (snooze). Um registro por tarefa por dia. */

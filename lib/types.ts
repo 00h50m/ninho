@@ -20,7 +20,11 @@ export interface CompletionState {
   hist?: HistEntry[]
   /** Pulada ou deixada para amanhã, valendo hoje (só tarefas). */
   skip?: SkipInfo | null
+  /** "Passar só hoje" (migration 036): a tarefa vai para a outra só neste dia. */
+  handoff?: HandoffInfo | null
 }
+
+export interface HandoffInfo { id: string, date: string, to: Who, by: Who | null }
 
 /** snooze = deixar para amanhã (some só no dia); skip = pular (resolve o período, sem XP). */
 export interface SkipInfo { id: string, date: string, kind: 'snooze' | 'skip', by: Who | null }

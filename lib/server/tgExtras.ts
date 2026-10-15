@@ -8,6 +8,7 @@ import { waterLine } from '@/lib/water'
 import { menuFromDb } from '@/lib/cardapio'
 import { MEALS, mealTotals } from '@/lib/nutricao'
 import { foodAlerts, foodLeftLabel } from '@/lib/caes'
+import { ddmm, other, parseGift, upcomingDates, whenLabel, type GiftDate, type GiftIdea } from '@/lib/presentes'
 import { loadRemState } from './reminders'
 import type { BotDeps, TgReport } from './telegram'
 
@@ -100,4 +101,33 @@ export async function foodLines(db: SupabaseClient, householdId: string, date: s
   const r = await db.from('dogs').select('id,name,food_g_day,food_stock_kg,food_stock_on').eq('household_id', householdId).eq('active', true).not('food_stock_on', 'is', null)
   if (r.error) return []
   return foodAlerts(((r.data || []) as any[]).map(d => ({ ...d, food_g_day: Number(d.food_g_day) || null })), date, 5).map(a => `🍖 Ração da ${a.dog.name}: ${foodLeftLabel(a.left)}`)
+}
+
+// ── Ideias de presente (036) ─────────────────────────────────────────
+/** Tabela ainda não criada: o PostgREST responde 404 (PGRST205 nas versões novas, corpo vazio nas antigas). */
+const noGiftTable = (e: any, status?: number) => !!e && (status === 404 || e.code === '42P01' || e.code === 'PGRST205' || /gift_(ideas|dates)/.test(e.message || ''))
+const GIFT_MISSING = '🎁 As ideias de presente ainda não estão ativas: falta rodar a atualização do banco (migration 036).'
+
+/** "/presente fone azul https://… até R$ 200": anota para a outra, só na lista de quem mandou. */
+export async function giftAdd(db: SupabaseClient, link: Link, text: string): Promise<string> {
+  const g = parseGift(text)
+  if (!g) return '🎁 Escreva o que ela comentou que queria. Ex.: /presente fone sem fio azul\n(só você vê a sua lista)'
+  const r = await db.from('gift_ideas').insert({ household_id: link.household_id, who: link.who, for_who: other(link.who), title: g.title, link: g.link, price: g.price }).select('id')
+  if (noGiftTable(r.error, r.status)) return GIFT_MISSING
+  if (r.error) throw new Error(r.error.message)
+  return `🎁 Anotado na sua lista: ${g.title}${g.price ? ` (${g.price})` : ''}${g.link ? ' · com link' : ''}\nSó você vê. No app: Nós › 🎁 Presentes.`
+}
+
+/** "/presentes": as ideias em aberto e as próximas datas, só de quem pediu. */
+export async function giftList(db: SupabaseClient, link: Link, date: string): Promise<string> {
+  const [d, i] = await Promise.all([
+    db.from('gift_dates').select('id,who,title,month,day,for_who').eq('household_id', link.household_id).eq('who', link.who),
+    db.from('gift_ideas').select('id,who,for_who,title,note,link,price,date_id,status,given_on,created_at').eq('household_id', link.household_id).eq('who', link.who).neq('status', 'dado').order('created_at', { ascending: false }).limit(30),
+  ])
+  if (noGiftTable(d.error, d.status) || noGiftTable(i.error, i.status)) return GIFT_MISSING
+  const dates = (d.data || []) as GiftDate[], ideas = (i.data || []) as GiftIdea[]
+  const up = upcomingDates(dates, ideas, date, 60).slice(0, 3).map(u => `📅 ${u.date.title}: ${whenLabel(u.days)} (${ddmm(u.date.month, u.date.day)})`)
+  const list = ideas.map(x => `${x.status === 'comprado' ? '🛍️' : '💡'} ${x.title}${x.price ? ` · ${x.price}` : ''}`)
+  if (!up.length && !list.length) return '🎁 Sua lista está vazia. Anote com: /presente fone sem fio azul'
+  return ['🎁 Sua lista (só você vê)', ...up, ...(up.length && list.length ? [''] : []), ...list].join('\n')
 }

@@ -18,7 +18,7 @@ export async function planDay(db: SupabaseClient, householdId: string, me: Who, 
   if (used.length >= DAY_DAILY_LIMIT) return { ok: false, status: 429, message: `Limite de ${DAY_DAILY_LIMIT} dias organizados por dia. Tente amanhã.` }
   const { date, hm } = homeClock(now)
   const h = await loadHousehold(db, householdId, date)
-  const plan = planToday(h.tasks, h.dogs, date, { split: h.split })
+  const plan = planToday(h.tasks, h.dogs, date, { split: h.split, busy: h.busy })
   const events = await db.from('house_events').select('title,time,who,done_at').eq('household_id', householdId).eq('date', date)
   const existing: DayContext['existing'] = [
     ...plan.items.filter(i => !i.completed_today).map(i => ({ title: i.task ? i.task.title : `${i.dog!.title} (cães)`, time: i.scheduled_time?.slice(0, 5) || null, who: i.task ? plan.ownerOfTask(i.task) : null, kind: 'tarefa' as const })),

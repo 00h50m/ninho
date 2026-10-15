@@ -5,7 +5,7 @@ import { addDays } from './dates'
 import { kindIcon, kindLabel, type HouseEvent } from './agenda'
 import { upcomingCare, type HealthRecord } from './caes'
 
-export interface IcsItem { uid: string, date: string, time: string | null, title: string, desc: string }
+export interface IcsItem { uid: string, date: string, time: string | null, end?: string | null, title: string, desc: string }
 
 /** Texto seguro para o .ics (barra, ponto e vírgula, vírgula e quebras de linha escapados). */
 export const icsText = (s: string) => s.replace(/[\\;,]/g, m => '\\' + m).replace(/\r?\n/g, '\\n').replace(/[\u0000-\u001f]/g, '')
@@ -40,7 +40,7 @@ export function icsCalendar(name: string, items: IcsItem[], stamp: string): stri
   ]
   for (const it of items) {
     L.push('BEGIN:VEVENT', `UID:${it.uid}@ninho`, `DTSTAMP:${stamp}`)
-    if (it.time) L.push(`DTSTART;TZID=America/Sao_Paulo:${ymd(it.date)}T${hms(it.time)}`, `DTEND;TZID=America/Sao_Paulo:${ymd(it.date)}T${plus1h(it.time)}`)
+    if (it.time) L.push(`DTSTART;TZID=America/Sao_Paulo:${ymd(it.date)}T${hms(it.time)}`, `DTEND;TZID=America/Sao_Paulo:${ymd(it.date)}T${it.end && it.end.slice(0, 5) > it.time.slice(0, 5) ? hms(it.end) : plus1h(it.time)}`)
     else L.push(`DTSTART;VALUE=DATE:${ymd(it.date)}`, `DTEND;VALUE=DATE:${ymd(addDays(it.date, 1))}`)
     L.push(`SUMMARY:${icsText(it.title)}`, `DESCRIPTION:${icsText(it.desc)}`, 'TRANSP:TRANSPARENT', 'END:VEVENT')
   }
@@ -59,7 +59,7 @@ export function agendaItems(o: {
   const from = addDays(o.today, -30), until = addDays(o.today, 365)
   const ev: IcsItem[] = o.events
     .filter(e => e.date >= from && e.date <= until && !(e.kind === 'vencimento' && e.paid))
-    .map(e => ({ uid: `ev-${e.id}`, date: e.date, time: /^\d{2}:\d{2}/.test(e.time || '') ? e.time : null, title: `${kindIcon(e.kind)} ${e.title}`, desc: `${kindLabel(e.kind)} · Ninho` }))
+    .map(e => ({ uid: `ev-${e.id}`, date: e.date, time: /^\d{2}:\d{2}/.test(e.time || '') ? e.time : null, end: e.end_time || null, title: `${kindIcon(e.kind)} ${e.title}`, desc: `${kindLabel(e.kind)} · Ninho` }))
   const mt: IcsItem[] = o.maint
     .filter(m => m.next_due >= from && m.next_due <= until)
     .map(m => ({ uid: `mt-${m.id}-${m.next_due}`, date: m.next_due, time: null, title: `🔧 ${m.title}`, desc: 'Manutenção da casa · Ninho' }))

@@ -20,8 +20,14 @@ export async function GET(_req: Request, ctx: { params: Promise<{ file: string }
   if (house.error || !house.data) return notFound()
   const hh = (house.data as any).id as string
   const today = homeToday()
+  // com a hora de fim (036); sem a coluna, como antes
+  const events = async () => {
+    const q = (cols: string) => db.from('house_events').select(cols).eq('household_id', hh).gte('date', addDays(today, -30)).order('date').limit(1000)
+    const r = await q('id,kind,title,date,time,end_time,who,paid,done_at')
+    return r.error ? q('id,kind,title,date,time,who,paid,done_at') : r
+  }
   const [ev, mt, hl, dg] = await Promise.all([
-    db.from('house_events').select('id,kind,title,date,time,who,paid,done_at').eq('household_id', hh).gte('date', addDays(today, -30)).order('date').limit(1000),
+    events(),
     db.from('maintenance_items').select('id,title,next_due').eq('household_id', hh).eq('active', true),
     db.from('dog_health').select('id,dog_id,kind,title,date,next_date,every_days').eq('household_id', hh).order('date', { ascending: false }).limit(500),
     db.from('dogs').select('id,name').eq('household_id', hh).eq('active', true),

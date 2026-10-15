@@ -1,5 +1,5 @@
 // Monta tarefas e cães com o estado de conclusão (usado pelo app e pelo servidor).
-import type { CompletionRow, Dog, Task } from './types'
+import type { CompletionRow, Dog, Task, Who } from './types'
 import { summarizeCompletions } from './completions'
 import { byTime } from './today'
 import { isWho } from './rotation'
@@ -9,14 +9,19 @@ type Row = Record<string, any>
 /** Linha de task_skips. */
 export interface SkipRow { id: string, task_id: string, date: string, kind: 'snooze' | 'skip', skipped_by?: string | null }
 
-export function buildTasks(rows: Row[], comps: CompletionRow[], today: string, skips: SkipRow[] = []): Task[] {
+/** Linha de task_handoffs (036). */
+export interface HandoffRow { id: string, task_id: string, date: string, to_who: string, by_who?: string | null }
+
+export function buildTasks(rows: Row[], comps: CompletionRow[], today: string, skips: SkipRow[] = [], handoffs: HandoffRow[] = []): Task[] {
   const info = summarizeCompletions(comps, 'task_id', today)
   // Pausa mais recente até hoje de cada tarefa (pular vale o período; adiar, só o dia)
   const last = new Map<string, SkipRow>()
   for (const s of skips) if (s.date <= today && (!last.has(s.task_id) || s.date > last.get(s.task_id)!.date)) last.set(s.task_id, s)
   return rows.map(t => {
     const s = last.get(t.id)
-    return { ...(t as Task), ...info(t.id), skip: s ? { id: s.id, date: s.date, kind: s.kind, by: isWho(s.skipped_by) ? s.skipped_by : null } : null }
+    const h = handoffs.find(x => x.task_id === t.id && x.date === today && isWho(x.to_who))
+    return { ...(t as Task), ...info(t.id), skip: s ? { id: s.id, date: s.date, kind: s.kind, by: isWho(s.skipped_by) ? s.skipped_by : null } : null,
+      handoff: h ? { id: h.id, date: h.date, to: h.to_who as Who, by: isWho(h.by_who) ? h.by_who : null } : null }
   })
 }
 

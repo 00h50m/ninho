@@ -17,6 +17,8 @@ export const kindLabel = (k: string) => KINDS.find(x => x[0] === k)?.[2] || 'Eve
 
 export interface HouseEvent {
   id: string, kind: EventKind, title: string, date: string, time: string | null
+  /** até que horas (036); sem ela, conta 1 hora */
+  end_time?: string | null
   who: 'g' | 's' | 'both' | null, notes: string | null, link: string | null, paid: boolean | null, done_at: string | null
 }
 

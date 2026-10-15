@@ -6,8 +6,9 @@ import { addDays, dowOf } from './dates'
 
 import { WATER_TIMES, waterBehind, waterLine } from './water'
 import { bedReminder, bedtime } from './sono'
+import { giftReminders, type GiftDate, type GiftIdea } from './presentes'
 
-export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao' | 'dormir'
+export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao' | 'dormir' | 'presente'
 export const RKINDS: Array<[RKind, string, string, string]> = [
   ['remedio', '💊', 'Remédios e vitaminas', 'No horário de cada dose, se ainda não marcou'],
   ['refeicao', '🍽️', 'Refeições do plano', 'No horário de cada refeição do plano alimentar (se ligou no plano), se ainda não marcou'],
@@ -18,10 +19,11 @@ export const RKINDS: Array<[RKind, string, string, string]> = [
   ['desafio', '🤝', 'Desafio em dupla', 'Às 21h, se o dia ainda não foi marcado'],
   ['agua', '💧', 'Água', 'De 9h30 às 20h, só quando estiver atrás do ritmo, com botão "+1 copo"'],
   ['checkin', '💬', 'Check-in da noite', 'Às 21h30, se ainda não fez o check-in'],
+  ['presente', '🎁', 'Datas especiais', 'Das suas datas em Nós › Presentes: 14 e 3 dias antes e no dia, às 9h. Só no seu aparelho'],
   ['dormir', '🌙', 'Hora de dormir', '30 min antes da hora de deitar para a sua meta de sono (pelo horário em que costuma acordar). Vale mesmo no horário de silêncio'],
 ]
 export type RPrefs = Record<RKind, boolean>
-export const DEFAULT_RPREFS: RPrefs = { remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false, dormir: false }
+export const DEFAULT_RPREFS: RPrefs = { remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false, dormir: false, presente: true }
 export const prefsOf = (x: unknown): RPrefs => ({ ...DEFAULT_RPREFS, ...(x && typeof x === 'object' ? x as Partial<RPrefs> : {}) })
 
 export interface RemState {
@@ -37,6 +39,8 @@ export interface RemState {
   dogHealth: Array<{ id: string, title: string, dog: string, next_date: string }>
   /** ração: quantos dias ainda dá, por cão (só quem tem o estoque preenchido) */
   dogFood?: Array<{ id: string, dog: string, left: number }>
+  /** datas especiais e ideias de presente (036): cada uma só da dona */
+  gifts?: { dates: GiftDate[], ideas: GiftIdea[] }
   events: Array<{ id: string, title: string, date: string, time: string | null, who: string | null, kind: string, paid: boolean | null, done_at: string | null }>
   challenges: Array<{ id: string, title: string }>   // desafios "marcamos no app" ainda sem o dia de hoje
   checkins: Who[]                                     // quem já fez check-in hoje
@@ -113,6 +117,8 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
       if (h.next_date === s.date) push(both, 'caes', `caes:${h.id}:${h.next_date}:0`, `🐾 ${h.dog}: ${h.title}`, 'É hoje.', '/?ir=caes')
       else if (h.next_date === tomorrow) push(both, 'caes', `caes:${h.id}:${h.next_date}:1`, `🐾 ${h.dog}: ${h.title}`, 'É amanhã.', '/?ir=caes')
     }
+    // Datas especiais: só para a dona da data
+    if (s.gifts) for (const g of giftReminders(s.gifts.dates, s.gifts.ideas, s.date)) push([g.who], 'presente', g.ref, g.title, g.body, '/?ir=presentes')
     // Ração acabando: 5, 3 e 1 dia antes e no dia em que acaba (não repete todo dia)
     for (const f of s.dogFood || []) {
       if (![5, 3, 1, 0].includes(f.left)) continue

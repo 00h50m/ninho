@@ -31,7 +31,7 @@ export type Understood =
 export async function loadContext(db: SupabaseClient, link: TgLink, now: Date): Promise<AiContext> {
   const { date, hm } = homeClock(now)
   const h = await loadHousehold(db, link.household_id, date)
-  const plan = planToday(h.tasks, h.dogs, date, { focus: false, split: h.split })
+  const plan = planToday(h.tasks, h.dogs, date, { focus: false, split: h.split, busy: h.busy })
   const pend = plan.items.filter(i => !i.completed_today)
   const tasks = pend.map(i => i.task ? { id: `t:${i.task.id}`, title: i.task.title } : { id: `d:${i.dog!.parts[0].r.id}`, title: `${i.dog!.title} (${i.dog!.parts.map(p => p.dog.name).join(' e ')})` })
   const dogs = (must(await db.from('dogs').select('id,name').eq('household_id', link.household_id).eq('active', true), 'cães') as any[]).map(d => ({ id: d.id, name: d.name }))

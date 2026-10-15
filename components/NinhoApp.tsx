@@ -10,6 +10,7 @@ import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '
 import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, weekdaysLabel } from '@/lib/frequency'
 import { isFixed } from '@/lib/rotation'
 import { whyLabel, type SplitMode } from '@/lib/split'
+import { busyWindows } from '@/lib/busy'
 import * as casaApi from '@/lib/services/casa'
 import { useCasa } from '@/hooks/useCasa'
 import { ShoppingTab } from '@/components/casa/ShoppingTab'
@@ -77,6 +78,7 @@ import * as nosApi from '@/lib/services/nos'
 import { bothCheckinStreak, meetingAgenda, progress as chProgress, timeline as nosTimeline, type Agreement, type AgendaSection, type Challenge } from '@/lib/nos'
 import { ChallengeCard, ChallengesView, CheckinHistory, DayNoteCard, TimelineCard, TogetherCard } from '@/components/nos/NosViews'
 import { CoupleMonthCard } from '@/components/nos/ResumoMes'
+import { GiftsView } from '@/components/nos/Presentes'
 import { dosesToday, waterOn, workoutsWeek, DEFAULT_SETTINGS as MD_DEFAULT, type Dose } from '@/lib/meudia'
 import { buildTimeline } from '@/lib/timeline'
 import { mascotSay } from '@/lib/mascote'
@@ -98,7 +100,7 @@ export interface Account { who:Who, email:string, onSignOut:()=>void }
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const [screen,setScreenState]=useState<ScreenId>('inicio')
   const [casaView,setCasaView]=useState<CasaView>('tarefas')
-  const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'>('semana')
+  const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'|'presentes'>('semana')
   const [rotView,setRotView]=useState<'rotinas'|'habitos'>('rotinas')
   const [theme,setThemeState]=useState<ThemeId>('aconchego')
   // Conforto do aparelho (Fase 9): tamanho, contraste, movimento, tema automático, cartões do Início
@@ -295,6 +297,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       case 'agenda':setTab('casa');setCasaView('agenda');break
       case 'faxinao':setTab('casa');setCasaView('faxinao');break
       case 'desafios':setTab('nos');setNosView('desafios');break
+      case 'presentes':setTab('nos');setNosView('presentes');break
       case 'nos':setTab('nos');setNosView('semana');break
       case 'sprint':setTab('inicio');setWantSprint(true);break
       case 'checkin':setTab('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),900);break
@@ -436,6 +439,29 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     const prev=t.assigned_to
     if(await updateTaskFields(t.id,{assigned_to:n}))
       showToast(`Passada para ${firstName(names[n])}${isFixed(t)?'':' (sai do rodízio)'}`,()=>{setToast(null);assignTask(t.id,prev)})
+  }
+
+  // ── PASSAR SÓ HOJE (036) ──────────────────────────────
+  async function handoffToday(t:Task){
+    const by=requireMe();if(!by)return
+    const to:Who=plan.ownerOfTask(t)==='g'?'s':'g',before=t.handoff??null
+    await withPending(['task:'+t.id],async()=>{
+      patchTask(t.id,{handoff:{id:'tmp',date:today,to,by}})
+      try{
+        const r=await api.handoffTask(householdId,t.id,today,to,by)
+        const handoff={id:r.id,date:r.date,to,by}
+        patchTask(t.id,{handoff})
+        showToast(`Só hoje com ${firstName(names[to])} · ${t.title}`,()=>{setToast(null);undoHandoff({...t,handoff})})
+      }catch(e){patchTask(t.id,{handoff:before});showError(toNinhoError(e,'passar só hoje'),()=>handoffToday(t))}
+    })
+  }
+  async function undoHandoff(t:Task){
+    const h=t.handoff;if(!h||h.id==='tmp')return
+    await withPending(['task:'+t.id],async()=>{
+      patchTask(t.id,{handoff:null})
+      try{await api.unhandoffTask(h.id);showToast(`De volta · ${t.title}`)}
+      catch(e){patchTask(t.id,{handoff:h});showError(toNinhoError(e,'desfazer'),()=>undoHandoff({...t,handoff:h}))}
+    })
   }
 
   // ── PULAR / DEIXAR PARA AMANHÃ ────────────────────────
@@ -664,7 +690,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // ── DERIVED ───────────────────────────────────────────
   const focusMode=settings.survival||settings.energy==='low'
   // Mesma conta usada pela notificação da manhã (lib/today.ts)
-  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday,split:casa.split})
+  const busy=busyWindows(ag.events,today)
+  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday,split:casa.split,busy})
   const {dogTasks,homeTasks,dueList,todayTasks,dogItems,ownerOfItem,ownerOfTask,ownerOfRoutine}=plan
   const hItems:HItem[]=plan.items
   const hiddenCount=dueList.length-todayTasks.length
@@ -851,6 +878,13 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   })()
 
   // ── RENDER HELPERS ────────────────────────────────────
+  /** Compromisso no horário (⚠) ou tarefa que veio da outra hoje (↪), pela Agenda. */
+  const dayTag=(id:string)=>{
+    const cf=plan.conflictOf(id),w=plan.whyOf(id)
+    if(cf)return <span className="tag-cf" title="Compromisso no mesmo horário">⚠ {cf.title} {cf.start}–{cf.end}</span>
+    if(w?.why.kind==='day')return <span className="tag-day" title={whyLabel(w,names,today)}>↪ hoje com {firstName(names[w.who])}</span>
+    return null
+  }
   const taskRow=(t:Task,o:{actions?:boolean,next?:boolean}={})=>{
     const actions=o.actions!==false
     const other:Who=ownerOfTask(t)==='g'?'s':'g'
@@ -872,6 +906,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {!!t.checklist?.length&&<span className="tag-ck" title="Checklist">☑ {t.checklist.filter(c=>c.d).length}/{t.checklist.length}</span>}
             {t.notes&&<span title={t.notes} aria-label="Tem observação">📝</span>}
             {t.help_by&&!t.completed_today&&<span className="tag-help" title="Pedido de ajuda">🙋 {t.help_by===me?'você pediu ajuda':`${firstName(names[t.help_by])} pediu ajuda`}</span>}
+            {!t.completed_today&&dayTag(t.id)}
           </div>
         </div>
         {canEarnOnTime(t,nowHM)
@@ -902,6 +937,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {it.frequency!=='daily'&&<span className="lg-only">{FPT[it.frequency]||it.frequency}</span>}
             <span className="tag-r" title="Rotinas dos cães alternam entre vocês">↻<span className="lg-only"> rodízio</span></span>
             {it.completed_today&&<span className="tag-by" title="Quem concluiu">✓ {by}</span>}
+            {!it.completed_today&&dayTag('dog:'+it.key)}
           </div>
         </div>
         {canEarnOnTime(it,nowHM)
@@ -1402,7 +1438,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <div><h2>Nós</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
             <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button><button className="btn btn-g" onClick={()=>go('ajustes')}>⚙️ Ajustes</button></div>
           </div>
-          <SubTabs label="Nós" value={nosView} onChange={v=>setNosView(v)} options={[['semana','Semana'],['desafios','Desafios',activeChs.length],['historico','Histórico'],['equilibrio','Equilíbrio']]}/>
+          <SubTabs label="Nós" value={nosView} onChange={v=>setNosView(v)} options={[['semana','Semana'],['desafios','Desafios',activeChs.length],['historico','Histórico'],['equilibrio','Equilíbrio'],['presentes','🎁 Presentes']]}/>
           {nosView==='semana'&&<div className="wgrid">
             <div className="col">
               <TogetherCard {...together} xp={game.scores.g.xp+game.scores.s.xp} streak={nos.available?bothCheckinStreak(nos.facts.checkins,today):0} meetingDone={!!thisMeeting&&!!(thisMeeting.what_worked||thisMeeting.wins||thisMeeting.adjustments||(thisMeeting.agreements||[]).length)} onOpenMeeting={()=>openModal('meeting')}/>
@@ -1465,6 +1501,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
               <Achievements stats={game.stats} names={names} me={me}/>
             </div>
           </div>}
+          {nosView==='presentes'&&(me?<div className="narrow"><GiftsView householdId={householdId} me={me} names={names} today={today} onToast={m=>showToast(m)}
+            onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}/></div>
+            :<div className="card empty"><span className="empty-icon">🎁</span>Escolha quem está usando este aparelho para ver a sua lista de presentes.</div>)}
           {nosView==='equilibrio'&&<div className="wgrid">
             <div className="col">
               <div className="card">
@@ -1796,11 +1835,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {modal==='taskmenu'&&(()=>{const t:Task=modalData;const other:Who=ownerOfTask(t)==='g'?'s':'g';const why=whyLabel(plan.whyOf(t.id),names,today);return(
         <Sheet size="sm" title={t.title} onClose={closeModal}>
           {why&&<div className="why">↻ {why}</div>}
+          {(()=>{const cf=plan.conflictOf(t.id);return cf&&!t.completed_today&&<div className="why cf" role="note">⚠ No horário de {cf.title} ({cf.start}–{cf.end}) da {firstName(names[cf.who])}. Passe só hoje, deixe para amanhã ou mude o horário.</div>})()}
           <div className="menu">
             <button className="btn btn-s" onClick={()=>{closeModal();toggleTask(t)}}>{t.completed_today?'↺ Desmarcar':'✓ Concluir'}</button>
             {!t.completed_today&&t.frequency!=='daily'&&<button className="btn btn-g" onClick={()=>{closeModal();pauseTask(t,'snooze')}}>⏭ Deixar para amanhã</button>}
             {!t.completed_today&&SKIP_LABEL[t.frequency]&&<button className="btn btn-g" onClick={()=>{closeModal();pauseTask(t,'skip')}}>⤼ {SKIP_LABEL[t.frequency]}<small className="menu-s">sem XP · não quebra a sequência</small></button>}
-            <button className="btn btn-g" onClick={()=>{closeModal();swapTask(t)}}>⇄ Passar para {firstName(names[other])}</button>
+            {!t.completed_today&&(t.handoff&&t.handoff.date===today
+              ?<button className="btn btn-g" onClick={()=>{closeModal();undoHandoff(t)}}>↩ Desfazer: volta para {firstName(names[t.handoff.to==='g'?'s':'g'])} hoje</button>
+              :<button className="btn btn-g" onClick={()=>{closeModal();handoffToday(t)}}>↪ Só hoje com {firstName(names[other])}<small className="menu-s">amanhã volta ao normal</small></button>)}
+            <button className="btn btn-g" onClick={()=>{closeModal();swapTask(t)}}>⇄ Passar para {firstName(names[other])} de vez</button>
             {casaOk&&!t.completed_today&&(t.help_by
               ?<button className="btn btn-g" onClick={()=>{closeModal();askHelp(t,false)}}>🙋 Cancelar pedido de ajuda</button>
               :<button className="btn btn-g" onClick={()=>{closeModal();askHelp(t,true)}}>🙋 Pedir ajuda a {firstName(names[other])}<small className="menu-s">ela vê o pedido na hora</small></button>)}
