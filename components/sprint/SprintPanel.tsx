@@ -1,4 +1,5 @@
 'use client'
+import { useBackClose } from '@/hooks/useBack'
 // Sprint do Ninho: escolher duração, cômodo, participantes e tarefas; cronômetro
 // que continua mesmo fora da tela; pausar/encerrar; resumo com o XP real.
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -59,6 +60,8 @@ export function SprintPanel({ active, recent, now, tasks, today, me, names, busy
     const prev = document.body.style.overflow; document.body.style.overflow = 'hidden'
     return () => { document.body.style.overflow = prev }
   }, [])
+  // voltar do celular fecha o painel (o sprint continua)
+  useBackClose(true, () => { onClose() })
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
     window.addEventListener('keydown', h); return () => window.removeEventListener('keydown', h)

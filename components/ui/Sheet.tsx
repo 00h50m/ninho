@@ -1,4 +1,5 @@
 'use client'
+import { useBackClose } from '@/hooks/useBack'
 import { useEffect, useRef, ReactNode } from 'react'
 
 // Modal: centralizado no desktop, folha que sobe de baixo no celular. Fecha com Esc,
@@ -6,6 +7,8 @@ import { useEffect, useRef, ReactNode } from 'react'
 export function Sheet({title,onClose,children,footer,size,dismissable=true}:{title:ReactNode,onClose:()=>void,children:ReactNode,footer?:ReactNode,size?:'sm'|'lg',dismissable?:boolean}){
   const closeRef=useRef(onClose)
   closeRef.current=dismissable?onClose:()=>{}
+  // voltar do celular fecha a folha (a que não pode fechar continua aberta)
+  useBackClose(true,()=>{if(!dismissable)return false;closeRef.current()})
   useEffect(()=>{
     const h=(e:KeyboardEvent)=>{if(e.key==='Escape')closeRef.current()}
     window.addEventListener('keydown',h)

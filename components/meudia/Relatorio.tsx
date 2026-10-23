@@ -1,4 +1,5 @@
 'use client'
+import { useBackClose } from '@/hooks/useBack'
 // Relatório do mês (para a nutricionista): abre por cima do app, imprime ou salva em PDF pelo
 // próprio celular/computador e compartilha um resumo em texto (WhatsApp). Só os dados de quem gera.
 import { useEffect, useState } from 'react'
@@ -25,6 +26,7 @@ export function MonthReportView({ householdId, me, name, today, prof, settings, 
 }) {
   const months = Array.from({ length: 6 }, (_, i) => { const d = new Date(`${today.slice(0, 7)}-15T12:00:00Z`); d.setUTCMonth(d.getUTCMonth() - i); return d.toISOString().slice(0, 7) })
   const [month, setMonth] = useState(months[0])
+  useBackClose(true, () => { onClose() })
   const [r, setR] = useState<MonthReport | null | 'err'>(null)
   useEffect(() => {
     let off = false

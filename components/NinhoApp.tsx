@@ -11,6 +11,7 @@ import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, weekdaysLabel
 import { isFixed } from '@/lib/rotation'
 import { whyLabel, type SplitMode } from '@/lib/split'
 import { busyWindows } from '@/lib/busy'
+import { navigateTo, startBackNav } from '@/lib/backNav'
 import * as casaApi from '@/lib/services/casa'
 import { useCasa } from '@/hooks/useCasa'
 import { ShoppingTab } from '@/components/casa/ShoppingTab'
@@ -279,6 +280,18 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   },[])
   /** Abre uma parte do Meu dia (e, se pedido, rola até um cartão). */
   const goMd=(t:MdTab,what?:NonNullable<MdFocus>['what'])=>{setTab('eu');setMdTab(t);if(what)setMdFocus({what,n:Date.now()})}
+  // ── VOLTAR DO CELULAR (lib/backNav) ──
+  // Cada tela/aba vira uma entrada no histórico; as janelas (folhas) fecham com o voltar;
+  // no Início, o voltar pede "toque de novo para sair" em vez de fechar o app de cara.
+  const HOME_NAV={screen:'inicio',casa:'tarefas',nos:'semana',rot:'rotinas',md:'hoje'}
+  useEffect(()=>startBackNav({screen,casa:casaView,nos:nosView,rot:rotView,md:mdTab},n=>{
+    setScreenState(n.screen as ScreenId);setCasaView(n.casa as CasaView);setNosView(n.nos as any);setRotView(n.rot as any);setMdTab(n.md as MdTab);window.scrollTo({top:0})
+  },n=>{
+    if(n.screen!=='inicio')return HOME_NAV
+    showToast('Toque em voltar de novo para sair do Ninho');return null
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }),[])
+  useEffect(()=>{navigateTo({screen,casa:casaView,nos:nosView,rot:rotView,md:mdTab})},[screen,casaView,nosView,rotView,mdTab])
   useEffect(()=>{
     if(typeof window==='undefined')return
     const u=new URL(window.location.href),ir=u.searchParams.get('ir')

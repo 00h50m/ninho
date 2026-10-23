@@ -1,4 +1,5 @@
 'use client'
+import { useBackClose } from '@/hooks/useBack'
 // Configuração inicial do Ninho em 9 etapas. Guarda o rascunho a cada mudança
 // (dá para fechar e continuar depois, inclusive em outro aparelho da mesma pessoa).
 import { useEffect, useMemo, useRef, useState } from 'react'
@@ -73,6 +74,8 @@ export function Onboarding(p: OnboardingProps) {
     if (p.setup.available) await saveProgress(p.householdId, p.me, step, a, true).catch(() => {})
     p.onClose()
   }
+  // voltar do celular: passo anterior; no primeiro passo, pausa e fecha
+  useBackClose(true, () => { if (busy) return false; if (!done && step > 1) { back(); return false } pause() })
   useEffect(() => {
     const h = (e: KeyboardEvent) => { if (e.key === 'Escape' && !busy) pause() }
     window.addEventListener('keydown', h)
