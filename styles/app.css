@@ -1631,3 +1631,17 @@ html.rp-open body{overflow:hidden}
 .ec-c.ec-s{background:var(--pri-bg);border:1px solid var(--pri-bd);color:var(--tx);font-weight:500}
 .ec-c:disabled{opacity:.6}
 .ec-legend{list-style:none;margin:10px 0 4px;padding:0;display:grid;gap:4px;font-size:12.5px;color:var(--sub)}
+
+/* Casa › Sugestões */
+.sg-areas{margin-bottom:10px}
+.sg-only{margin:0 0 12px}
+.sg-area{margin-bottom:12px}
+.sg-note{margin:0 0 6px}
+.sg-list{list-style:none;margin:0;padding:0}
+.sg-i{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;padding:10px 0;border-top:1px solid var(--bd)}
+.sg-i:first-child{border-top:0}
+.sg-t{flex:1 1 220px;min-width:0;display:flex;flex-direction:column;gap:2px}
+.sg-t small{color:var(--sub);font-size:12.5px}
+.sg-i.has .sg-t b{color:var(--sub);font-weight:500}
+.sg-has{font-size:12.5px;color:var(--sub)}
+.sg-acts{display:flex;align-items:center;gap:6px}

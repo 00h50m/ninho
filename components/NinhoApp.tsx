@@ -60,6 +60,8 @@ import * as agApi from '@/lib/services/agenda'
 import { AgendaView, EventSheet } from '@/components/casa/Agenda'
 import { AgendaCelular } from '@/components/casa/AgendaCelular'
 import { DogScheduleCard } from '@/components/caes/Escala'
+import { SuggestionsView } from '@/components/casa/Sugestoes'
+import type { Sug } from '@/lib/sugestoes'
 import { useCaes } from '@/hooks/useCaes'
 import { useMeuDia } from '@/hooks/useMeuDia'
 import { enqueue, flush as flushOutbox, newId, readOutbox, writeOutbox, type OutItem } from '@/lib/outbox'
@@ -94,7 +96,7 @@ import { DogAvatar, DogHealthBlock, DogProfileSheet, FoodLow, HealthSheet, Puppy
 import { foodAlerts, foodLeftLabel, kindInfo, newBag as newBagStock, upcomingCare, type AccidentRow, type HealthKind, type HealthRecord } from '@/lib/caes'
 import { bills as agBills, agendaEntries, kindIcon, type EventKind, type HouseEvent } from '@/lib/agenda'
 import { areaLabel, fmtClock, remainingMs, type Sprint } from '@/lib/sprint'
-import { firstName, initials, wCls, byCat, catIc, QuickTime, TaskFormModal, SuggModal, PetModal, DogModal, RoutineModal, EnergyModal, MeetingModal } from '@/components/AppModals'
+import { firstName, initials, wCls, byCat, catIc, QuickTime, TaskFormModal, PetModal, DogModal, RoutineModal, EnergyModal, MeetingModal } from '@/components/AppModals'
 
 type ToastState={kind:'ok'|'err',msg:string,undo?:()=>void,retry?:()=>void}
 export interface Account { who:Who, email:string, onSignOut:()=>void }
@@ -555,15 +557,17 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     },editId?'Tarefa atualizada!':`"${d.title}" criada!`)
   }
 
-  async function addSuggestions(sel:any[]){
-    const existing=new Set(tasks.map(t=>t.title))
-    const toAdd=sel.filter(s=>!existing.has(s.t)).map(s=>({title:s.t,category:s.cat,weight:s.w,frequency:s.f,assigned_to:null,scheduled_time:null,essential:s.ess}))
-    if(!toAdd.length){closeModal();return}
+  /** Casa › Sugestões: tarefa entra alternando; a de pet vira rotina de cada cão. */
+  async function addSuggestion(sg:Sug){
     try{
-      await api.insertTasks(householdId,toAdd as any)
-      await data.reloadTasks()
-      closeModal();showToast(`${toAdd.length} tarefa${toAdd.length!==1?'s':''} adicionada${toAdd.length!==1?'s':''}!`)
-    }catch(e){showError(toNinhoError(e,'adicionar sugestões'))}
+      if(sg.kind==='pet'){
+        for(const d of dogs)if(!d.routines.some(r=>r.title===sg.t))await api.upsertRoutine(householdId,d.id,{title:sg.t,frequency:sg.f,scheduled_time:null})
+        await data.reloadDogs();showToast(`🐾 "${sg.t}" nas rotinas dos cães · alternando`)
+      }else{
+        await api.insertTasks(householdId,[{title:sg.t,category:sg.cat,weight:sg.w as any,frequency:sg.f,assigned_to:null,scheduled_time:null,essential:false}])
+        await data.reloadTasks();showToast(`"${sg.t}" adicionada · alternando`)
+      }
+    }catch(e){showError(toNinhoError(e,'adicionar sugestão'));throw e}
   }
 
   // ── CÃES ──────────────────────────────────────────────
@@ -990,7 +994,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           <div className="alldone">🎉 Nada pendente para hoje<small>As tarefas do período já estão em dia</small></div>
         ):(
           <div className="empty"><span className="empty-icon">📋</span>{who==='g'?'Nenhuma tarefa ainda':'Nenhuma tarefa atribuída'}
-            <div><button className="btn btn-s" onClick={()=>openModal('sugg')}>✦ Ver sugestões</button></div>
+            <div><button className="btn btn-s" onClick={()=>goCasa('sugestoes')}>✦ Ver sugestões</button></div>
           </div>
         )):<>
           {homeView==='tempo'?<DayTimeline tl={timelineOf(who,all)} nowHM={nowHM} busy={e=>e.item?(e.item.task?isPending('task:'+e.item.task.id):e.item.dog!.parts.some(x=>isPending('dog:'+x.r.id))):false}
@@ -1357,8 +1361,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
         {/* ── CASA ── */}
         {screen==='casa'&&<div className="scr">
-          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[])]}/>
-          {casaView==='faxinao'?<FaxinaoView householdId={householdId} me={me} names={names} list={fx.list} available={fx.available} ready={fx.ready} reload={fx.reload} setList={fx.setList}
+          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),['sugestoes','💡 Sugestões']]}/>
+          {casaView==='sugestoes'?<SuggestionsView taskTitles={tasks.map(t=>t.title)} petTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} hasDogs={dogs.length>0}
+              onAdd={addSuggestion} onCustomize={sg=>openModal('task',{title:sg.t,category:sg.cat,weight:sg.w,frequency:sg.f,essential:false,assigned_to:null,scheduled_time:null,active:true,id:null})}/>
+          :casaView==='faxinao'?<FaxinaoView householdId={householdId} me={me} names={names} list={fx.list} available={fx.available} ready={fx.ready} reload={fx.reload} setList={fx.setList}
               onToast={m=>showToast(m)} onError={(e,c)=>showError(toNinhoError(e,c))}/>
           :casaView==='compras'?<ShoppingTab householdId={householdId} me={me} names={names} items={casa.shop} history={casa.shopHistory} state={casa.shopState} error={casa.shopError}
             setItems={casa.setShop} onReload={casa.reloadShopping} extras={casa.shopExtras} requireMe={requireMe} toast={(m,u)=>showToast(m,u)} fail={(e,r)=>showError(e,r)} onFinished={onShoppingFinished}/>
@@ -1374,7 +1380,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           <div className="sh">
             <div><h2>Tarefas</h2><p>{tasks.length} ativa{tasks.length!==1?'s':''} · toque numa tarefa para editar</p></div>
             <div className="sh-a">
-              <button className="btn btn-s" onClick={()=>openModal('sugg')}>✦ Sugestões</button>
+              <button className="btn btn-s" onClick={()=>goCasa('sugestoes')}>✦ Sugestões</button>
               <button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button>
             </div>
           </div>
@@ -1401,7 +1407,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             </div>}
           </div>
           {tasks.length===0?(
-            <div className="card empty"><span className="empty-icon">📋</span>Nenhuma tarefa cadastrada ainda<div><button className="btn btn-p" onClick={()=>openModal('sugg')}>✦ Começar com sugestões</button></div></div>
+            <div className="card empty"><span className="empty-icon">📋</span>Nenhuma tarefa cadastrada ainda<div><button className="btn btn-p" onClick={()=>goCasa('sugestoes')}>✦ Começar com sugestões</button></div></div>
           ):filtered.length===0?(
             <div className="empty"><span className="empty-icon">🔍</span>Nada encontrado com esse filtro<div><button className="btn btn-g" onClick={()=>{setTaskFilter('all');setQuery('')}}>Limpar filtros</button></div></div>
           ):byCat(filtered).map(([cat,list])=>(
@@ -1853,7 +1859,6 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {toast.kind==='err'&&<button className="tx" onClick={()=>setToast(null)} aria-label="Fechar aviso">✕</button>}
       </div>}
       {modal==='task'&&<TaskFormModal task={modalData} names={names} saving={saving} casaOk={casaOk} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
-      {modal==='sugg'&&<SuggModal tasks={tasks} onClose={closeModal} onAdd={addSuggestions} onCustomize={s=>openModal('task',{title:s.t,category:s.cat,weight:s.w,frequency:s.f,essential:s.ess,assigned_to:null,scheduled_time:null,active:true,id:null})}/>}
       {modal==='pet'&&<PetModal saving={saving} onClose={closeModal} onSave={savePet}/>}
       {modal==='taskmenu'&&(()=>{const t:Task=modalData;const other:Who=ownerOfTask(t)==='g'?'s':'g';const why=whyLabel(plan.whyOf(t.id),names,today);return(
         <Sheet size="sm" title={t.title} onClose={closeModal}>

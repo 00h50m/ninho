@@ -2,7 +2,7 @@
 // Peças de UI e janelas do app (separadas do NinhoApp: ficam fora do componente principal para não remontar a cada render).
 import { useEffect, useState } from 'react'
 import type { Dog, DogRoutine, Meeting, Names, Task, Who } from '@/lib/types'
-import { CAT, DR_DEF, DR_PUP, ENERGY, FPT, RFREQ, SUGG, WPT } from '@/lib/constants'
+import { CAT, DR_DEF, DR_PUP, ENERGY, FPT, RFREQ, WPT } from '@/lib/constants'
 import { fmtDate, hhmm } from '@/lib/dates'
 import { WEEKDAY_SHORT } from '@/lib/frequency'
 import { XPW } from '@/lib/xp'
@@ -125,50 +125,6 @@ export function TaskFormModal({task,names,saving,casaOk,onClose,onSave,onDelete}
           {hist.map((h,i)=><li key={i}><span className="mono">{fmtDate(h.date)}</span>{h.kind==='done'?<>✓ feita{h.by?` por ${firstName(names[h.by])}`:''}</>:h.kind==='skip'?<>⤼ pulada{h.by?` por ${firstName(names[h.by])}`:''}</>:<>⏭ adiada{h.by?` por ${firstName(names[h.by])}`:''}</>}</li>)}
         </ul>}
       </>}
-    </Sheet>
-  )
-}
-
-export function SuggModal({tasks,onClose,onAdd,onCustomize}:{tasks:Task[],onClose:()=>void,onAdd:(sel:any[])=>Promise<void>,onCustomize:(s:any)=>void}){
-  const cats=Object.keys(SUGG)
-  const[curTab,setCurTab]=useState(cats[0])
-  const[sel,setSel]=useState<any[]>([])
-  const[busy,setBusy]=useState(false)
-  const existing=new Set(tasks.map(t=>t.title))
-  const keyOf=(s:any)=>curTab+'::'+s.t
-  function toggle(s:any){const key=keyOf(s);setSel(p=>p.find(x=>x.key===key)?p.filter(x=>x.key!==key):[...p,{...s,key}])}
-  function selectAll(){const toAdd=SUGG[curTab].filter(s=>!existing.has(s.t)&&!sel.find(x=>x.key===keyOf(s)));setSel(p=>[...p,...toAdd.map(s=>({...s,key:keyOf(s)}))])}
-  return(
-    <Sheet size="lg" title="Sugestões de tarefas" onClose={onClose} footer={
-      <button className="btn btn-p" disabled={sel.length===0||busy} onClick={async()=>{setBusy(true);try{await onAdd(sel)}finally{setBusy(false)}}}>
-        {busy?'Salvando…':sel.length===0?'Selecione tarefas':`Adicionar ${sel.length} tarefa${sel.length!==1?'s':''}`}
-      </button>
-    }>
-      <div className="stabs">{cats.map(c=>{
-        const n=sel.filter(x=>x.key.startsWith(c+'::')).length
-        return <button key={c} className={`fc ${curTab===c?'on':''}`} onClick={()=>setCurTab(c)}>{c}{n>0&&` · ${n}`}</button>
-      })}</div>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
-        <span style={{fontSize:12,color:'var(--sub)'}}>Toque para selecionar · ✎ para ajustar antes</span>
-        <button onClick={selectAll} style={{fontSize:12.5,fontWeight:500,color:'var(--green)',background:'none',border:'none'}}>Selecionar todas</button>
-      </div>
-      {SUGG[curTab].map(s=>{
-        const on=!!sel.find(x=>x.key===keyOf(s));const added=existing.has(s.t)
-        return(
-          <div key={s.t} className={`li ${on?'on':''} ${added?'off':''}`} onClick={()=>!added&&toggle(s)}>
-            <span className={`chk ${on||added?'ok':''}`}>✓</span>
-            <span className="li-t">{s.t}</span>
-            <div className="li-m">
-              {added?<span className="bdg bdg-n">já existe</span>:<>
-                {s.ess&&<span className="bdg bdg-e">essencial</span>}
-                <span className={`bdg bdg-${wCls(s.w)}`}>{WPT[s.w]}</span>
-                <span className="bdg bdg-n">{FPT[s.f]}</span>
-                <button className="ib" style={{width:28,height:28}} title="Ajustar antes de criar" onClick={e=>{e.stopPropagation();onCustomize(s)}}>✎</button>
-              </>}
-            </div>
-          </div>
-        )
-      })}
     </Sheet>
   )
 }
