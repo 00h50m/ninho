@@ -15,6 +15,7 @@ import type { HistEntry, Who } from './types'
 import { periodStart } from './frequency'
 import { weekStartOf } from './dates'
 import { busyWhyLabel, type BusyWhy } from './busy'
+import { escalaLabel, type Period } from './escala'
 
 export type SplitMode = 'smart' | 'rotation'
 export const SPLIT_MODES: SplitMode[] = ['smart', 'rotation']
@@ -26,6 +27,8 @@ export type Why =
   | { kind: 'rotation' }
   /** compromisso, dia cheio ou "passar só hoje" (036) */
   | { kind: 'day', day: BusyWhy }
+  /** escala fixa dos cães (037) */
+  | { kind: 'escala', dow: number, period: Period }
 
 export interface Decision { who: Who, why: Why }
 
@@ -132,6 +135,7 @@ export function whyLabel(d: Decision | undefined, names: Record<Who, string>, to
     return `Vez da ${n(d.who)}: ${n(w.by)} fez da última vez (${when})`
   }
   if (w.kind === 'day') return busyWhyLabel(w.day, names)
+  if (w.kind === 'escala') return escalaLabel(w.dow, w.period, d.who, names)
   if (w.kind === 'balance') return `Vez da ${n(d.who)}: equilibrando a carga da semana`
   return `Vez da ${n(d.who)} pelo rodízio`
 }

@@ -3,6 +3,7 @@ import { supabase } from '@/lib/supabase'
 import { NinhoError, isMissingTable, logError } from '@/lib/errors'
 import type { Who } from '@/lib/types'
 import type { AccidentRow, HealthRecord } from '@/lib/caes'
+import { cellsFromDb, type DogMode, type DogPlan, type Period } from '@/lib/escala'
 
 function must<T>(r: { data: T | null, error: any }, ctx: string): T {
   if (r.error) { logError(ctx, r.error); throw new NinhoError(r.error, ctx) }
@@ -45,4 +46,26 @@ export async function updateAccident(id: string, patch: { location?: string, occ
 
 export async function deleteAccident(id: string): Promise<void> {
   must(await supabase.from('puppy_accidents').delete().eq('id', id).select('id'), 'apagar acidente')
+}
+
+/** Escala fixa dos cães (037). ready = false: falta a migration (tudo no rodízio). */
+export async function loadDogPlan(householdId: string): Promise<{ ready: boolean, plan: DogPlan }> {
+  const [h, s] = await Promise.all([
+    supabase.from('households').select('dog_mode').eq('id', householdId).maybeSingle(),
+    supabase.from('dog_schedule').select('dow,period,who').eq('household_id', householdId),
+  ])
+  if (h.error || s.error) {
+    const e = h.error || s.error
+    if (!isMissingTable(e) && !/dog_mode/.test(e?.message || '') && e?.code !== '42703') logError('carregar escala dos cães', e)
+    return { ready: false, plan: { mode: 'rodizio', cells: [] } }
+  }
+  return { ready: true, plan: { mode: (h.data as any)?.dog_mode === 'escala' ? 'escala' : 'rodizio', cells: cellsFromDb(s.data) } }
+}
+export async function setDogMode(householdId: string, mode: DogMode): Promise<void> {
+  must(await supabase.from('households').update({ dog_mode: mode }).eq('id', householdId).select('id'), 'mudar a divisão dos cães')
+}
+/** Um turno da escala: dona fixa, ou null para voltar ao rodízio. */
+export async function setScheduleCell(householdId: string, dow: number, period: Period, who: Who | null): Promise<void> {
+  if (who) must(await supabase.from('dog_schedule').upsert({ household_id: householdId, dow, period, who, updated_at: new Date().toISOString() }, { onConflict: 'household_id,dow,period' }).select('dow'), 'salvar escala')
+  else must(await supabase.from('dog_schedule').delete().eq('household_id', householdId).eq('dow', dow).eq('period', period).select('dow'), 'salvar escala')
 }

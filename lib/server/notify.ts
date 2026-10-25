@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { HItem, Names, Who } from '@/lib/types'
 import { buildDogs, buildTasks, type HandoffRow, type SkipRow } from '@/lib/build'
 import { busyWindows } from '@/lib/busy'
+import { cellsFromDb, type DogPlan } from '@/lib/escala'
 import { addDays, homeClock, weekStartOf } from '@/lib/dates'
 import { planToday } from '@/lib/today'
 import { COMPLETION_WINDOW_DAYS, DEFAULT_NAMES } from '@/lib/constants'
@@ -48,6 +49,12 @@ export async function loadHousehold(db: SupabaseClient, householdId: string, tod
   let ev: any = await evq('id,kind,title,date,time,end_time,who,done_at')
   if (ev.error) ev = await evq('id,kind,title,date,time,who,done_at')
   const busy = busyWindows((ev.error ? [] : ev.data || []) as any[], today)
+  // 037: escala fixa dos cães (sem a migration: rodízio)
+  const [dm, ds] = await Promise.all([
+    db.from('households').select('dog_mode').eq('id', householdId).maybeSingle(),
+    db.from('dog_schedule').select('dow,period,who').eq('household_id', householdId),
+  ])
+  const dogPlan: DogPlan = { mode: !dm.error && (dm.data as any)?.dog_mode === 'escala' ? 'escala' : 'rodizio', cells: ds.error ? [] : cellsFromDb(ds.data) }
   // Fase 3 (migration 007): sem a migration, segue com o rodízio e sem manutenção
   const house = await db.from('households').select('split_mode').eq('id', householdId).maybeSingle()
   const split: SplitMode = house.error || (house.data as any)?.split_mode === 'rotation' ? 'rotation' : 'smart'
@@ -61,7 +68,7 @@ export async function loadHousehold(db: SupabaseClient, householdId: string, tod
     dogs: buildDogs(dogs as any[], dcomps as any[], today),
     focus: !!st?.survival || st?.energy === 'low',
     bet: (st?.bet as string | null) ?? null,
-    names, split, maint, busy,
+    names, split, maint, busy, dogPlan,
   }
 }
 
@@ -105,7 +112,7 @@ function groupByHousehold(subs: Subscription[]) {
 /** Texto do bom dia de cada pessoa da casa (o mesmo no celular e no Telegram). */
 export async function morningPayloads(db: SupabaseClient, householdId: string, date: string, hm: string): Promise<(w: Who) => PushPayload> {
   const h = await loadHousehold(db, householdId, date)
-  const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy })
+  const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy, dogPlan: h.dogPlan })
   const mine = (w: Who): HItem[] => plan.items.filter(i => plan.ownerOfItem(i) === w)
   const maintOf = (w: Who): MaintNote[] => dueForPerson(h.maint as MaintenanceItem[], w, date).map(m => ({ title: m.title, late: m.next_due < date }))
   return (w: Who) => morningMessage(w, h.names, mine(w), hm, maintOf(w))
@@ -120,7 +127,7 @@ export async function weeklyPayload(db: SupabaseClient, householdId: string, dat
   ])
   const sc = (scoresRaw || {}) as any
   const scores: WeeklyScores = { g: { ...EMPTY_SCORES.g, ...sc.g }, s: { ...EMPTY_SCORES.s, ...sc.s }, unknown: { ...EMPTY_SCORES.unknown, ...sc.unknown } }
-  const plan = planToday(h.tasks, h.dogs, date, { split: h.split, busy: h.busy })
+  const plan = planToday(h.tasks, h.dogs, date, { split: h.split, busy: h.busy, dogPlan: h.dogPlan })
   const nextMaint = h.maint.filter(m => m.next_due > date && m.next_due <= addDays(date, 7)).sort((a, b) => a.next_due.localeCompare(b.next_due)).map(m => m.title)
   const pending = plan.dueList.filter(t => t.frequency !== 'daily' && t.frequency !== 'once' && !t.completed_today).map(t => ({ title: t.title, frequency: t.frequency }))
   return weeklyMessage(h.names, scores, h.bet, Number((streaksRaw as any)?.house) || 0, pending, nextMaint)

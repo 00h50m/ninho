@@ -1618,3 +1618,16 @@ html.rp-open body{overflow:hidden}
 .tag-day{color:var(--sub)}
 .why.cf{color:var(--cor-tx)}
 .ag-busy-h{display:block;margin:-2px 0 8px}
+
+/* Escala dos cães */
+.ec-help{margin:8px 0 4px}
+.ec-grid{width:100%;border-collapse:separate;border-spacing:4px;margin-top:8px;font-size:13px}
+.ec-grid th{font-weight:500;color:var(--sub);text-align:center}
+.ec-grid thead th small{display:block;font-size:11px;color:var(--faint);font-weight:400}
+.ec-grid tbody th{text-align:left;width:44px}
+.ec-today th{color:var(--tx);font-weight:600}
+.ec-c{width:100%;min-height:var(--touch);border-radius:var(--rs);border:1px dashed var(--bd2);background:transparent;color:var(--sub);font:inherit;cursor:pointer}
+.ec-c.ec-g{background:var(--gbg);border:1px solid var(--gdk);color:var(--tx);font-weight:500}
+.ec-c.ec-s{background:var(--pri-bg);border:1px solid var(--pri-bd);color:var(--tx);font-weight:500}
+.ec-c:disabled{opacity:.6}
+.ec-legend{list-style:none;margin:10px 0 4px;padding:0;display:grid;gap:4px;font-size:12.5px;color:var(--sub)}

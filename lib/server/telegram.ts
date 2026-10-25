@@ -133,7 +133,7 @@ interface TodayView { text: string, buttons: Array<Array<{ text: string, callbac
 
 export async function todayView(db: SupabaseClient, link: Link, date: string): Promise<TodayView> {
   const h = await loadHousehold(db, link.household_id, date)
-  const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy })
+  const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy, dogPlan: h.dogPlan })
   const mine = plan.items.filter(i => plan.ownerOfItem(i) === link.who)
   const pend = mine.filter(i => !i.completed_today).sort((a, b) => (hhmm(a.scheduled_time) || '99').localeCompare(hhmm(b.scheduled_time) || '99'))
   const maint = dueForPerson(h.maint as MaintenanceItem[], link.who, date)
@@ -193,7 +193,7 @@ async function doneByName(deps: BotDeps, link: Link, arg: string, date: string) 
   const q = normalize(arg)
   if (!q) return send(deps, link.chat_id, 'Diga o nome: /feito louça')
   const h = await loadHousehold(deps.db, link.household_id, date)
-  const plan = planToday(h.tasks, h.dogs, date, { focus: false, split: h.split, busy: h.busy })
+  const plan = planToday(h.tasks, h.dogs, date, { focus: false, split: h.split, busy: h.busy, dogPlan: h.dogPlan })
   const pend = plan.items.filter(i => !i.completed_today)
   const title = (i: typeof pend[number]) => i.task ? i.task.title : i.dog!.title
   const hits = pend.filter(i => normalize(title(i)).includes(q))

@@ -6,11 +6,25 @@ import { logError } from '@/lib/errors'
 import { addDays } from '@/lib/dates'
 import * as api from '@/lib/services/caes'
 import type { AccidentRow, HealthRecord } from '@/lib/caes'
+import type { DogPlan } from '@/lib/escala'
 
 export function useCaes(householdId: string, today: string) {
   const [available, setAvailable] = useState(false)
   const [records, setRecords] = useState<HealthRecord[]>([])
   const [accidents, setAccidents] = useState<AccidentRow[]>([])
+  const [planReady, setPlanReady] = useState(false)
+  const [dogPlan, setDogPlan] = useState<DogPlan>({ mode: 'rodizio', cells: [] })
+  const reloadPlan = useCallback(async () => { const r = await api.loadDogPlan(householdId).catch(() => null); if (r) { setPlanReady(r.ready); setDogPlan(r.plan) } }, [householdId])
+  useEffect(() => { reloadPlan() }, [reloadPlan])
+  // escala (037) em canal separado: sem a tabela, o canal principal não cai
+  useEffect(() => {
+    if (!planReady) return
+    const ch = supabase.channel(`ninho-escala:${householdId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'dog_schedule', filter: `household_id=eq.${householdId}` }, () => { reloadPlan() })
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'households', filter: `id=eq.${householdId}` }, () => { reloadPlan() })
+      .subscribe()
+    return () => { supabase.removeChannel(ch) }
+  }, [householdId, planReady, reloadPlan])
   const from = addDays(today, -60)
   const reload = useCallback(async () => {
     try {
@@ -29,5 +43,5 @@ export function useCaes(householdId: string, today: string) {
     ch.subscribe()
     return () => { supabase.removeChannel(ch) }
   }, [householdId, available, reload])
-  return { available, records, accidents, setAccidents, reload }
+  return { available, records, accidents, setAccidents, reload, planReady, dogPlan, setDogPlan, reloadPlan }
 }

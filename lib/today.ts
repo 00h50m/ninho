@@ -6,6 +6,7 @@ import { buildSlots, dogKey, isFixed, ownerOf, turnBy, type Slots } from './rota
 import { smartSplit, type Decision, type FixedLoad, type SplitMode, type SplitUnit } from './split'
 import { DOG_ROUTINE_XP, xpForWeight } from './xp'
 import { adjustOwner, type BusyWindow } from './busy'
+import { scheduleOwner, type DogPlan } from './escala'
 
 export const GROUPS: Array<[string, string]> = [['late', '⚠ Atrasadas'], ['morning', '🌅 Manhã'], ['afternoon', '☀️ Tarde'], ['night', '🌙 Noite'], ['any', 'Hoje, a qualquer hora'], ['weekly', 'Até o fim da semana'], ['biweekly', 'Até o fim da quinzena'], ['monthly', 'Até o fim do mês'], ['once', 'Pontuais']]
 
@@ -60,7 +61,7 @@ export function groupToday(list: HItem[], nowHM: string, today?: string) {
  * · com foco (modo sobrevivência ou energia baixa), só essenciais — rotinas dos cães sempre aparecem;
  * · cada item tem dona: fixa, ou pela divisão da casa ('smart' = inteligente, 'rotation' = rodízio fixo).
  */
-export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { focus?: boolean, split?: SplitMode, busy?: BusyWindow[] } = {}) {
+export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { focus?: boolean, split?: SplitMode, busy?: BusyWindow[], dogPlan?: DogPlan | null } = {}) {
   const dogTasks = dogs.length ? tasks.filter(t => t.category === 'dogs') : []
   const homeTasks = dogs.length ? tasks.filter(t => t.category !== 'dogs') : tasks
   const slots = buildSlots(homeTasks, dogs)
@@ -99,7 +100,9 @@ export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { foc
     return adj.get(id)!
   }
   const taskAdj = (t: Task) => adjusted(t.id, baseTask(t), isFixed(t), t.scheduled_time, t.handoff)
-  const dogAdj = (key: string, freq: string, time: string | null | undefined) => adjusted('dog:' + key, baseDog(key, freq), false, time)
+  // escala fixa dos cães (037): o turno com dona na escala vale como dona fixa (compromisso no horário só avisa)
+  const esc = (time: string | null | undefined) => scheduleOwner(opts.dogPlan, today, time)
+  const dogAdj = (key: string, freq: string, time: string | null | undefined) => { const e = freq === 'daily' ? esc(time) : null; return adjusted('dog:' + key, e ? e.who : baseDog(key, freq), !!e, time) }
   const dogTime = (key: string) => dogs.flatMap(d => d.routines).find(r => dogKey(r) === key)?.scheduled_time
   const dogOwner = (key: string, freq: string): Who => dogAdj(key, freq, dogTime(key)).who
   const ownerOfTask = (t: Task): Who => taskAdj(t).who
@@ -116,6 +119,7 @@ export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { foc
     const t = homeTasks.find(x => x.id === id)
     const a = t ? taskAdj(t) : id.startsWith('dog:') ? (() => { const k = id.slice(4); const r = dogs.flatMap(d => d.routines).find(x => dogKey(x) === k); return r ? dogAdj(k, r.frequency, r.scheduled_time) : null })() : null
     if (a?.why) return { who: a.who, why: { kind: 'day', day: a.why } }
+    if (!t && id.startsWith('dog:')) { const k = id.slice(4); const r = dogs.flatMap(d => d.routines).find(x => dogKey(x) === k); const e = r && r.frequency === 'daily' ? esc(r.scheduled_time) : null; if (e) return { who: e.who, why: { kind: 'escala', dow: e.dow, period: e.period } } }
     if (t && isFixed(t)) return { who: t.assigned_to as Who, why: { kind: 'fixed' } }
     if (decisions.has(id)) return decisions.get(id)
     if (t) return { who: ownerOf(t, today, slots), why: { kind: 'rotation' } }

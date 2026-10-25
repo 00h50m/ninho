@@ -59,6 +59,7 @@ import { useAgenda } from '@/hooks/useAgenda'
 import * as agApi from '@/lib/services/agenda'
 import { AgendaView, EventSheet } from '@/components/casa/Agenda'
 import { AgendaCelular } from '@/components/casa/AgendaCelular'
+import { DogScheduleCard } from '@/components/caes/Escala'
 import { useCaes } from '@/hooks/useCaes'
 import { useMeuDia } from '@/hooks/useMeuDia'
 import { enqueue, flush as flushOutbox, newId, readOutbox, writeOutbox, type OutItem } from '@/lib/outbox'
@@ -704,7 +705,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const focusMode=settings.survival||settings.energy==='low'
   // Mesma conta usada pela notificação da manhã (lib/today.ts)
   const busy=busyWindows(ag.events,today)
-  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday,split:casa.split,busy})
+  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday,split:casa.split,busy,dogPlan:cz.dogPlan})
   const {dogTasks,homeTasks,dueList,todayTasks,dogItems,ownerOfItem,ownerOfTask,ownerOfRoutine}=plan
   const hItems:HItem[]=plan.items
   const hiddenCount=dueList.length-todayTasks.length
@@ -1577,6 +1578,15 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <div><h2>Cães</h2><p>{dogs.length} pet{dogs.length!==1?'s':''}{dogDaily.length>0&&` · ${dogDone}/${dogDaily.length} rotinas hoje`}</p></div>
             <div className="sh-a"><button className="btn btn-s" onClick={()=>openModal('pet')}>+ Adicionar pet</button></div>
           </div>
+          {dogs.length>0&&<DogScheduleCard ready={cz.planReady} plan={cz.dogPlan} names={names} today={today}
+            routines={dogs.flatMap(d=>d.routines.filter(r=>r.frequency==='daily').map(r=>({title:r.title,scheduled_time:r.scheduled_time})))}
+            onMode={async m=>{const prev=cz.dogPlan;cz.setDogPlan(p=>({...p,mode:m}))
+              try{await cApi.setDogMode(householdId,m);showToast(m==='escala'?'Escala fixa dos cães ligada 📅':'Rotinas dos cães voltam a alternar ↻')}
+              catch(e){cz.setDogPlan(prev);showError(toNinhoError(e,'mudar a divisão dos cães'));throw e}}}
+            onCell={async(dow,period,who)=>{const prev=cz.dogPlan
+              cz.setDogPlan(p=>({...p,cells:[...p.cells.filter(c=>!(c.dow===dow&&c.period===period)),...(who?[{dow,period,who}]:[])]}))
+              try{await cApi.setScheduleCell(householdId,dow,period,who)}
+              catch(e){cz.setDogPlan(prev);showError(toNinhoError(e,'salvar escala'));throw e}}}/>}
           {puppies.map(pup=><PuppyPanel key={pup.id} dog={pup} accidents={cz.accidents} today={today} busy={isPending('acc:'+pup.id)} onAdd={loc=>addAccident(pup.id,loc)} onSave={fixAccident} onDelete={removeAccident}/>)}
           {dogs.length===0?(
             <div className="card empty"><span className="empty-icon">🐾</span>Nenhum pet cadastrado<div><button className="btn btn-p" onClick={()=>openModal('pet')}>Cadastrar pet</button></div></div>
