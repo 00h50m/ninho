@@ -7,7 +7,7 @@ import { THEMES, applyTheme, readTheme, saveTheme, type ThemeId } from '@/lib/th
 import { DEFAULT_A11Y, HOME_CARDS, TEXT_SIZES, applyA11y, effectiveTheme, isDarkTheme, readA11y, saveA11y, setupSnoozed, type A11yPrefs } from '@/lib/a11y'
 import { dogKey } from '@/lib/rotation'
 import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '@/lib/dates'
-import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, periodLabel, periodState, weekdaysLabel } from '@/lib/frequency'
+import { doneInPeriod, dueToday, lastDone, lastLabel, pausedOn, pausedToday, periodLabel, periodState, weekdaysLabel } from '@/lib/frequency'
 import { isFixed } from '@/lib/rotation'
 import { whyLabel, type SplitMode } from '@/lib/split'
 import { busyWindows } from '@/lib/busy'
@@ -67,7 +67,10 @@ import { BalanceCard } from '@/components/nos/Balanco'
 import { useCasaExtra } from '@/hooks/useCasaExtra'
 import * as cxApi from '@/lib/services/despensaJantar'
 import { useSoon, urgencyLabel } from '@/lib/despensa'
-import { cookLabel } from '@/lib/jantar'
+import { cookLabel, dinnersFromPantry } from '@/lib/jantar'
+import { packTasks, type Pack, type PackItem } from '@/lib/estacoes'
+import { setAppBadge } from '@/lib/badge'
+import { AlbumView } from '@/components/nos/Album'
 import { weekBalance } from '@/lib/balanco'
 import type { Sug } from '@/lib/sugestoes'
 import { useCaes } from '@/hooks/useCaes'
@@ -104,7 +107,7 @@ import { DogAvatar, DogHealthBlock, DogProfileSheet, FoodLow, HealthSheet, Puppy
 import { foodAlerts, foodLeftLabel, kindInfo, newBag as newBagStock, upcomingCare, type AccidentRow, type HealthKind, type HealthRecord } from '@/lib/caes'
 import { bills as agBills, agendaEntries, kindIcon, type EventKind, type HouseEvent } from '@/lib/agenda'
 import { areaLabel, fmtClock, remainingMs, type Sprint } from '@/lib/sprint'
-import { firstName, initials, wCls, byCat, catIc, QuickTime, TaskFormModal, PetModal, DogModal, RoutineModal, EnergyModal, MeetingModal } from '@/components/AppModals'
+import { firstName, initials, wCls, byCat, catIc, QuickTime, TaskFormModal, PauseSheet, PetModal, DogModal, RoutineModal, EnergyModal, MeetingModal } from '@/components/AppModals'
 
 type ToastState={kind:'ok'|'err',msg:string,undo?:()=>void,retry?:()=>void}
 export interface Account { who:Who, email:string, onSignOut:()=>void }
@@ -112,7 +115,7 @@ export interface Account { who:Who, email:string, onSignOut:()=>void }
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const [screen,setScreenState]=useState<ScreenId>('inicio')
   const [casaView,setCasaView]=useState<CasaView>('tarefas')
-  const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'|'presentes'>('semana')
+  const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'|'presentes'|'album'>('semana')
   const [rotView,setRotView]=useState<'rotinas'|'habitos'>('rotinas')
   const [theme,setThemeState]=useState<ThemeId>('aconchego')
   // Conforto do aparelho (Fase 9): tamanho, contraste, movimento, tema automático, cartões do Início
@@ -311,6 +314,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     u.searchParams.delete('ir');window.history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)
     switch(ir){
       case 'meudia':goMd('hoje');break
+      case 'hoje':setTab('inicio');setTimeout(()=>document.getElementById('minhas')?.scrollIntoView({behavior:'smooth',block:'start'}),900);break
+      case 'compras':setTab('casa');setCasaView('compras');break
+      case 'tarefa':setTab('casa');setCasaView('tarefas');setTimeout(()=>openModal('task',null),300);break
       case 'agua':setAguaPop(p=>p+1);break
       case 'copo':setWantCup(true);break
       case 'refeicao':goMd('comida','refeicao');break
@@ -323,6 +329,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       case 'faxinao':setTab('casa');setCasaView('faxinao');break
       case 'desafios':setTab('nos');setNosView('desafios');break
       case 'presentes':setTab('nos');setNosView('presentes');break
+      case 'album':setTab('nos');setNosView('album');break
       case 'nos':setTab('nos');setNosView('semana');break
       case 'sprint':setTab('inicio');setWantSprint(true);break
       case 'checkin':setTab('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),900);break
@@ -510,6 +517,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       }catch(e){patchTask(t.id,{skip:before});showError(toNinhoError(e,kind==='skip'?'pular tarefa':'adiar tarefa'),()=>pauseTask(t,kind))}
     })
   }
+  /** ⏸ Pausar até um dia (040): some de Hoje e da divisão; volta sozinha no dia seguinte. null = despausar. */
+  async function pauseUntil(t:Task,until:string|null){
+    const prev=t.paused_until??null
+    if(await updateTaskFields(t.id,{paused_until:until}))showToast(until?`⏸ Pausada até ${fmtDate(until)} · ${t.title}`:`▶ De volta · ${t.title}`,()=>{setToast(null);updateTaskFields(t.id,{paused_until:prev})})
+  }
   async function unpauseTask(t:Task){
     const s=t.skip;if(!s||s.id==='tmp')return
     await withPending(['task:'+t.id],async()=>{
@@ -584,6 +596,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         await data.reloadTasks();showToast(`"${sg.t}" adicionada · alternando`)
       }
     }catch(e){showError(toNinhoError(e,'adicionar sugestão'));throw e}
+  }
+
+  /** Checklist de estação: as que repetem com período, as de uma vez como pontual no início. */
+  async function addPack(p:Pack,items:PackItem[],from:string,to:string){
+    try{await api.insertTasks(householdId,packTasks(items,from,to) as any);await data.reloadTasks();showToast(`${p.icon} ${items.length} tarefa${items.length===1?'':'s'} de ${p.label.toLowerCase()} · ${fmtDate(from)} a ${fmtDate(to)}`)}
+    catch(e){showError(toNinhoError(e,'adicionar checklist'));throw e}
   }
 
   // ── CÃES ──────────────────────────────────────────────
@@ -747,8 +765,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // Migration 019 aplicada? (as tarefas trazem a coluna priority)
   const casaOk=tasks.some(t=>'priority' in t)
   const periodOk=tasks.some(t=>'starts_on' in t)
+  const pauseOk=tasks.some(t=>'paused_until' in t)
   const helpReq=tasks.filter(t=>t.help_by&&t.help_by!==me&&!t.completed_today)
   const countFor=(w:Who)=>{const all=hItems.filter(i=>ownerOfItem(i)===w);return{all:all.length,done:all.filter(i=>i.completed_today).length}}
+  // Número no ícone do app: o que ainda falta para mim hoje
+  const myLeft=me?(c=>c.all-c.done)(countFor(me)):0
+  useEffect(()=>{if(me)setAppBadge(myLeft)},[me,myLeft])
   // Início: semana real, rotina do momento, resumo de agora, cuidados dos cães, desafio sugerido
   const weekInfo=weekDays(weekStart,today,{tasks,dogs,checkins:week.checkins,days:week.days,survivalNow:settings.survival})
   const rn=routineNow(routines.filter(r=>routineOnDay(r,today)),today,nowHM)
@@ -878,6 +900,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     challenges:nos.challenges.filter(c=>c.status==='active'||(c.ended_at||'').slice(0,10)>=weekStart).map(c=>{const p=chProgress(c,nos.facts,today);return{title:c.title,hits:p.hits,goal:c.goal,state:c.status==='active'?p.state:c.status}}),
     shared:sharedLines,lastAgreements:lastMeeting?.agreements||[],
   },names):[]
+  const onAlbumError=useCallback((e:unknown,c:string)=>showError(toNinhoError(e,c)),[])
   const nosTl=nos.available?nosTimeline({challenges:nos.challenges,meetings:nos.meetings,sprints:nos.sprints}):[]
   const together={done:nos.completions.filter(c=>inWk(c.date)).length,runs:nos.facts.runs.filter(r=>inWk(r.date)).length,habits:nos.facts.habitLogs.filter(h=>inWk(h.date)).length,sprints:nos.sprints.filter(x=>inWk(x.date)&&x.status==='done').length}
 
@@ -998,7 +1021,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     const doneXP=done.reduce((s,i)=>s+xpOfItem(i),0)
     const essLeft=pend.filter(i=>i.essential).length
     return(
-      <section key={who} className="card pcard" data-hide={person!==who?'1':'0'}>
+      <section key={who} id={me===who?'minhas':undefined} className="card pcard" data-hide={person!==who?'1':'0'}>
         <div className="ph">
           <div className={`av av-${who}`}>{initials(names[who])}</div>
           <div style={{minWidth:0}}>
@@ -1384,19 +1407,19 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── CASA ── */}
         {screen==='casa'&&<div className="scr">
           <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),...(cx.ready?[['despensa','🥫 Despensa',useSoon(cx.pantry,today).length],['jantar','🍲 Jantar']] as [CasaView,string,number?][]:[]),['sugestoes','💡 Sugestões']]}/>
-          {casaView==='despensa'?<PantryView ready={cx.ready} items={cx.pantry} history={casa.shopHistory} today={today}
+          {casaView==='despensa'?<PantryView ready={cx.ready} items={cx.pantry} history={casa.shopHistory} today={today} ideas={dinnersFromPantry(md.recipes,cx.pantry,today).length} onIdeas={()=>setCasaView('jantar')}
               onSave={x=>cxApi.savePantry(householdId,me,x).then(cx.reload).then(()=>showToast(x.id?'Item salvo':`🥫 ${x.name} na despensa`)).catch(e=>{showError(toNinhoError(e,'guardar na despensa'));throw e})}
               onRemove={it=>cxApi.removePantry(it.id).then(cx.reload).then(()=>showToast(`${it.name} saiu da despensa`)).catch(e=>{showError(toNinhoError(e,'tirar da despensa'));throw e})}
               onFinished={it=>cxApi.pantryToShopping(householdId,me,it).then(r=>{cx.reload();casa.reloadShopping();showToast(r.created?`🛒 ${it.name} na lista de compras`:`${it.name} já estava na lista`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}/>
-          :casaView==='jantar'?<DinnerView ready={cx.ready} meals={cx.meals} recipes={md.recipes} names={names} today={today}
+          :casaView==='jantar'?<DinnerView ready={cx.ready} meals={cx.meals} recipes={md.recipes} pantry={cx.pantry} names={names} today={today}
               onSave={x=>cxApi.saveMeal(householdId,me,x).then(cx.reload).then(()=>showToast(`🍲 ${x.title} · ${fmtDate(x.date)}`)).catch(e=>{showError(toNinhoError(e,'planejar jantar'));throw e})}
               onDelete={m=>cxApi.deleteMeal(m.id).then(cx.reload).then(()=>showToast('Jantar tirado')).catch(e=>{showError(toNinhoError(e,'tirar jantar'));throw e})}
               onShopping={lines=>mdApi.menuToShopping(householdId,me,lines).then(r=>{casa.reloadShopping();showToast(`🛒 ${r.added} na lista de compras${r.had?` · ${r.had} já estava(m)`:''}`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}/>
-          :casaView==='sugestoes'?<SuggestionsView taskTitles={tasks.map(t=>t.title)} petTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} hasDogs={dogs.length>0} archived={archived} names={names} onRestore={restoreTask}
+          :casaView==='sugestoes'?<SuggestionsView taskTitles={tasks.map(t=>t.title)} petTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} hasDogs={dogs.length>0} archived={archived} names={names} onRestore={restoreTask} today={today} periodOk={periodOk} onAddPack={addPack}
               onAdd={addSuggestion} onCustomize={sg=>openModal('task',{title:sg.t,category:sg.cat,weight:sg.w,frequency:sg.f,essential:false,assigned_to:null,scheduled_time:null,active:true,id:null})}/>
           :casaView==='faxinao'?<FaxinaoView householdId={householdId} me={me} names={names} list={fx.list} available={fx.available} ready={fx.ready} reload={fx.reload} setList={fx.setList}
               onToast={m=>showToast(m)} onError={(e,c)=>showError(toNinhoError(e,c))}/>
-          :casaView==='compras'?<ShoppingTab householdId={householdId} me={me} names={names} items={casa.shop} history={casa.shopHistory} state={casa.shopState} error={casa.shopError}
+          :casaView==='compras'?<ShoppingTab householdId={householdId} me={me} names={names} items={casa.shop} stores={casa.shopStores} history={casa.shopHistory} state={casa.shopState} error={casa.shopError}
             setItems={casa.setShop} onReload={casa.reloadShopping} extras={casa.shopExtras} requireMe={requireMe} toast={(m,u)=>showToast(m,u)} fail={(e,r)=>showError(e,r)} onFinished={onShoppingFinished}/>
           :casaView==='agenda'?<AgendaView available={ag.available} events={ag.events} maint={casa.maint} dogCare={dogCareAgenda} onOpenDogs={()=>go('caes')} today={today} names={names} sobrouUrl={ag.sobrouUrl}
             onNew={k=>openModal('event',{event:null,kind:k})} onEdit={e=>openModal('event',{event:e,kind:e.kind})} onDone={eventDone} onPaid={billPaid}
@@ -1454,6 +1477,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                         <QuickTime value={hhmm(t.scheduled_time)} onSave={v=>quickUpdate(t.id,{scheduled_time:v||null})}/>
                         {weekdaysLabel(t.weekdays)&&t.frequency!=='monthly'&&t.frequency!=='once'&&<span className="bdg bdg-t" title="Dias da semana">📆 {weekdaysLabel(t.weekdays)}</span>}
                         {t.frequency==='once'&&t.due_date&&<span className={`bdg ${t.due_date<today?'bdg-h':'bdg-t'}`} title="Data">📆 {fmtDate(t.due_date)}</span>}
+                        {pausedOn(t,today)&&<button className="bdg qb bdg-n" onClick={e=>{e.stopPropagation();pauseUntil(t,null)}} title="Despausar" aria-label={`Pausada até ${fmtDate(t.paused_until!)}. Despausar ${t.title}`}>⏸ até {fmtDate(t.paused_until!)}</button>}
                         {t.frequency!=='once'&&periodLabel(t)&&(()=>{const st=periodState(t,today);return <span className={`bdg ${st?'bdg-n':'bdg-t'}`} title="Período">🗓 {st==='antes'?`começa ${fmtDate(t.starts_on!)}`:st==='depois'?`terminou ${fmtDate(t.ends_on!)}`:periodLabel(t)}</span>})()}
                         {pausedToday(t,today)&&<span className="bdg bdg-n">⏸ {t.skip!.kind==='snooze'?'amanhã':'pulada'}</span>}
                         <span className={`bdg bdg-${wCls(t.weight)}`} title={`Esforço ${WPT[t.weight].toLowerCase()} · +${XPW[t.weight]} XP`}>+{XPW[t.weight]}</span>
@@ -1489,7 +1513,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             <div><h2>Nós</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
             <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button><button className="btn btn-g" onClick={()=>go('ajustes')}>⚙️ Ajustes</button></div>
           </div>
-          <SubTabs label="Nós" value={nosView} onChange={v=>setNosView(v)} options={[['semana','Semana'],['desafios','Desafios',activeChs.length],['historico','Histórico'],['equilibrio','Equilíbrio'],['presentes','🎁 Presentes']]}/>
+          <SubTabs label="Nós" value={nosView} onChange={v=>setNosView(v)} options={[['semana','Semana'],['desafios','Desafios',activeChs.length],['historico','Histórico'],['equilibrio','Equilíbrio'],['presentes','🎁 Presentes'],['album','📸 Álbum']]}/>
           {nosView==='semana'&&<div className="wgrid">
             <div className="col">
               <TogetherCard {...together} xp={game.scores.g.xp+game.scores.s.xp} streak={nos.available?bothCheckinStreak(nos.facts.checkins,today):0} meetingDone={!!thisMeeting&&!!(thisMeeting.what_worked||thisMeeting.wins||thisMeeting.adjustments||(thisMeeting.agreements||[]).length)} onOpenMeeting={()=>openModal('meeting')}/>
@@ -1521,6 +1545,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             routines={routines.map(r=>({id:r.id,title:r.title}))} habits={rot.habits.filter((h:any)=>!h.archived_at).map(h=>({id:h.id,title:h.title}))}
             suggestion={challenge||null} onCreate={v=>createChallenge({...v,created_by:me})} onMark={markChallenge} onStatus={challengeStatus} onDelete={deleteChallenge}/>
             :<div className="card empty"><span className="empty-icon">🤝</span>Desafios em dupla precisam da atualização do banco (migration 022).</div>)}
+          {nosView==='album'&&<AlbumView householdId={householdId} me={me} names={names} today={today} marks={nosTl} onToast={m=>showToast(m)} onError={onAlbumError}/>}
           {nosView==='historico'&&<div className="wgrid">
             <div className="col">
               <CoupleMonthCard householdId={householdId} today={today} names={names} onToast={m=>showToast(m)}/>
@@ -1890,7 +1915,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {toast.retry&&<button onClick={()=>{const r=toast.retry!;setToast(null);r()}}>Tentar novamente</button>}
         {toast.kind==='err'&&<button className="tx" onClick={()=>setToast(null)} aria-label="Fechar aviso">✕</button>}
       </div>}
-      {modal==='task'&&<TaskFormModal task={modalData} names={names} saving={saving} casaOk={casaOk} periodOk={periodOk} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
+      {modal==='task'&&<TaskFormModal task={modalData} names={names} saving={saving} casaOk={casaOk} periodOk={periodOk} pauseOk={pauseOk} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
+      {modal==='pause'&&<PauseSheet task={modalData} today={today} onClose={closeModal} onPause={d=>{const t=modalData;closeModal();pauseUntil(t,d)}}/>}
       {modal==='pet'&&<PetModal saving={saving} onClose={closeModal} onSave={savePet}/>}
       {modal==='taskmenu'&&(()=>{const t:Task=modalData;const other:Who=ownerOfTask(t)==='g'?'s':'g';const why=whyLabel(plan.whyOf(t.id),names,today);return(
         <Sheet size="sm" title={t.title} onClose={closeModal}>
@@ -1907,6 +1933,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             {casaOk&&!t.completed_today&&(t.help_by
               ?<button className="btn btn-g" onClick={()=>{closeModal();askHelp(t,false)}}>🙋 Cancelar pedido de ajuda</button>
               :<button className="btn btn-g" onClick={()=>{closeModal();askHelp(t,true)}}>🙋 Pedir ajuda a {firstName(names[other])}<small className="menu-s">ela vê o pedido na hora</small></button>)}
+            {pauseOk&&(pausedOn(t,today)
+              ?<button className="btn btn-g" onClick={()=>{closeModal();pauseUntil(t,null)}}>▶ Despausar<small className="menu-s">pausada até {fmtDate(t.paused_until!)}</small></button>
+              :<button className="btn btn-g" onClick={()=>openModal('pause',t)}>⏸ Pausar por um tempo<small className="menu-s">viagem, obra, época do ano</small></button>)}
             <button className="btn btn-g" onClick={()=>openModal('task',t)}>✎ Editar tarefa</button>
           </div>
         </Sheet>

@@ -51,6 +51,8 @@ export interface Task extends CompletionState {
   /** Migration 039: período (De … até …). Fora dele não aparece em Hoje. */
   starts_on?: string | null
   ends_on?: string | null
+  /** Migration 040: pausada até este dia (inclusive). */
+  paused_until?: string | null
   /** Migration 019: prioridade, observações, checklist e pedido de ajuda */
   priority?: 'alta' | 'normal' | 'baixa'
   notes?: string | null
@@ -121,7 +123,7 @@ export interface CompletionRow {
 }
 
 /** Qualquer coisa que pode ser concluída e tem frequência. */
-export type Doable = { frequency: string, weekdays?: number[] | null, due_date?: string | null, starts_on?: string | null, ends_on?: string | null } & CompletionState
+export type Doable = { frequency: string, weekdays?: number[] | null, due_date?: string | null, starts_on?: string | null, ends_on?: string | null, paused_until?: string | null } & CompletionState
 
 /** Rotinas iguais de cães diferentes viram um item só em Hoje. */
 export interface DogItem {

@@ -5,15 +5,17 @@ import type { Names, Who } from '@/lib/types'
 import type { NinhoError } from '@/lib/errors'
 import { toNinhoError } from '@/lib/errors'
 import * as casa from '@/lib/services/casa'
-import { SHOP_CATS, buyAgain, groupOpen, marketView, guessCategory, parseEntry, qtyLabel, shoppingCounts, type ShoppingItem } from '@/lib/shopping'
+import { SHOP_CATS, STORES, STORE_LABEL, buyAgain, estimate, groupOpen, lastBuys, marketView, guessCategory, normalize, parseEntry, priceLabel, qtyLabel, shoppingCounts, storeCounts, storeOf, toPrice, type ShoppingItem } from '@/lib/shopping'
 import { Sheet } from '@/components/ui/Sheet'
 
 const first = (n: string) => (n || '').split(' ')[0]
 
-export function ShoppingTab({ householdId, me, names, items, history, state, error, setItems, onReload, requireMe, toast, fail, onFinished, extras = false }: {
+export function ShoppingTab({ householdId, me, names, items: allItems, history, state, error, setItems, onReload, requireMe, toast, fail, onFinished, extras = false, stores = false }: {
   householdId: string, me: Who | null, names: Names
   /** Migration 019: unidade, prioridade, quem compra, acabando, recorrência */
   extras?: boolean
+  /** Migration 040: onde comprar e preço */
+  stores?: boolean
   items: ShoppingItem[], history: ShoppingItem[], state: 'loading' | 'ready' | 'error', error: NinhoError | null
   setItems: (f: (l: ShoppingItem[]) => ShoppingItem[]) => void
   onReload: () => Promise<void>
@@ -32,6 +34,15 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   const guessed = parsed.title ? guessCategory(parsed.title) : 'outros'
   const chosenCat = cat ?? guessed
   const [market, setMarket] = useState(false)
+  // filtro por lugar (040), lembrado neste aparelho
+  const [where, setWhere] = useState('all')
+  useEffect(() => { try { const v = localStorage.getItem('ninho.loja'); if (v) setWhere(v) } catch { /* sem storage */ } }, [])
+  const pickWhere = (v: string) => { setWhere(v); try { localStorage.setItem('ninho.loja', v) } catch { /* sem storage */ } }
+  const byStore = useMemo(() => stores ? storeCounts(allItems) : [], [stores, allItems])
+  const filtering = stores && where !== 'all' && byStore.some(x => x.store === where)
+  const items = useMemo(() => filtering ? allItems.filter(i => storeOf(i) === where) : allItems, [filtering, allItems, where])
+  const last = useMemo(() => lastBuys(history), [history])
+  const est = stores ? estimate(items, last) : null
   const [cartOpen, setCartOpen] = useState(false)
   // o modo mercado fica lembrado neste aparelho
   useEffect(() => { try { setMarket(localStorage.getItem('ninho.mercado') === '1') } catch { /* sem storage */ } }, [])
@@ -49,8 +60,9 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   }, [market])
   const groups = useMemo(() => groupOpen(items), [items])
   const mv = useMemo(() => marketView(items), [items])
-  const again = useMemo(() => buyAgain(history, items), [history, items])
-  const c = shoppingCounts(items)
+  const again = useMemo(() => buyAgain(history, allItems), [history, allItems])
+  const c = shoppingCounts(allItems)
+  const cf = shoppingCounts(items)
 
   const mark = (id: string, on: boolean) => setBusy(s => { const n = new Set(s); on ? n.add(id) : n.delete(id); return n })
 
@@ -58,12 +70,15 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
     const by = me ?? requireMe()
     if (!by) return
     const tmpId = 'tmp:' + Math.random().toString(36).slice(2)
-    const exists = items.find(i => !i.done_at && i.title.trim().toLowerCase() === title.trim().toLowerCase())
+    const exists = allItems.find(i => !i.done_at && i.title.trim().toLowerCase() === title.trim().toLowerCase())
     if (!exists) {
       setItems(l => [...l, { id: tmpId, household_id: householdId, title, qty, category, note: null, added_by: by, checked_at: null, checked_by: null, done_at: null, created_at: new Date().toISOString() }])
     }
     try {
       const r = await casa.addShoppingItem(householdId, title, qty, category, by)
+      // lugar de sempre (o da última compra), quando não é o do corredor
+      const lb = stores && r.created ? last.get(normalize(title)) : null
+      if (lb?.store && lb.store !== storeOf({ store: null, category })) await casa.updateShoppingItem(r.id, { store: lb.store }).catch(() => {})
       if (!r.created) toast(r.reopened ? `${title} voltou para a lista` : `${title} já está na lista`)
       await onReload()
     } catch (e) {
@@ -110,7 +125,7 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   async function finish() {
     if (!c.checked) return
     if (!confirm(`Finalizar a compra? ${c.checked} ite${c.checked === 1 ? 'm riscado sai' : 'ns riscados saem'} da lista${c.toBuy ? ` e ${c.toBuy} continua${c.toBuy === 1 ? '' : 'm'} para a próxima` : ''}.`)) return
-    const checked = items.filter(i => i.checked_at && !i.done_at)
+    const checked = allItems.filter(i => i.checked_at && !i.done_at)
     setItems(l => l.filter(i => !i.checked_at))
     try {
       const ids = await casa.finishShopping(householdId)
@@ -147,7 +162,8 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
   return (
     <div className="narrow">
       <div className="sh">
-        <div><h2>Compras</h2><p>{c.open === 0 ? 'Lista vazia' : `${c.toBuy} para comprar${c.checked ? ` · ${c.checked} no carrinho` : ''}`} · ao vivo entre vocês</p></div>
+        <div><h2>Compras</h2><p>{c.open === 0 ? 'Lista vazia' : `${c.toBuy} para comprar${c.checked ? ` · ${c.checked} no carrinho` : ''}`} · ao vivo entre vocês</p>
+          {est && est.known > 0 && <p className="shop-est">≈ <b className="mono">{priceLabel(est.total)}</b>{filtering ? ` no ${STORE_LABEL[where].replace(/^\S+ /, '').toLowerCase()}` : ''} pela última compra{est.known < est.of ? ` (${est.known} de ${est.of} itens com preço)` : ''}</p>}</div>
         {c.open > 0 && <div className="sh-a"><button className={`btn ${market ? 'btn-p' : 'btn-s'}`} aria-pressed={market} onClick={toggleMarket}>{market ? '✓ Modo mercado' : '🛒 Modo mercado'}</button></div>}
       </div>
 
@@ -155,6 +171,11 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
         <div style={{ fontSize: 15, fontWeight: 500, marginBottom: 6 }}>Não foi possível abrir a lista</div>
         <div style={{ fontSize: 13, color: 'var(--sub)', marginBottom: 14 }}>{error?.userMessage}</div>
         <button className="btn btn-p" onClick={() => onReload()}>Tentar novamente</button>
+      </div>}
+
+      {state !== 'error' && byStore.length > 1 && <div className="fchips shop-where" role="tablist" aria-label="Onde comprar">
+        <button role="tab" aria-selected={!filtering} className={`fc ${!filtering ? 'on' : ''}`} onClick={() => pickWhere('all')}>Tudo · {c.toBuy}</button>
+        {byStore.map(x => <button key={x.store} role="tab" aria-selected={filtering && where === x.store} className={`fc ${filtering && where === x.store ? 'on' : ''}`} onClick={() => pickWhere(x.store)}>{x.label} · {x.n}</button>)}
       </div>}
 
       {state !== 'error' && market && c.open > 0 && <MarketMode mv={mv} busy={busy} names={names} cartOpen={cartOpen} setCartOpen={setCartOpen} onToggle={toggle} onFinish={finish} onExit={toggleMarket}/>}
@@ -178,7 +199,7 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
         </div>}
 
         {state === 'loading' && items.length === 0 ? <div className="loadscr" role="status"><span className="spin" aria-hidden="true"/>Carregando a lista…</div>
-        : groups.length === 0 ? <div className="card empty"><span className="empty-icon">🛒</span>Nada na lista.<br/>Adicione acima ou toque em “Comprar de novo”.</div>
+        : groups.length === 0 ? <div className="card empty"><span className="empty-icon">🛒</span>{filtering && cf.open === 0 && c.open > 0 ? <>Nada para comprar aqui.</> : <>Nada na lista.<br/>Adicione acima ou toque em “Comprar de novo”.</>}</div>
         : <div className="card">
           {groups.map(g => (
             <div key={g.cat}>
@@ -194,6 +215,8 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
                       {it.priority === 'alta' && !it.checked_at && <span className="tag-pri">↑ prioridade</span>}
                       {it.assigned_to && !it.checked_at && <span className="tag-by">🛒 {first(names[it.assigned_to])} compra</span>}
                       {it.recur_days && <span className="tag-r" title="Volta sozinho para a lista">↻ {it.recur_days} dias</span>}
+                      {stores && !filtering && storeOf(it) !== 'mercado' && <span className="tag-by">{STORE_LABEL[storeOf(it)]}</span>}
+                      {stores && (() => { const p = toPrice(it.price); const lb = last.get(normalize(it.title)); return p != null ? <span className="tag-by mono">{priceLabel(p)}</span> : lb?.price != null ? <span className="tag-by" title={`Última compra: ${lb.date.slice(8, 10)}/${lb.date.slice(5, 7)}`}>última {priceLabel(lb.price)}</span> : null })()}
                       {it.checked_at ? <span className="tag-by">✓ {it.checked_by ? first(names[it.checked_by]) : 'riscado'}</span>
                         : it.added_by && <span className="tag-by">pedido por {first(names[it.added_by])}</span>}
                     </div>
@@ -211,7 +234,7 @@ export function ShoppingTab({ householdId, me, names, items, history, state, err
           Toque no item para riscar. “Finalizar compra” tira os riscados da lista e guarda para o “comprar de novo”.
         </div>
       </>}
-      {editing && <ShopItemSheet item={editing} names={names} onClose={() => setEditing(null)} onSave={p => saveEdit(editing, p)} onRemove={() => { setEditing(null); remove(editing) }}/>}
+      {editing && <ShopItemSheet item={editing} names={names} stores={stores} onClose={() => setEditing(null)} onSave={p => saveEdit(editing, p)} onRemove={() => { setEditing(null); remove(editing) }}/>}
     </div>
   )
 }
@@ -253,7 +276,7 @@ function MarketMode({ mv, busy, names, cartOpen, setCartOpen, onToggle, onFinish
 
 const UNITS = ['un', 'kg', 'g', 'L', 'ml', 'pct', 'cx', 'dz']
 
-function ShopItemSheet({ item, names, onClose, onSave, onRemove }: { item: ShoppingItem, names: Names, onClose: () => void, onSave: (p: Partial<ShoppingItem>) => void, onRemove: () => void }) {
+function ShopItemSheet({ item, names, stores, onClose, onSave, onRemove }: { item: ShoppingItem, names: Names, stores?: boolean, onClose: () => void, onSave: (p: Partial<ShoppingItem>) => void, onRemove: () => void }) {
   const [qty, setQty] = useState(item.qty || '')
   const [unit, setUnit] = useState(item.unit || '')
   const [category, setCategory] = useState(item.category)
@@ -262,12 +285,15 @@ function ShopItemSheet({ item, names, onClose, onSave, onRemove }: { item: Shopp
   const [low, setLow] = useState(!!item.running_low)
   const [recur, setRecur] = useState(item.recur_days ? String(item.recur_days) : '')
   const [note, setNote] = useState(item.note || '')
+  const [store, setStore] = useState(item.store || '')
+  const [price, setPrice] = useState(toPrice(item.price) != null ? String(toPrice(item.price)).replace('.', ',') : '')
   return (
     <Sheet title={item.title} onClose={onClose} footer={<>
       <button className="btn btn-danger" onClick={onRemove}>Remover</button>
       <button className="btn btn-p" onClick={() => onSave({
         qty: qty.trim().slice(0, 30) || null, unit: unit.trim().slice(0, 15) || null, category, priority, assigned_to: who, running_low: low,
         recur_days: recur ? Math.min(365, Math.max(1, Number(recur) || 0)) || null : null, note: note.trim().slice(0, 200) || null,
+        ...(stores ? { store: store || null, price: toPrice(price) } : {}),
       })}>Salvar</button>
     </>}>
       <div className="onb-row">
@@ -275,6 +301,14 @@ function ShopItemSheet({ item, names, onClose, onSave, onRemove }: { item: Shopp
         <label className="onb-f"><span>Unidade</span><input className="fi" value={unit} maxLength={15} list="shop-units" onChange={e => setUnit(e.target.value)} placeholder="kg"/></label>
       </div>
       <datalist id="shop-units">{UNITS.map(u => <option key={u} value={u}/>)}</datalist>
+      {stores && <div className="onb-row">
+        <label className="onb-f"><span>Onde comprar</span>
+          <select className="fi" value={store} onChange={e => setStore(e.target.value)}>
+            <option value="">{STORE_LABEL[storeOf({ store: null, category: item.category })]} (pelo corredor)</option>
+            {STORES.map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select></label>
+        <label className="onb-f"><span>Preço pago (R$)</span><input className="fi" inputMode="decimal" value={price} maxLength={10} onChange={e => setPrice(e.target.value)} placeholder="12,90"/></label>
+      </div>}
       <label className="onb-f"><span>Categoria (corredor)</span>
         <select className="fi" value={category} onChange={e => setCategory(e.target.value)}>{SHOP_CATS.map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
       <label className="rt-toggle"><input type="checkbox" checked={low} onChange={e => setLow(e.target.checked)}/><span><b>⚠ Está acabando</b><small>Sobe para o topo do corredor</small></span></label>

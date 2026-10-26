@@ -5,8 +5,10 @@ import { useState } from 'react'
 import { PLACES, byPlace, guessPlace, fromShopping, urgency, urgencyLabel, useSoon, type PantryItem, type Place } from '@/lib/despensa'
 import type { PantryInput } from '@/lib/services/despensaJantar'
 
-export function PantryView({ ready, items, history, today, onSave, onRemove, onFinished }: {
+export function PantryView({ ready, items, history, today, ideas = 0, onIdeas, onSave, onRemove, onFinished }: {
   ready: boolean, items: PantryItem[], today: string
+  /** quantas receitas usam o que vence logo (vai para Casa › Jantar) */
+  ideas?: number, onIdeas?: () => void
   history: Array<{ title: string, done_at: string | null }>
   onSave: (x: PantryInput) => Promise<void>, onRemove: (it: PantryItem) => Promise<void>, onFinished: (it: PantryItem) => Promise<void>
 }) {
@@ -31,6 +33,7 @@ export function PantryView({ ready, items, history, today, onSave, onRemove, onF
       {soon.length > 0 && <section className="card dp-soon" aria-labelledby="dp-s">
         <div className="slbl" id="dp-s">⏰ Usar logo</div>
         <ul className="dp-list">{soon.map(it => <li key={it.id} className="dp-i"><span className="dp-t"><b>{it.name}</b><small className={`dp-u dp-${urgency(it, today).u}`}>{urgencyLabel(it, today)}{it.qty ? ` · ${it.qty}` : ''}</small></span></li>)}</ul>
+        {ideas > 0 && onIdeas && <button className="btn btn-s" onClick={onIdeas}>🍲 {ideas} ideia{ideas === 1 ? '' : 's'} de jantar com isso</button>}
       </section>}
       {groups.length === 0 && !form && <div className="card empty"><span className="empty-icon">🥫</span>Nada anotado ainda. Comece pelo que vence: iogurte, carne, frios.</div>}
       {groups.map(g => <section key={g.place} className="card" aria-labelledby={`dp-${g.place}`}>

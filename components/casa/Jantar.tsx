@@ -4,15 +4,16 @@
 import { useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { addDays, fmtDate, weekStartOf } from '@/lib/dates'
-import { cookLabel, weekPlan, weekShopping, type Cook, type HouseMeal } from '@/lib/jantar'
+import { cookLabel, dinnersFromPantry, firstFreeDay, weekPlan, weekShopping, type Cook, type HouseMeal } from '@/lib/jantar'
+import { urgencyLabel, type PantryItem } from '@/lib/despensa'
 import { recipeShopping, type Recipe } from '@/lib/receitas'
 import type { MealInput } from '@/lib/services/despensaJantar'
 
 const DOW = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 const first = (n: string) => (n || '').split(' ')[0]
 
-export function DinnerView({ ready, meals, recipes, names, today, onSave, onDelete, onShopping }: {
-  ready: boolean, meals: HouseMeal[], recipes: Recipe[], names: Names, today: string
+export function DinnerView({ ready, meals, recipes, pantry = [], names, today, onSave, onDelete, onShopping }: {
+  ready: boolean, meals: HouseMeal[], recipes: Recipe[], pantry?: PantryItem[], names: Names, today: string
   onSave: (x: MealInput) => Promise<void>, onDelete: (m: HouseMeal) => Promise<void>, onShopping: (lines: Array<{ title: string, qty: string }>) => Promise<void>
 }) {
   const [week, setWeek] = useState(weekStartOf(today))
@@ -24,6 +25,8 @@ export function DinnerView({ ready, meals, recipes, names, today, onSave, onDele
   const lines = weekShopping(planned.filter(m => m.date >= today))
   const cooks = planned.reduce((a, m) => { if (m.cook === 'g' || m.cook === 's') a[m.cook]++; return a }, { g: 0, s: 0 } as Record<Who, number>)
   const cur = weekStartOf(today)
+  const ideas = dinnersFromPantry(recipes, pantry, today)
+  const free = firstFreeDay(meals, today)
   return (
     <div className="narrow jt">
       <div className="sh"><div><h2>Jantar das duas</h2><p>Quem cozinha cada dia{planned.length ? ` · ${first(names.g)} ${cooks.g} · ${first(names.s)} ${cooks.s}` : ''}</p></div></div>
@@ -32,6 +35,14 @@ export function DinnerView({ ready, meals, recipes, names, today, onSave, onDele
         <b className="cm-m">{week === cur ? 'Esta semana' : week === addDays(cur, 7) ? 'Próxima semana' : `Semana de ${fmtDate(week)}`}</b>
         <button className="ib" aria-label="Próxima semana" onClick={() => setWeek(w => addDays(w, 7))}>›</button>
       </div>
+      {!edit && ideas.length > 0 && <section className="card jt-ideas" aria-labelledby="jt-ideas">
+        <div className="slbl" id="jt-ideas">🥫 Com o que vence logo</div>
+        <p className="row-s">Receitas que usam o que está para vencer na despensa. Toque para planejar em {free === today ? 'hoje' : fmtDate(free)}.</p>
+        <ul className="jt-idl">{ideas.map(({ recipe, uses }) => <li key={recipe.id}>
+          <button className="jt-m" onClick={() => setEdit({ date: free, title: recipe.name, cook: null, recipe_id: recipe.id, ingredients: recipeShopping(recipe), notes: null })} aria-label={`Planejar ${recipe.name}`}>
+            <b>{recipe.name}</b><small>usa {uses.map(u => `${u.name} (${urgencyLabel(u, today)})`).join(', ')}</small></button>
+        </li>)}</ul>
+      </section>}
       {edit && <MealForm value={edit} recipes={recipes} names={names} onCancel={() => setEdit(null)} onSave={async v => { await onSave(v); setEdit(null) }}/>}
       <section className="card">
         <ul className="jt-list">{plan.map(({ date, meal }) => <li key={date} className={`jt-d ${date === today ? 'jt-today' : ''} ${date < today ? 'jt-past' : ''}`}>

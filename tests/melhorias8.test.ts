@@ -123,9 +123,9 @@ describe('relatório do mês', () => {
 })
 
 describe('atalhos no ícone do app', () => {
-  it('manifest com os 4 atalhos, cada um com nome curto e endereço do próprio app', () => {
+  it('manifest com os 6 atalhos (Hoje e Compras desde as melhorias 13), cada um com nome curto e endereço do próprio app', () => {
     const m = JSON.parse(readFileSync('public/manifest.json', 'utf8'))
-    expect(m.shortcuts.map((s: any) => s.url)).toEqual(['/?ir=copo&source=atalho', '/?ir=refeicao&source=atalho', '/?ir=cardapio&source=atalho', '/?ir=rotulo&source=atalho'])
+    expect(m.shortcuts.map((s: any) => s.url)).toEqual(['/?ir=copo&source=atalho', '/?ir=hoje&source=atalho', '/?ir=compras&source=atalho', '/?ir=refeicao&source=atalho', '/?ir=cardapio&source=atalho', '/?ir=rotulo&source=atalho'])
     expect(m.shortcuts.every((s: any) => s.short_name.length <= 12 && s.icons?.length)).toBe(true)
   })
 })

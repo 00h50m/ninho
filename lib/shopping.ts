@@ -20,6 +20,9 @@ export interface ShoppingItem {
   assigned_to?: Who | null
   running_low?: boolean
   recur_days?: number | null
+  /** Migration 040: onde comprar (null = pelo corredor) e quanto custou */
+  store?: string | null
+  price?: number | string | null
 }
 
 /** Ordem = ordem dos corredores num mercado comum. */
@@ -143,4 +146,55 @@ export function buyAgain(history: ShoppingItem[], open: ShoppingItem[], limit = 
 export function shoppingCounts(items: ShoppingItem[]) {
   const open = items.filter(i => !i.done_at)
   return { open: open.length, checked: open.filter(i => i.checked_at).length, toBuy: open.filter(i => !i.checked_at).length }
+}
+
+// ── Onde comprar (040) ─────────────────────────────────────────────────
+
+export const STORES: Array<[string, string]> = [
+  ['mercado', '🛒 Mercado'], ['feira', '🥬 Feira'], ['acougue', '🥩 Açougue'], ['padaria', '🍞 Padaria'], ['petshop', '🐾 Pet shop'],
+  ['farmacia', '💊 Farmácia'], ['atacado', '📦 Atacado'], ['online', '📱 Online'], ['outro', '📍 Outro lugar'],
+]
+export const STORE_LABEL: Record<string, string> = Object.fromEntries(STORES)
+
+/** Onde comprar: o escolhido, ou pelo corredor (farmácia → farmácia; pets → pet shop; o resto → mercado). */
+export function storeOf(i: Pick<ShoppingItem, 'store' | 'category'>): string {
+  if (i.store && STORE_LABEL[i.store]) return i.store
+  return i.category === 'farmacia' ? 'farmacia' : i.category === 'pets' ? 'petshop' : 'mercado'
+}
+
+/** Quantos itens faltam comprar em cada lugar (só os lugares com algo), na ordem de STORES. */
+export function storeCounts(items: ShoppingItem[]): Array<{ store: string, label: string, n: number }> {
+  const open = items.filter(i => !i.done_at && !i.checked_at)
+  return STORES.map(([store, label]) => ({ store, label, n: open.filter(i => storeOf(i) === store).length })).filter(x => x.n > 0)
+}
+
+export const toPrice = (v: number | string | null | undefined): number | null => {
+  if (v == null || v === '') return null
+  const n = typeof v === 'number' ? v : Number(String(v).replace(/\s|R\$/g, '').replace(/\.(?=\d{3}(\D|$))/g, '').replace(',', '.'))
+  return Number.isFinite(n) && n >= 0 && n < 100000 ? Math.round(n * 100) / 100 : null
+}
+
+/** "R$ 12,90" */
+export function priceLabel(n: number): string {
+  return 'R$ ' + n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')
+}
+
+/** Última compra de cada item (pelo nome): preço, dia e lugar. Do histórico (finalizadas). */
+export function lastBuys(history: ShoppingItem[]): Map<string, { price: number | null, date: string, store: string | null }> {
+  const m = new Map<string, { price: number | null, date: string, store: string | null }>()
+  for (const h of history) {
+    if (!h.done_at) continue
+    const k = normalize(h.title), cur = m.get(k), price = toPrice(h.price)
+    if (!cur || h.done_at > cur.date) m.set(k, { price: price ?? cur?.price ?? null, date: h.done_at, store: h.store || cur?.store || null })
+    else if (cur.price == null && price != null) cur.price = price
+  }
+  return m
+}
+
+/** Quanto deve dar (pela última compra de cada item ainda não riscado). `known` = quantos têm preço. */
+export function estimate(items: ShoppingItem[], last: Map<string, { price: number | null }>): { total: number, known: number, of: number } {
+  const open = items.filter(i => !i.done_at && !i.checked_at)
+  let total = 0, known = 0
+  for (const i of open) { const p = toPrice(i.price) ?? last.get(normalize(i.title))?.price; if (p != null) { total += p; known++ } }
+  return { total: Math.round(total * 100) / 100, known, of: open.length }
 }

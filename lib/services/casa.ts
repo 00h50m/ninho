@@ -36,12 +36,15 @@ export async function saveSplitMode(householdId: string, mode: SplitMode) {
 
 const SHOP_COLS_OLD = 'id,household_id,title,qty,category,note,added_by,checked_at,checked_by,done_at,created_at'
 const SHOP_COLS = SHOP_COLS_OLD + ',unit,priority,assigned_to,running_low,recur_days'
+const SHOP_COLS_040 = SHOP_COLS + ',store,price'
 const missingColumn = (e: any) => e?.code === '42703' || e?.code === 'PGRST204' || /column .* does not exist/i.test(e?.message || '')
 /** Colunas da 019 disponíveis? (descoberto na primeira leitura) */
 let casa019: boolean | null = null
+/** Colunas da 040 (lugar e preço) disponíveis? */
+let casa040: boolean | null = null
 
 /** Lista aberta + histórico recente (para "comprar de novo"). Devolve à lista os recorrentes que chegaram na data. */
-export async function loadShopping(householdId: string, historyDays = 120): Promise<{ open: ShoppingItem[], history: ShoppingItem[], extras: boolean }> {
+export async function loadShopping(householdId: string, historyDays = 120): Promise<{ open: ShoppingItem[], history: ShoppingItem[], extras: boolean, stores: boolean }> {
   if (casa019 !== false) {
     const r = await supabase.rpc('ninho_shopping_recur', { p_household_id: householdId })
     if (r.error && !['PGRST202', '42883'].includes((r.error as any).code)) logError('compras recorrentes', r.error)
@@ -51,12 +54,14 @@ export async function loadShopping(householdId: string, historyDays = 120): Prom
     supabase.from('shopping_items').select(cols).eq('household_id', householdId).is('done_at', null).order('created_at'),
     supabase.from('shopping_items').select(cols).eq('household_id', householdId).gte('done_at', since).order('done_at', { ascending: false }).limit(400),
   ])
-  let [open, history] = await q(casa019 === false ? SHOP_COLS_OLD : SHOP_COLS)
-  if (casa019 !== false && (missingColumn(open.error) || missingColumn(history.error))) {
-    casa019 = false;[open, history] = await q(SHOP_COLS_OLD)
-  } else if (!open.error) casa019 = true
+  const failed = (r: Awaited<ReturnType<typeof q>>) => missingColumn(r[0].error) || missingColumn(r[1].error)
+  let res = await q(casa019 === false ? SHOP_COLS_OLD : casa040 === false ? SHOP_COLS : SHOP_COLS_040)
+  if (failed(res) && casa019 !== false && casa040 !== false) { casa040 = false; res = await q(SHOP_COLS) }
+  if (failed(res) && casa019 !== false) { casa019 = false; res = await q(SHOP_COLS_OLD) }
+  if (!res[0].error) { if (casa019 === null) casa019 = true; if (casa040 === null) casa040 = casa019 }
+  const [open, history] = res
   const o = await run('carregar lista de compras', Promise.resolve(open as any)), h = await run('carregar compras anteriores', Promise.resolve(history as any))
-  return { open: o as ShoppingItem[], history: h as ShoppingItem[], extras: casa019 === true }
+  return { open: o as ShoppingItem[], history: h as ShoppingItem[], extras: casa019 === true, stores: casa040 === true }
 }
 
 export async function addShoppingItem(householdId: string, title: string, qty: string | null, category: string, by: Who | null) {
@@ -67,7 +72,7 @@ export async function setShoppingChecked(id: string, by: Who | null, checked: bo
   await run(checked ? 'riscar item' : 'desmarcar item', supabase.from('shopping_items').update(checked ? { checked_at: new Date().toISOString(), checked_by: by } : { checked_at: null, checked_by: null }).eq('id', id).select('id'))
 }
 
-export async function updateShoppingItem(id: string, patch: Partial<Pick<ShoppingItem, 'title' | 'qty' | 'category' | 'note' | 'unit' | 'priority' | 'assigned_to' | 'running_low' | 'recur_days'>>) {
+export async function updateShoppingItem(id: string, patch: Partial<Pick<ShoppingItem, 'title' | 'qty' | 'category' | 'note' | 'unit' | 'priority' | 'assigned_to' | 'running_low' | 'recur_days' | 'store' | 'price'>>) {
   await run('atualizar item', supabase.from('shopping_items').update(patch).eq('id', id).select('id'))
 }
 

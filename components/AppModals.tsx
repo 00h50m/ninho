@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import type { Dog, DogRoutine, Meeting, Names, Task, Who } from '@/lib/types'
 import { CAT, DR_DEF, DR_PUP, ENERGY, FPT, RFREQ, WPT } from '@/lib/constants'
-import { fmtDate, hhmm } from '@/lib/dates'
+import { addDays, fmtDate, hhmm } from '@/lib/dates'
 import { WEEKDAY_SHORT } from '@/lib/frequency'
 import { XPW } from '@/lib/xp'
 import * as api from '@/lib/services/ninho'
@@ -35,7 +35,7 @@ export function QuickTime({value,onSave}:{value:string,onSave:(v:string)=>void})
   )
 }
 
-export function TaskFormModal({task,names,saving,casaOk,periodOk,onClose,onSave,onDelete}:{task:Task|null,names:Names,saving:boolean,casaOk?:boolean,periodOk?:boolean,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void}){
+export function TaskFormModal({task,names,saving,casaOk,periodOk,pauseOk,onClose,onSave,onDelete}:{task:Task|null,names:Names,saving:boolean,casaOk?:boolean,periodOk?:boolean,pauseOk?:boolean,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void}){
   const t=task
   const editing=!!t?.id
   const[title,setTitle]=useState(t?.title||'')
@@ -49,6 +49,7 @@ export function TaskFormModal({task,names,saving,casaOk,periodOk,onClose,onSave,
   const[due,setDue]=useState(t?.due_date||'')
   const[from,setFrom]=useState(t?.starts_on||'')
   const[until,setUntil]=useState(t?.ends_on||'')
+  const[paused,setPaused]=useState(t?.paused_until||'')
   const[prio,setPrio]=useState<'alta'|'normal'|'baixa'>(t?.priority||'normal')
   const[notes,setNotes]=useState(t?.notes||'')
   const[check,setCheck]=useState<Array<{t:string,d:boolean}>>(t?.checklist||[])
@@ -68,6 +69,8 @@ export function TaskFormModal({task,names,saving,casaOk,periodOk,onClose,onSave,
     if((freq==='once'&&due)||t?.due_date)extra.due_date=freq==='once'&&due?due:null
     // Migration 039: período só quando o banco já tem as colunas (pontual usa a data)
     if(periodOk){extra.starts_on=usesPeriod&&from?from:null;extra.ends_on=usesPeriod&&until?until:null}
+    // Migration 040: pausa (pontual não pausa: muda a data)
+    if(pauseOk)extra.paused_until=usesPeriod&&paused?paused:null
     // Migration 019: só envia quando o banco já tem as colunas
     if(casaOk){extra.priority=prio;extra.notes=notes.trim()||null;extra.checklist=check.filter(c=>c.t.trim())}
     onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess,...extra},editing?t!.id:undefined)}
@@ -110,6 +113,13 @@ export function TaskFormModal({task,names,saving,casaOk,periodOk,onClose,onSave,
           {(from||until)&&<button type="button" className="btn btn-g" onClick={()=>{setFrom('');setUntil('')}}>Sem período</button>}
         </div>
         {badPeriod&&<div className="hint" role="alert" style={{color:'var(--cor-tx)'}}>O "até" precisa ser depois do "de".</div>}
+      </>}
+      {pauseOk&&usesPeriod&&<>
+        <label className="fl" htmlFor="tk-pause">⏸ Pausada até <span className="hint">(opcional · volta sozinha no dia seguinte)</span></label>
+        <div className="tk-pause">
+          <input id="tk-pause" type="date" className="fi" value={paused} onChange={e=>setPaused(e.target.value)} style={{maxWidth:200}}/>
+          {paused&&<button type="button" className="btn btn-g" onClick={()=>setPaused('')}>Despausar</button>}
+        </div>
       </>}
       <label className="fl">Horário <span className="hint">(opcional)</span></label>
       <input type="time" className="fi" aria-label="Horário" value={time} onChange={e=>setTime(e.target.value)} style={{maxWidth:180}}/>
@@ -324,3 +334,18 @@ export function MeetingModal({householdId,names,weekStart,saving,initial,agenda,
 }
 
 // ── APP ─────────────────────────────────────────────────
+
+/** ⏸ Pausar por um tempo: atalhos (1 semana, 2 semanas, 1 mês) ou um dia escolhido. */
+export function PauseSheet({task,today,onClose,onPause}:{task:Task,today:string,onClose:()=>void,onPause:(until:string)=>void}){
+  const[d,setD]=useState(addDays(today,6))
+  const opts:Array<[string,string]>=[['1 semana',addDays(today,6)],['2 semanas',addDays(today,13)],['1 mês',addDays(today,29)]]
+  return(
+    <Sheet size="sm" title={`Pausar · ${task.title}`} onClose={onClose} footer={<button className="btn btn-p" disabled={!d||d<today} onClick={()=>onPause(d)}>⏸ Pausar até {d?fmtDate(d):'…'}</button>}>
+      <p className="hint" style={{marginBottom:10}}>Some de Hoje e da divisão enquanto estiver pausada. Volta sozinha no dia seguinte.</p>
+      <div className="fchips" role="radiogroup" aria-label="Por quanto tempo">
+        {opts.map(([l,v])=><button key={l} role="radio" aria-checked={d===v} className={`fc ${d===v?'on':''}`} onClick={()=>setD(v)}>{l}</button>)}
+      </div>
+      <label className="onb-f" style={{marginTop:12}}><span>Até (inclusive)</span><input type="date" className="fi" min={today} value={d} onChange={e=>setD(e.target.value)}/></label>
+    </Sheet>
+  )
+}

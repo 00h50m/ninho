@@ -45,6 +45,32 @@
       ]
     },
     {
+      "name": "Minhas tarefas de hoje",
+      "short_name": "Hoje",
+      "description": "O que é seu hoje",
+      "url": "/?ir=hoje&source=atalho",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Lista de compras",
+      "short_name": "Compras",
+      "description": "A lista de compras da casa",
+      "url": "/?ir=compras&source=atalho",
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
       "name": "Registrar refeição",
       "short_name": "Refeição",
       "description": "Abre o registro de refeição",

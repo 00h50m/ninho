@@ -5,7 +5,7 @@ import { hhmm } from './dates'
 import { canEarnOnTime, type WeeklyScores } from './gamification'
 import { FPT } from './constants'
 
-export interface PushPayload { title: string, body: string, tag: string, url: string, /** "+1 copo" (bilhete assinado) */ agua?: string, actions?: Array<{ action: string, title: string }> }
+export interface PushPayload { title: string, body: string, tag: string, url: string, /** "+1 copo" (bilhete assinado) */ agua?: string, actions?: Array<{ action: string, title: string }>, /** bom dia: número no ícone do app */ count?: number }
 
 const first = (n: string) => (n || '').split(' ')[0]
 const plural = (n: number, s: string, p: string) => `${n} ${n === 1 ? s : p}`
@@ -22,7 +22,7 @@ export function morningMessage(who: Who, names: Names, items: HItem[], nowHM = '
   const ess = tasks.filter(i => i.essential).length
   const mt = maintText(maint)
   if (!pend.length) {
-    return { title: `Bom dia, ${name}! ☀️`, body: mt ? `Nenhuma tarefa pendente para você hoje.${mt}` : 'Nada pendente para você hoje. Aproveite o dia! 🌿', tag: 'morning', url: '/' }
+    return { title: `Bom dia, ${name}! ☀️`, body: mt ? `Nenhuma tarefa pendente para você hoje.${mt}` : 'Nada pendente para você hoje. Aproveite o dia! 🌿', tag: 'morning', url: '/', count: 0 }
   }
   const parts: string[] = []
   if (tasks.length) parts.push(plural(tasks.length, 'tarefa', 'tarefas') + (ess ? ` (${plural(ess, 'essencial', 'essenciais')})` : ''))
@@ -34,7 +34,7 @@ export function morningMessage(who: Who, names: Names, items: HItem[], nowHM = '
   let body = `Hoje: ${parts.join(' e ')}. Primeira: ${nextTitle}${next.scheduled_time ? ` às ${hhmm(next.scheduled_time)}` : ''}.`
   if (bonus) body += bonus === 1 ? ' ⚡ 1 item vale ×1,5 se feito no horário.' : ` ⚡ ${bonus} itens valem ×1,5 se feitos no horário.`
   body += mt
-  return { title: `Bom dia, ${name}! ☀️`, body, tag: 'morning', url: '/' }
+  return { title: `Bom dia, ${name}! ☀️`, body, tag: 'morning', url: '/', count: pend.length }
 }
 
 /** Manutenção que vence hoje (ou já venceu) para a pessoa. */

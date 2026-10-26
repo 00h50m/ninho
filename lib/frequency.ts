@@ -42,6 +42,11 @@ export function inPeriod(x: Pick<Doable, 'starts_on' | 'ends_on'>, date: string)
   return (!x.starts_on || date >= x.starts_on) && (!x.ends_on || date <= x.ends_on)
 }
 
+/** Pausada neste dia (migration 040)? A pausa vale até o dia marcado, inclusive. */
+export function pausedOn(x: Pick<Doable, 'paused_until'>, date: string): boolean {
+  return !!x.paused_until && date <= x.paused_until
+}
+
 /** "de 01/12 até 15/12" · "a partir de 01/12" · "até 15/12" · "" (sem período) */
 export function periodLabel(x: Pick<Doable, 'starts_on' | 'ends_on'>): string {
   if (x.starts_on && x.ends_on) return `de ${fmtDate(x.starts_on)} até ${fmtDate(x.ends_on)}`
@@ -65,10 +70,11 @@ const monIdx = (dow: number) => (dow + 6) % 7
  * · semanal/quinzenal com dias: a partir do primeiro desses dias no período;
  * · pontual com data: a partir da data;
  * · mensal e sem dias: qualquer dia;
- * · com período (De … até …): só dentro dele.
+ * · com período (De … até …): só dentro dele;
+ * · pausada: não vale até o fim da pausa.
  */
 export function scheduledOn(x: Doable, date: string): boolean {
-  if (!inPeriod(x, date)) return false
+  if (!inPeriod(x, date) || pausedOn(x, date)) return false
   if (x.frequency === 'once') return !x.due_date || date >= x.due_date
   const wd = x.weekdays
   if (!wd || !wd.length || x.frequency === 'monthly') return true

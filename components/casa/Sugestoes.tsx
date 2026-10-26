@@ -3,16 +3,20 @@
 // com os pets. "+ Adicionar" cria alternando entre vocês (dá para ajustar depois); ✎ abre antes de criar.
 import { useState } from 'react'
 import { FREQ_LABEL, norm, suggestionView, type Sug } from '@/lib/sugestoes'
+import { PACKS, packHas, packWindow, type Pack, type PackItem } from '@/lib/estacoes'
+import { fmtDate } from '@/lib/dates'
 
 export interface ArchivedTask { id: string, title: string, frequency: string, assigned_to: string | null, weekdays?: number[] | null }
 const FREQ_ANY: Record<string, string> = { daily: 'todo dia', weekly: 'toda semana', biweekly: 'a cada 15 dias', monthly: 'todo mês', once: 'uma vez' }
 const DOW = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
 
-export function SuggestionsView({ taskTitles, petTitles, hasDogs, archived = [], names, onAdd, onCustomize, onRestore }: {
+export function SuggestionsView({ taskTitles, petTitles, hasDogs, archived = [], names, today, periodOk = false, onAdd, onCustomize, onRestore, onAddPack }: {
   taskTitles: string[], petTitles: string[], hasDogs: boolean
   /** tarefas que vocês já tiveram (arquivadas): voltam como eram */
   archived?: ArchivedTask[], names?: Record<'g' | 's', string>
   onAdd: (s: Sug) => Promise<void>, onCustomize: (s: Sug) => void, onRestore?: (t: ArchivedTask) => Promise<void>
+  /** checklists de estação (precisam do período, migration 039) */
+  today?: string, periodOk?: boolean, onAddPack?: (p: Pack, items: PackItem[], from: string, to: string) => Promise<void>
 }) {
   const [onlyMissing, setOnlyMissing] = useState(true)
   const [area, setArea] = useState<string>('all')
@@ -41,6 +45,7 @@ export function SuggestionsView({ taskTitles, petTitles, hasDogs, archived = [],
         {view.map(a => <button key={a.key} role="tab" aria-selected={area === a.key} className={`fc ${area === a.key ? 'on' : ''}`} onClick={() => setArea(a.key)}>{a.icon} {a.label}{a.missing ? ` · ${a.missing}` : ''}</button>)}
       </div>
       <label className="rt-toggle sg-only"><input type="checkbox" checked={onlyMissing} onChange={e => setOnlyMissing(e.target.checked)}/><span><b>Só o que falta</b><small>Esconde o que vocês já têm (pelo nome)</small></span></label>
+      {today && onAddPack && area === 'all' && <SeasonPacks today={today} periodOk={periodOk} taskTitles={taskTitles} onAddPack={onAddPack}/>}
       {onlyOld.length > 0 && area === 'all' && <section className="card sg-area" aria-labelledby="sg-old">
         <div className="slbl" id="sg-old">📦 Vocês já tiveram <span className="mono" style={{ color: 'var(--faint)' }}>{onlyOld.length}</span></div>
         <p className="row-s sg-note">Saíram da rotina, mas voltam como eram (dias e quem faz).</p>
@@ -66,4 +71,47 @@ export function SuggestionsView({ taskTitles, petTitles, hasDogs, archived = [],
       <p className="row-s" style={{ textAlign: 'center' }}>Tudo entra alternando entre vocês. Depois dá para mudar dias e quem faz na própria tarefa.</p>
     </div>
   )
+}
+
+const PFREQ: Record<string, string> = { ...FREQ_ANY, once: 'uma vez' }
+
+/** 🗓 Checklists de estação: cada pacote abre com as tarefas (dá para desmarcar) e o período sugerido. */
+function SeasonPacks({ today, periodOk, taskTitles, onAddPack }: { today: string, periodOk: boolean, taskTitles: string[], onAddPack: (p: Pack, items: PackItem[], from: string, to: string) => Promise<void> }) {
+  const [open, setOpen] = useState<string | null>(null)
+  return <section className="card sg-area" aria-labelledby="sg-season">
+    <div className="slbl" id="sg-season">🗓 Checklists de estação</div>
+    <p className="row-s sg-note">Tarefas que só valem numa época. Entram com período: somem sozinhas quando a estação acaba.</p>
+    {!periodOk ? <p className="row-s">Precisa da atualização do banco (migration 039).</p>
+    : <ul className="sg-list">{PACKS.map(p => {
+      const w = packWindow(p, today), has = packHas(p, taskTitles), left = p.items.length - has.size
+      return <li key={p.key} className="sg-pack">
+        <div className="sg-i">
+          <div className="sg-t"><b>{p.icon} {p.label}</b><small>{p.season ? `${w.now ? 'agora · até' : `${fmtDate(w.from)} a`} ${fmtDate(w.to)}` : `${p.days} dias a partir de quando quiser`} · {left ? `${left} de ${p.items.length} tarefas` : 'vocês já têm todas ✓'}</small></div>
+          <div className="sg-acts"><button className="btn btn-s" aria-expanded={open === p.key} onClick={() => setOpen(o => o === p.key ? null : p.key)}>{open === p.key ? 'Fechar' : 'Ver'}</button></div>
+        </div>
+        {open === p.key && <PackForm pack={p} from={w.from} to={w.to} has={has} onAdd={async (items, f, t) => { await onAddPack(p, items, f, t); setOpen(null) }}/>}
+      </li>
+    })}</ul>}
+  </section>
+}
+
+function PackForm({ pack, from: f0, to: t0, has, onAdd }: { pack: Pack, from: string, to: string, has: Set<string>, onAdd: (items: PackItem[], from: string, to: string) => Promise<void> }) {
+  const [pick, setPick] = useState<Set<string>>(new Set(pack.items.filter(i => !has.has(i.t)).map(i => i.t)))
+  const [from, setFrom] = useState(f0), [to, setTo] = useState(t0), [busy, setBusy] = useState(false)
+  const bad = !from || !to || to < from
+  const chosen = pack.items.filter(i => pick.has(i.t))
+  return <div className="sg-packf">
+    <p className="row-s">{pack.why}</p>
+    <ul className="tk-check">{pack.items.map(i => <li key={i.t}>
+      <label><input type="checkbox" disabled={has.has(i.t)} checked={pick.has(i.t)} onChange={() => setPick(s => { const n = new Set(s); n.has(i.t) ? n.delete(i.t) : n.add(i.t); return n })}/>
+        <span><b>{i.t}</b> <small className="row-s">· {has.has(i.t) ? 'já tem' : PFREQ[i.f]}</small></span></label>
+    </li>)}</ul>
+    <div className="tk-per" role="group" aria-label={`Período · ${pack.label}`}>
+      <label className="onb-f"><span>De</span><input type="date" className="fi" value={from} onChange={e => setFrom(e.target.value)}/></label>
+      <label className="onb-f"><span>Até</span><input type="date" className="fi" value={to} min={from} onChange={e => setTo(e.target.value)}/></label>
+    </div>
+    {bad && <p className="hint" role="alert">O "até" precisa ser depois do "de".</p>}
+    <p className="row-s">As que repetem valem de {from ? fmtDate(from) : '…'} até {to ? fmtDate(to) : '…'}; as de uma vez aparecem a partir de {from ? fmtDate(from) : '…'}. Alternando entre vocês.</p>
+    <div className="md-acts"><button className="btn btn-p" disabled={!chosen.length || bad || busy} onClick={async () => { setBusy(true); try { await onAdd(chosen, from, to) } catch { /* aviso já mostrado */ } finally { setBusy(false) } }}>{busy ? 'Adicionando…' : `+ Adicionar ${chosen.length} tarefa${chosen.length === 1 ? '' : 's'}`}</button></div>
+  </div>
 }

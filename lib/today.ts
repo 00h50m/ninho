@@ -1,7 +1,7 @@
 // Montagem da tela Hoje: grupos por horário e rotinas dos cães agrupadas.
 import type { Dog, DogItem, DogRoutine, Doable, HistEntry, HItem, Task, Who } from './types'
 import { hhmm } from './dates'
-import { dueToday, inPeriod } from './frequency'
+import { dueToday, inPeriod, pausedOn } from './frequency'
 import { buildSlots, dogKey, isFixed, ownerOf, turnBy, type Slots } from './rotation'
 import { smartSplit, type Decision, type FixedLoad, type SplitMode, type SplitUnit } from './split'
 import { DOG_ROUTINE_XP, xpForWeight } from './xp'
@@ -71,8 +71,8 @@ export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { foc
   // Divisão: decide a dona de cada item sem responsável fixa
   const decisions = new Map<string, Decision>()
   if (opts.split === 'smart') {
-    // Fora do período (migration 039) a tarefa não pesa na divisão
-    const live = homeTasks.filter(t => inPeriod(t, today))
+    // Fora do período (039) ou pausada (040) a tarefa não pesa na divisão
+    const live = homeTasks.filter(t => inPeriod(t, today) && !pausedOn(t, today))
     const units: SplitUnit[] = live.filter(t => !isFixed(t)).map(t => ({
       id: t.id, frequency: t.frequency, time: hhmm(t.scheduled_time), title: t.title, weight: xpForWeight(t.weight), hist: t.hist || [],
     }))

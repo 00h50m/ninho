@@ -57,6 +57,10 @@ self.addEventListener('push', event => {
   let data = {}
   try { data = event.data ? event.data.json() : {} } catch { data = { title: 'Ninho', body: event.data ? event.data.text() : '' } }
   const title = data.title || 'Ninho'
+  // bom dia: atualiza o número no ícone do app (onde o aparelho deixa)
+  if (typeof data.count === 'number' && self.navigator && self.navigator.setAppBadge) {
+    try { (data.count > 0 ? self.navigator.setAppBadge(Math.min(99, data.count)) : self.navigator.clearAppBadge()).catch(() => {}) } catch { /* sem suporte */ }
+  }
   event.waitUntil(self.registration.showNotification(title, {
     body: data.body || '',
     icon: '/icon-192.png',

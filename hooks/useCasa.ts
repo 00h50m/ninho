@@ -24,6 +24,7 @@ export function useCasa(householdId: string, today: string) {
   const [shopState, setShopState] = useState<Part>('loading')
   const [shopError, setShopError] = useState<NinhoError | null>(null)
   const [shopExtras, setShopExtras] = useState(false)
+  const [shopStores, setShopStores] = useState(false)
   const [maintExtras, setMaintExtras] = useState(false)
   const [maint, setMaint] = useState<MaintenanceItem[]>([])
   const [maintLog, setMaintLog] = useState<MaintenanceLog[]>([])
@@ -46,7 +47,7 @@ export function useCasa(householdId: string, today: string) {
   const reloadShopping = useCallback(async () => {
     try {
       const r = await casa.loadShopping(householdId)
-      setShop(r.open); setShopHistory(r.history); setShopState('ready'); setShopError(null); setShopExtras(r.extras)
+      setShop(r.open); setShopHistory(r.history); setShopState('ready'); setShopError(null); setShopExtras(r.extras); setShopStores(r.stores)
       persist({ open: r.open, history: r.history })
     } catch (e) {
       const snap = readSnapshot<CasaSnap>(snapKey)
@@ -128,7 +129,7 @@ export function useCasa(householdId: string, today: string) {
 
   return {
     split, setSplit, splitReady,
-    shop, setShop, shopHistory, shopState, shopError, shopExtras, reloadShopping,
+    shop, setShop, shopHistory, shopState, shopError, shopExtras, shopStores, reloadShopping,
     maint, setMaint, maintLog, maintState, maintError, maintExtras, reloadMaintenance,
   }
 }
