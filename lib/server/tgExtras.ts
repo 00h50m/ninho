@@ -8,6 +8,12 @@ import { waterLine } from '@/lib/water'
 import { menuFromDb } from '@/lib/cardapio'
 import { MEALS, mealTotals } from '@/lib/nutricao'
 import { foodAlerts, foodLeftLabel } from '@/lib/caes'
+import { addDays, weekStartOf } from '@/lib/dates'
+import { urgencyLabel, useSoon, type PantryItem } from '@/lib/despensa'
+import { cookLabel } from '@/lib/jantar'
+import { balanceLine, weekBalance } from '@/lib/balanco'
+import { loadHousehold } from './notify'
+import { DEFAULT_NAMES } from '@/lib/constants'
 import { ddmm, other, parseGift, upcomingDates, whenLabel, type GiftDate, type GiftIdea } from '@/lib/presentes'
 import { loadRemState } from './reminders'
 import type { BotDeps, TgReport } from './telegram'
@@ -130,4 +136,32 @@ export async function giftList(db: SupabaseClient, link: Link, date: string): Pr
   const list = ideas.map(x => `${x.status === 'comprado' ? '🛍️' : '💡'} ${x.title}${x.price ? ` · ${x.price}` : ''}`)
   if (!up.length && !list.length) return '🎁 Sua lista está vazia. Anote com: /presente fone sem fio azul'
   return ['🎁 Sua lista (só você vê)', ...up, ...(up.length && list.length ? [''] : []), ...list].join('\n')
+}
+
+// ── Jantar, despensa e balanço (038) ───────────────────────────────
+/** Bom dia: o jantar de hoje (e quem cozinha) e o que usar logo da despensa. Sem a migration: nada. */
+export async function houseLines(db: SupabaseClient, householdId: string, date: string): Promise<string[]> {
+  const [m, p, pr] = await Promise.all([
+    db.from('house_meals').select('title,cook').eq('household_id', householdId).eq('date', date).eq('meal', 'jantar').maybeSingle(),
+    db.from('pantry_items').select('id,name,place,qty,expires_on').eq('household_id', householdId).eq('active', true).not('expires_on', 'is', null).lte('expires_on', addDays(date, 3)),
+    db.from('profiles').select('display_name,role').eq('household_id', householdId),
+  ])
+  const prof = (pr.data || []) as any[]
+  const names: Record<Who, string> = { g: prof.find(x => x.role === 'g')?.display_name || DEFAULT_NAMES.g, s: prof.find(x => x.role === 's')?.display_name || DEFAULT_NAMES.s }
+  const out: string[] = []
+  if (!m.error && m.data) out.push(`🍲 Jantar de hoje: ${(m.data as any).title} (cozinha: ${cookLabel((m.data as any).cook, names)})`)
+  if (!p.error) { const soon = useSoon((p.data || []) as PantryItem[], date); if (soon.length) out.push(`⏰ Usar logo: ${soon.slice(0, 4).map(i => `${i.name} (${urgencyLabel(i, date)})`).join(', ')}`) }
+  return out
+}
+
+/** Domingo: o balanço da semana (esforço de cada uma, cozinha e compromissos). */
+export async function balanceText(db: SupabaseClient, householdId: string, date: string): Promise<string | null> {
+  const h = await loadHousehold(db, householdId, date)
+  const ws = weekStartOf(date)
+  const [m, e] = await Promise.all([
+    db.from('house_meals').select('id,date,meal,title,cook,recipe_id,ingredients,notes').eq('household_id', householdId).gte('date', ws).lte('date', date),
+    db.from('house_events').select('id,kind,title,date,time,end_time,who,done_at').eq('household_id', householdId).gte('date', ws).lte('date', date),
+  ])
+  const b = weekBalance({ tasks: h.tasks, dogs: h.dogs, meals: (m.error ? [] : m.data || []) as any[], events: (e.error ? [] : e.data || []) as any[], anyDay: date, today: date })
+  return b.verdict === 'vazio' ? null : `⚖️ ${balanceLine(b, h.names, false).replace('; esta semana o rodízio compensa.', '; a próxima semana o rodízio compensa.')}`
 }

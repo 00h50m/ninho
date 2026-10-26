@@ -158,6 +158,17 @@ export async function uncompleteDogRoutines(ids: string[], date: string): Promis
 
 // ── Tarefas ────────────────────────────────────────────────────────────
 
+/** Tarefas arquivadas (para trazer de volta pela aba Sugestões), a mais recente de cada nome. */
+export async function loadArchivedTasks(householdId: string): Promise<Array<Pick<Task, 'id' | 'title' | 'frequency' | 'assigned_to' | 'weekdays' | 'category'>>> {
+  const r = await supabase.from('tasks').select('id,title,frequency,assigned_to,weekdays,category,created_at').eq('household_id', householdId).eq('active', false).order('created_at', { ascending: false }).limit(300)
+  if (r.error) { logError('carregar tarefas arquivadas', r.error); return [] }
+  const seen = new Set<string>()
+  return ((r.data || []) as any[]).filter(t => { const k = String(t.title).trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true })
+}
+export async function restoreTask(id: string) {
+  await run('trazer tarefa de volta', supabase.from('tasks').update({ active: true }).eq('id', id).select('id'))
+}
+
 export async function updateTask(id: string, data: Partial<Task>) {
   await run('atualizar tarefa', supabase.from('tasks').update(data).eq('id', id).select('id'))
 }

@@ -58,6 +58,17 @@ export function lastBefore(hist: HistEntry[], before: string): HistEntry | null 
   return null
 }
 
+/** Peso da semana passada no rodízio (quem fez mais lá recebe um pouco menos agora). */
+export const PREV_WEEK_FACTOR = 0.25
+
+/** Carga feita na semana passada inteira, por pessoa. */
+export function prevWeekLoad(units: Array<{ weight: number, hist: HistEntry[] }>, today: string): Record<Who, number> {
+  const ws = weekStartOf(today), pws = weekStartOf(new Date(Date.parse(ws + 'T12:00:00Z') - 7 * 86400000).toISOString().slice(0, 10))
+  const l: Record<Who, number> = { g: 0, s: 0 }
+  for (const u of units) for (const h of u.hist) if (h.by && h.d >= pws && h.d < ws) l[h.by] += u.weight
+  return l
+}
+
 /** Carga feita na semana (antes de hoje), por pessoa. */
 export function weekLoad(units: Array<{ weight: number, hist: HistEntry[] }>, today: string): Record<Who, number> {
   const ws = weekStartOf(today)
@@ -115,6 +126,10 @@ export function smartSplit(units: SplitUnit[], fixed: FixedLoad[], allUnits: Arr
       const wk = weekLoad(allUnits, today)
       start.g += wk.g * WEEK_HISTORY_FACTOR
       start.s += wk.s * WEEK_HISTORY_FACTOR
+      // balanço: um pouco da semana passada também conta (compensa semana pesada de uma)
+      const pw = prevWeekLoad(allUnits, today)
+      start.g += pw.g * PREV_WEEK_FACTOR
+      start.s += pw.s * PREV_WEEK_FACTOR
     }
     // Diárias: histórico até ontem. Período: histórico de antes do período começar.
     const since = freq === 'daily' ? today : periodStart(freq, today)

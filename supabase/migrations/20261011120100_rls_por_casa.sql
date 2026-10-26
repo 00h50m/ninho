@@ -17,7 +17,7 @@ begin
   foreach t in array array[
     'tasks','task_completions','dogs','dog_completions','weekly_settings','weekly_meetings',
     'xp_history','puppy_accidents','push_subscriptions','shopping_items','maintenance_items',
-    'maintenance_log','task_skips','task_handoffs','dog_schedule','telegram_links',
+    'maintenance_log','task_skips','task_handoffs','dog_schedule','pantry_items','house_meals','telegram_links',
     'household_setup','onboarding_progress','routines','routine_steps','daily_checkins','household_days',
     'routine_runs','routine_step_checks','ninho_habits','ninho_habit_logs','routine_templates','sprints','house_events','dog_health','couple_challenges','challenge_marks','faxinoes'] loop
     if to_regclass('public.' || t) is null then continue; end if;

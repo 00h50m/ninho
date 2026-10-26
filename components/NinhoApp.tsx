@@ -61,6 +61,14 @@ import { AgendaView, EventSheet } from '@/components/casa/Agenda'
 import { AgendaCelular } from '@/components/casa/AgendaCelular'
 import { DogScheduleCard } from '@/components/caes/Escala'
 import { SuggestionsView } from '@/components/casa/Sugestoes'
+import { PantryView } from '@/components/casa/Despensa'
+import { DinnerView } from '@/components/casa/Jantar'
+import { BalanceCard } from '@/components/nos/Balanco'
+import { useCasaExtra } from '@/hooks/useCasaExtra'
+import * as cxApi from '@/lib/services/despensaJantar'
+import { useSoon, urgencyLabel } from '@/lib/despensa'
+import { cookLabel } from '@/lib/jantar'
+import { weekBalance } from '@/lib/balanco'
 import type { Sug } from '@/lib/sugestoes'
 import { useCaes } from '@/hooks/useCaes'
 import { useMeuDia } from '@/hooks/useMeuDia'
@@ -165,6 +173,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const rot=useRotinas(householdId,today)
   const sp=useSprint(householdId)
   const ag=useAgenda(householdId,today)
+  const cx=useCasaExtra(householdId,today)
   const cz=useCaes(householdId,today)
   const md=useMeuDia(householdId,today)
   const fx=useFaxinao(householdId)
@@ -557,6 +566,13 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     },editId?'Tarefa atualizada!':`"${d.title}" criada!`)
   }
 
+  /** Casa › Sugestões: tarefas arquivadas para trazer de volta. */
+  const [archived,setArchived]=useState<Array<{id:string,title:string,frequency:string,assigned_to:string|null,weekdays?:number[]|null}>>([])
+  useEffect(()=>{if(screen==='casa'&&casaView==='sugestoes')api.loadArchivedTasks(householdId).then(setArchived).catch(()=>{})},[screen,casaView,householdId,tasks.length])
+  async function restoreTask(t:{id:string,title:string}){
+    try{await api.restoreTask(t.id);await data.reloadTasks();setArchived(a=>a.filter(x=>x.id!==t.id));showToast(`↩ "${t.title}" de volta na rotina`)}
+    catch(e){showError(toNinhoError(e,'trazer tarefa de volta'));throw e}
+  }
   /** Casa › Sugestões: tarefa entra alternando; a de pet vira rotina de cada cão. */
   async function addSuggestion(sg:Sug){
     try{
@@ -1254,6 +1270,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                 </div>}
                 {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
               </div>}
+              {cx.ready&&showCard('jantar')&&(()=>{const din=cx.meals.find(m=>m.date===today&&m.meal==='jantar');const soon=useSoon(cx.pantry,today);return (din||soon.length>0)&&(
+                <div className="card jt-home">
+                  {din&&<div className="jt-home-d"><span>🍲 <b>Jantar de hoje:</b> {din.title}</span><button className="lnk" onClick={()=>goCasa('jantar')}>🍳 {cookLabel(din.cook,names)}</button></div>}
+                  {soon.length>0&&<div className="jt-home-d"><span>⏰ <b>Usar logo:</b> {soon.slice(0,3).map(i=>`${i.name} (${urgencyLabel(i,today)})`).join(', ')}{soon.length>3?` e mais ${soon.length-3}`:''}</span><button className="lnk" onClick={()=>goCasa('despensa')}>Despensa →</button></div>}
+                </div>)})()}
               {ag.available&&showCard('agenda')&&(()=>{const soon=agendaEntries(ag.events,[],today,1).filter(e=>!e.late);const due=agBills(ag.events,today).pending.filter(b=>b.date<=addDays(today,3));return (soon.length>0||due.length>0)&&(
                 <div className="card ag-home">
                   <div className="slbl">📅 Agenda<button className="lnk" onClick={()=>goCasa('agenda')}>Ver →</button></div>
@@ -1361,8 +1382,16 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
         {/* ── CASA ── */}
         {screen==='casa'&&<div className="scr">
-          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),['sugestoes','💡 Sugestões']]}/>
-          {casaView==='sugestoes'?<SuggestionsView taskTitles={tasks.map(t=>t.title)} petTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} hasDogs={dogs.length>0}
+          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),...(cx.ready?[['despensa','🥫 Despensa',useSoon(cx.pantry,today).length],['jantar','🍲 Jantar']] as [CasaView,string,number?][]:[]),['sugestoes','💡 Sugestões']]}/>
+          {casaView==='despensa'?<PantryView ready={cx.ready} items={cx.pantry} history={casa.shopHistory} today={today}
+              onSave={x=>cxApi.savePantry(householdId,me,x).then(cx.reload).then(()=>showToast(x.id?'Item salvo':`🥫 ${x.name} na despensa`)).catch(e=>{showError(toNinhoError(e,'guardar na despensa'));throw e})}
+              onRemove={it=>cxApi.removePantry(it.id).then(cx.reload).then(()=>showToast(`${it.name} saiu da despensa`)).catch(e=>{showError(toNinhoError(e,'tirar da despensa'));throw e})}
+              onFinished={it=>cxApi.pantryToShopping(householdId,me,it).then(r=>{cx.reload();casa.reloadShopping();showToast(r.created?`🛒 ${it.name} na lista de compras`:`${it.name} já estava na lista`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}/>
+          :casaView==='jantar'?<DinnerView ready={cx.ready} meals={cx.meals} recipes={md.recipes} names={names} today={today}
+              onSave={x=>cxApi.saveMeal(householdId,me,x).then(cx.reload).then(()=>showToast(`🍲 ${x.title} · ${fmtDate(x.date)}`)).catch(e=>{showError(toNinhoError(e,'planejar jantar'));throw e})}
+              onDelete={m=>cxApi.deleteMeal(m.id).then(cx.reload).then(()=>showToast('Jantar tirado')).catch(e=>{showError(toNinhoError(e,'tirar jantar'));throw e})}
+              onShopping={lines=>mdApi.menuToShopping(householdId,me,lines).then(r=>{casa.reloadShopping();showToast(`🛒 ${r.added} na lista de compras${r.had?` · ${r.had} já estava(m)`:''}`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}/>
+          :casaView==='sugestoes'?<SuggestionsView taskTitles={tasks.map(t=>t.title)} petTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} hasDogs={dogs.length>0} archived={archived} names={names} onRestore={restoreTask}
               onAdd={addSuggestion} onCustomize={sg=>openModal('task',{title:sg.t,category:sg.cat,weight:sg.w,frequency:sg.f,essential:false,assigned_to:null,scheduled_time:null,active:true,id:null})}/>
           :casaView==='faxinao'?<FaxinaoView householdId={householdId} me={me} names={names} list={fx.list} available={fx.available} ready={fx.ready} reload={fx.reload} setList={fx.setList}
               onToast={m=>showToast(m)} onError={(e,c)=>showError(toNinhoError(e,c))}/>
@@ -1462,6 +1491,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           {nosView==='semana'&&<div className="wgrid">
             <div className="col">
               <TogetherCard {...together} xp={game.scores.g.xp+game.scores.s.xp} streak={nos.available?bothCheckinStreak(nos.facts.checkins,today):0} meetingDone={!!thisMeeting&&!!(thisMeeting.what_worked||thisMeeting.wins||thisMeeting.adjustments||(thisMeeting.agreements||[]).length)} onOpenMeeting={()=>openModal('meeting')}/>
+              <BalanceCard names={names} thisWeek={weekBalance({tasks,dogs,meals:cx.meals,events:ag.events,anyDay:today,today})} lastWeek={weekBalance({tasks,dogs,meals:cx.meals,events:ag.events,anyDay:addDays(today,-7),today})}/>
               {nos.available&&me&&<DayNoteCard me={me} names={names} today={today} rows={nos.checkins} onSave={v=>nosApi.saveDayNote(householdId,today,me,v).then(()=>nos.reload()).then(()=>showToast('Registro salvo 📝')).catch(e=>{showError(toNinhoError(e,'salvar registro do dia'));throw e})}/>}
               {!nos.available&&nos.ready&&<div className="card empty"><span className="empty-icon">🤝</span>Registro do dia, desafios em dupla e combinados precisam da atualização do banco (migration 022).{nos.reason&&<div className="row-s" style={{marginTop:6}}>Detalhe: {nos.reason}</div>}</div>}
             </div>

@@ -76,6 +76,7 @@ export const CATALOG: SugArea[] = [
     T('Mercado semanal', 'weekly', 'medium', 'shopping', 'Uma ida grande no lugar de várias pequenas.', ['mercado']),
     T('Repor produtos de limpeza', 'monthly', 'light', 'shopping', 'Nada de faltar detergente no meio da faxina.', ['produtos de limpeza']),
     T('Verificar validades', 'monthly', 'light', 'kitchen', 'Remédios, despensa e geladeira.', ['validades']),
+    T('Repor ração dos cães', 'monthly', 'light', 'shopping', 'O alerta de ração acabando avisa, mas é bom ter o dia.', ['repor racao']),
   ] },
   { key: 'plantas', icon: '🪴', label: 'Plantas', items: [
     T('Regar as plantas', 'weekly', 'light', 'general', 'Ajuste os dias conforme cada planta.', ['regar']),

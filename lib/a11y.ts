@@ -8,7 +8,7 @@ export const TEXT_SIZES: Array<[TextSize, string, number]> = [['md', 'Normal', 1
 /** Cartões do Início que a pessoa pode esconder (neste aparelho). */
 export const HOME_CARDS: Array<[string, string]> = [
   ['mascote', 'Nino, o mascote'], ['resumo', 'Resumo do dia (números)'], ['semana', 'A semana'], ['checkin', 'Check-in'], ['meudia', 'Meu dia'],
-  ['rotina', 'Rotina agora'], ['caes', 'Cães hoje'], ['agenda', 'Agenda'], ['manutencao', 'Manutenção'],
+  ['rotina', 'Rotina agora'], ['caes', 'Cães hoje'], ['agenda', 'Agenda'], ['jantar', 'Jantar de hoje e despensa'], ['manutencao', 'Manutenção'],
   ['compras', 'Lista de compras'], ['sobrou', 'Sobrou! (finanças do mês)'], ['atalhos', 'Atalhos'],
 ]
 
