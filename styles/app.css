@@ -444,7 +444,10 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 @media(max-width:420px){
   .opts{grid-template-columns:1fr}
   .opts.c2{grid-template-columns:1fr 1fr}
-  .shop-add .shop-cat{max-width:110px}
+  /* celular: o campo ocupa a linha toda; corredor e + embaixo */
+  .shop-add{flex-wrap:wrap}
+  .shop-add>.fi:first-child{flex:1 1 100%}
+  .shop-add .shop-cat{flex:1 1 auto;max-width:none}
   .bnb{font-size:10.5px}
   .field-row{flex-wrap:wrap}.field-row .fi{max-width:none}
 }
@@ -884,8 +887,11 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
   .subtab-n{margin-left:4px}
 }
 @media(max-width:520px){
-  .subtabs:has(.subtab:nth-child(4)){display:grid;grid-template-columns:1fr 1fr;overflow:visible}
-  .subtabs:has(.subtab:nth-child(4)) .subtab{justify-content:center}
+  /* 4 abas: grade 2×2 (todas à vista). 5 ou mais: uma linha que rola de lado (a aberta fica à vista) */
+  .subtabs:has(.subtab:nth-child(4)):not(:has(.subtab:nth-child(5))){display:grid;grid-template-columns:1fr 1fr;overflow:visible}
+  .subtabs:has(.subtab:nth-child(4)):not(:has(.subtab:nth-child(5))) .subtab{justify-content:center}
+  .subtabs:has(.subtab:nth-child(5)){scroll-snap-type:x proximity;scroll-padding:0 24px}
+  .subtabs:has(.subtab:nth-child(5)) .subtab{flex:0 0 auto;scroll-snap-align:start}
 }
 
 /* ── Cães (Fase 7) ─────────────────────────────────────────────────── */
@@ -1700,3 +1706,32 @@ html.rp-open body{overflow:hidden}
 .al-tl{margin-top:10px}
 .al-full{width:100%;max-height:60vh;object-fit:contain;border-radius:12px;background:var(--sf2);margin-bottom:10px}
 .al .fchips{margin:4px 0 12px}
+
+/* Revisão de UX: todo alvo de toque com pelo menos 24×24 px (WCAG 2.5.8), sem mudar o desenho,
+   e botão com texto longo quebra a linha em vez de alargar a tela */
+.logo{min-height:24px;display:inline-flex;align-items:center}
+/* .lnk sem contexto aparecia com a borda padrão do navegador: link de texto em todo lugar */
+.lnk{background:none;border:none;padding:0;color:var(--green);font:inherit;font-size:13px;font-weight:500;cursor:pointer}
+.lnk:hover{text-decoration:underline;text-underline-offset:3px}
+.lnk,.lnk-inline{min-height:24px;display:inline-flex;align-items:center}
+.bdg.qb,.qtw{min-height:24px;display:inline-flex;align-items:center}
+.bdg.qb{min-width:24px;justify-content:center}
+.qtime{height:24px}
+.qx{min-width:24px;min-height:24px;display:inline-flex;align-items:center;justify-content:center}
+.mg-c{min-width:24px;min-height:24px}
+.dr .chk,.li .chk{width:24px;height:24px}
+.btn{max-width:100%}
+.btn.btn-wrap,.md .btn-g{white-space:normal;text-align:center}
+/* Coluna estreita (cada pessoa no Início em tela média/grande): as ações viram o "⋯" do celular
+   e o nome da tarefa quebra em até 2 linhas, em vez de sobrar 90 px para ele */
+.pcard{container-type:inline-size}
+@container (max-width:400px){
+  .tr .ib.desk{display:none}.tr .ib.mob{display:flex}
+  .trt{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+}
+/* janela com título longo: o ✕ de fechar não encolhe */
+.mclose{flex-shrink:0}
+/* Ação rápida: no item em foco o subtítulo fica com contraste sobre o fundo da cor principal */
+.qa:hover .qa-t small,.qa:focus-visible .qa-t small{color:var(--mu)}
+/* botão escolhido: o texto pequeno acompanha a cor do botão (contraste no tema escuro) */
+.sbtn.on small{color:inherit}

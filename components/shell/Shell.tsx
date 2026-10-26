@@ -1,7 +1,7 @@
 'use client'
 // Moldura do app: menu lateral (desktop), menu inferior (celular) e ações rápidas.
 // As áreas e telas ficam em lib/nav.ts.
-import type { ReactNode } from 'react'
+import { useEffect, useRef, type ReactNode } from 'react'
 import { Sheet } from '@/components/ui/Sheet'
 
 import { MD_TABS, MODULES, moduleOf, type ScreenId } from '@/lib/nav'
@@ -101,8 +101,16 @@ export function QuickActionsSheet({ actions, onClose }: { actions: QuickAction[]
 
 /** Abas internas de uma área (ex.: Casa › Tarefas | Compras | Manutenção). */
 export function SubTabs<T extends string>({ value, options, onChange, label }: { value: T, options: Array<[T, string, number?]>, onChange: (v: T) => void, label: string }) {
+  const ref = useRef<HTMLDivElement>(null)
+  // na linha que rola de lado (celular), a aba aberta fica à vista
+  useEffect(() => {
+    const box = ref.current, on = box?.querySelector<HTMLElement>('.subtab.on')
+    if (!box || !on || box.scrollWidth <= box.clientWidth) return
+    const l = on.offsetLeft - box.offsetLeft, r = l + on.offsetWidth
+    if (l < box.scrollLeft || r > box.scrollLeft + box.clientWidth) box.scrollTo({ left: Math.max(0, l - 24), behavior: 'smooth' })
+  }, [value])
   return (
-    <div className="subtabs" role="tablist" aria-label={label}>
+    <div ref={ref} className="subtabs" role="tablist" aria-label={label}>
       {options.map(([v, l, n]) => (
         <button key={v} role="tab" aria-selected={value === v} className={`subtab ${value === v ? 'on' : ''}`} onClick={() => onChange(v)}>
           {l}{!!n && <span className="subtab-n">{n}</span>}

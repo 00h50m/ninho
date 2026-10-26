@@ -1605,7 +1605,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                 </div>
                 {(rotCount>0||allRoutines.length>0)&&<div style={{fontSize:12,color:'var(--sub)',marginTop:-6,marginBottom:14}}><span className="tag-r">↻ {[rotCount>0&&`${rotCount} tarefa${rotCount!==1?'s':''}`,allRoutines.length>0&&`${allRoutines.length} rotina${allRoutines.length!==1?'s':''} dos cães`].filter(Boolean).join(' + ')} sem dona fixa</span> — {casa.split==='smart'?'divididas pela divisão inteligente':'alternam a cada dia, semana ou mês'}, metade da carga para cada</div>}
                 <button className="btn btn-pur btn-w" onClick={autoDistribute}>✦ Distribuir automaticamente</button>
-                <div style={{fontSize:12,color:'var(--sub)',marginTop:8,textAlign:'center'}}>Ou ajuste uma a uma em <button onClick={()=>goCasa('tarefas')} style={{background:'none',border:'none',color:'var(--pri)',fontSize:12}}>Casa › Tarefas →</button></div>
+                <div style={{fontSize:12,color:'var(--sub)',marginTop:8,textAlign:'center'}}>Ou ajuste uma a uma em <button className="lnk-inline" onClick={()=>goCasa('tarefas')}>Casa › Tarefas →</button></div>
               </div>
               <div className="card">
                 <div className="slbl">Energia da semana</div>

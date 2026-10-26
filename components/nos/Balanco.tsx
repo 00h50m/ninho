@@ -16,7 +16,7 @@ export function BalanceCard({ thisWeek, lastWeek, names }: { thisWeek: WeekBalan
     <table className="bl-t">
       <thead><tr><th scope="col"><span className="sr-only">Pessoa</span></th><th scope="col">Esforço</th><th scope="col">Feitas</th><th scope="col">Cozinhou</th><th scope="col">Compromissos</th></tr></thead>
       <tbody>{(['g', 's'] as const).map(w => <tr key={w}><th scope="row"><span className={`bl-dot bl-${w}`} aria-hidden="true"/>{first(names[w])}</th>
-        <td className="mono">{b[w].points}</td><td className="mono">{b[w].done}</td><td className="mono">{b[w].cooked ? String(b[w].cooked).replace('.', ',') : '—'}</td><td className="mono">{H(b[w].busyMin)}</td></tr>)}</tbody>
+        <td className="mono">{b[w].points + b[w].cooked * 2}</td><td className="mono">{b[w].done}</td><td className="mono">{b[w].cooked ? String(b[w].cooked).replace('.', ',') : '—'}</td><td className="mono">{H(b[w].busyMin)}</td></tr>)}</tbody>
     </table>
     <p className="row-s">{balanceLine(b, names, now)}</p>
   </div>
