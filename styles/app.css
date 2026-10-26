@@ -847,6 +847,7 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .tk-check input{width:18px;height:18px;accent-color:var(--green)}
 .tk-check .done{text-decoration:line-through;color:var(--sub)}
 .tk-add{display:flex;gap:6px}
+.tk-per{display:flex;gap:10px;align-items:end;flex-wrap:wrap}.tk-per>.onb-f{flex:1 1 140px;min-width:0}.tk-per>.btn{margin-bottom:10px}
 .tk-hist{list-style:none;display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--mu)}
 .tk-hist li{display:flex;gap:10px}
 .tk-hist .mono{color:var(--sub);min-width:48px}

@@ -1,7 +1,7 @@
 // Regras de frequência atuais: diária, semanal (semana começa na segunda),
 // quinzenal (blocos fixos de 2 semanas), mensal (mês do calendário), pontual.
 import type { Doable } from './types'
-import { dayNum, dowOf, monthStart, weekStartOf, addDays } from './dates'
+import { dayNum, dowOf, fmtDate, monthStart, weekStartOf, addDays } from './dates'
 
 const EPOCH_MON = dayNum('1970-01-05') // uma segunda-feira
 
@@ -37,6 +37,25 @@ export function doneInPeriod(x: Doable, today: string): boolean {
   return !!l && l >= periodStart(x.frequency, today)
 }
 
+/** Dentro do período da tarefa (migration 039)? As duas pontas contam; sem ponta = sem limite. */
+export function inPeriod(x: Pick<Doable, 'starts_on' | 'ends_on'>, date: string): boolean {
+  return (!x.starts_on || date >= x.starts_on) && (!x.ends_on || date <= x.ends_on)
+}
+
+/** "de 01/12 até 15/12" · "a partir de 01/12" · "até 15/12" · "" (sem período) */
+export function periodLabel(x: Pick<Doable, 'starts_on' | 'ends_on'>): string {
+  if (x.starts_on && x.ends_on) return `de ${fmtDate(x.starts_on)} até ${fmtDate(x.ends_on)}`
+  if (x.starts_on) return `a partir de ${fmtDate(x.starts_on)}`
+  return x.ends_on ? `até ${fmtDate(x.ends_on)}` : ''
+}
+
+/** Fora do período hoje: 'antes' (ainda vai começar) · 'depois' (já terminou) · null (vale hoje ou não tem período). */
+export function periodState(x: Pick<Doable, 'starts_on' | 'ends_on'>, today: string): 'antes' | 'depois' | null {
+  if (x.starts_on && today < x.starts_on) return 'antes'
+  if (x.ends_on && today > x.ends_on) return 'depois'
+  return null
+}
+
 /** Segunda = 0 … domingo = 6 (a semana do Ninho começa na segunda). */
 const monIdx = (dow: number) => (dow + 6) % 7
 
@@ -45,9 +64,11 @@ const monIdx = (dow: number) => (dow + 6) % 7
  * · diária com dias da semana: só nesses dias;
  * · semanal/quinzenal com dias: a partir do primeiro desses dias no período;
  * · pontual com data: a partir da data;
- * · mensal e sem dias: qualquer dia.
+ * · mensal e sem dias: qualquer dia;
+ * · com período (De … até …): só dentro dele.
  */
 export function scheduledOn(x: Doable, date: string): boolean {
+  if (!inPeriod(x, date)) return false
   if (x.frequency === 'once') return !x.due_date || date >= x.due_date
   const wd = x.weekdays
   if (!wd || !wd.length || x.frequency === 'monthly') return true

@@ -7,7 +7,7 @@ import { THEMES, applyTheme, readTheme, saveTheme, type ThemeId } from '@/lib/th
 import { DEFAULT_A11Y, HOME_CARDS, TEXT_SIZES, applyA11y, effectiveTheme, isDarkTheme, readA11y, saveA11y, setupSnoozed, type A11yPrefs } from '@/lib/a11y'
 import { dogKey } from '@/lib/rotation'
 import { addDays, fmtDate, greeting, hhmm, longDateLabel, timeOfInstant } from '@/lib/dates'
-import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, weekdaysLabel } from '@/lib/frequency'
+import { doneInPeriod, dueToday, lastDone, lastLabel, pausedToday, periodLabel, periodState, weekdaysLabel } from '@/lib/frequency'
 import { isFixed } from '@/lib/rotation'
 import { whyLabel, type SplitMode } from '@/lib/split'
 import { busyWindows } from '@/lib/busy'
@@ -746,6 +746,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const dateLabel=longDateLabel(now)
   // Migration 019 aplicada? (as tarefas trazem a coluna priority)
   const casaOk=tasks.some(t=>'priority' in t)
+  const periodOk=tasks.some(t=>'starts_on' in t)
   const helpReq=tasks.filter(t=>t.help_by&&t.help_by!==me&&!t.completed_today)
   const countFor=(w:Who)=>{const all=hItems.filter(i=>ownerOfItem(i)===w);return{all:all.length,done:all.filter(i=>i.completed_today).length}}
   // Início: semana real, rotina do momento, resumo de agora, cuidados dos cães, desafio sugerido
@@ -1453,6 +1454,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                         <QuickTime value={hhmm(t.scheduled_time)} onSave={v=>quickUpdate(t.id,{scheduled_time:v||null})}/>
                         {weekdaysLabel(t.weekdays)&&t.frequency!=='monthly'&&t.frequency!=='once'&&<span className="bdg bdg-t" title="Dias da semana">📆 {weekdaysLabel(t.weekdays)}</span>}
                         {t.frequency==='once'&&t.due_date&&<span className={`bdg ${t.due_date<today?'bdg-h':'bdg-t'}`} title="Data">📆 {fmtDate(t.due_date)}</span>}
+                        {t.frequency!=='once'&&periodLabel(t)&&(()=>{const st=periodState(t,today);return <span className={`bdg ${st?'bdg-n':'bdg-t'}`} title="Período">🗓 {st==='antes'?`começa ${fmtDate(t.starts_on!)}`:st==='depois'?`terminou ${fmtDate(t.ends_on!)}`:periodLabel(t)}</span>})()}
                         {pausedToday(t,today)&&<span className="bdg bdg-n">⏸ {t.skip!.kind==='snooze'?'amanhã':'pulada'}</span>}
                         <span className={`bdg bdg-${wCls(t.weight)}`} title={`Esforço ${WPT[t.weight].toLowerCase()} · +${XPW[t.weight]} XP`}>+{XPW[t.weight]}</span>
                         {t.priority==='alta'&&<span className="bdg bdg-h">↑ alta</span>}
@@ -1888,7 +1890,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {toast.retry&&<button onClick={()=>{const r=toast.retry!;setToast(null);r()}}>Tentar novamente</button>}
         {toast.kind==='err'&&<button className="tx" onClick={()=>setToast(null)} aria-label="Fechar aviso">✕</button>}
       </div>}
-      {modal==='task'&&<TaskFormModal task={modalData} names={names} saving={saving} casaOk={casaOk} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
+      {modal==='task'&&<TaskFormModal task={modalData} names={names} saving={saving} casaOk={casaOk} periodOk={periodOk} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
       {modal==='pet'&&<PetModal saving={saving} onClose={closeModal} onSave={savePet}/>}
       {modal==='taskmenu'&&(()=>{const t:Task=modalData;const other:Who=ownerOfTask(t)==='g'?'s':'g';const why=whyLabel(plan.whyOf(t.id),names,today);return(
         <Sheet size="sm" title={t.title} onClose={closeModal}>

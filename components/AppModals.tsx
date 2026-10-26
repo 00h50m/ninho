@@ -35,7 +35,7 @@ export function QuickTime({value,onSave}:{value:string,onSave:(v:string)=>void})
   )
 }
 
-export function TaskFormModal({task,names,saving,casaOk,onClose,onSave,onDelete}:{task:Task|null,names:Names,saving:boolean,casaOk?:boolean,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void}){
+export function TaskFormModal({task,names,saving,casaOk,periodOk,onClose,onSave,onDelete}:{task:Task|null,names:Names,saving:boolean,casaOk?:boolean,periodOk?:boolean,onClose:()=>void,onSave:(d:any,id?:string)=>void,onDelete:(id:string)=>void}){
   const t=task
   const editing=!!t?.id
   const[title,setTitle]=useState(t?.title||'')
@@ -47,6 +47,8 @@ export function TaskFormModal({task,names,saving,casaOk,onClose,onSave,onDelete}
   const[ess,setEss]=useState(t?.essential||false)
   const[days,setDays]=useState<number[]>(t?.weekdays||[])
   const[due,setDue]=useState(t?.due_date||'')
+  const[from,setFrom]=useState(t?.starts_on||'')
+  const[until,setUntil]=useState(t?.ends_on||'')
   const[prio,setPrio]=useState<'alta'|'normal'|'baixa'>(t?.priority||'normal')
   const[notes,setNotes]=useState(t?.notes||'')
   const[check,setCheck]=useState<Array<{t:string,d:boolean}>>(t?.checklist||[])
@@ -56,19 +58,23 @@ export function TaskFormModal({task,names,saving,casaOk,onClose,onSave,onDelete}
   const addItem=()=>{const v=newItem.trim();if(!v||check.length>=30)return;setCheck(c=>[...c,{t:v.slice(0,80),d:false}]);setNewItem('')}
   const usesDays=['daily','weekly','biweekly'].includes(freq)
   const toggleDay=(d:number)=>setDays(p=>p.includes(d)?p.filter(x=>x!==d):[...p,d])
-  const handle=()=>{if(!title.trim()||saving)return
+  const usesPeriod=freq!=='once'
+  const badPeriod=usesPeriod&&!!from&&!!until&&until<from
+  const handle=()=>{if(!title.trim()||saving||badPeriod)return
     const wd=usesDays&&days.length&&days.length<7?[...days].sort():null
     const extra:any={}
     // Só envia as colunas novas quando usadas (o app funciona mesmo antes da migration 008)
     if(wd||t?.weekdays)extra.weekdays=wd
     if((freq==='once'&&due)||t?.due_date)extra.due_date=freq==='once'&&due?due:null
+    // Migration 039: período só quando o banco já tem as colunas (pontual usa a data)
+    if(periodOk){extra.starts_on=usesPeriod&&from?from:null;extra.ends_on=usesPeriod&&until?until:null}
     // Migration 019: só envia quando o banco já tem as colunas
     if(casaOk){extra.priority=prio;extra.notes=notes.trim()||null;extra.checklist=check.filter(c=>c.t.trim())}
     onSave({title:title.trim(),category:cat,weight,frequency:freq,assigned_to:assign||null,scheduled_time:time||null,essential:ess,...extra},editing?t!.id:undefined)}
   return(
     <Sheet title={editing?'Editar tarefa':'Nova tarefa'} onClose={onClose} footer={<>
       {editing&&<button className="btn btn-danger" disabled={saving} onClick={()=>onDelete(t!.id)}>Remover</button>}
-      <button className="btn btn-p" disabled={!title.trim()||saving} onClick={handle}>{saving?'Salvando…':editing?'Salvar alterações':'Criar tarefa'}</button>
+      <button className="btn btn-p" disabled={!title.trim()||saving||badPeriod} onClick={handle}>{saving?'Salvando…':editing?'Salvar alterações':'Criar tarefa'}</button>
     </>}>
       <label className="fl">Nome</label>
       <input className="fi" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handle()}} placeholder="Ex: Limpar bancada" autoFocus/>
@@ -96,8 +102,17 @@ export function TaskFormModal({task,names,saving,casaOk,onClose,onSave,onDelete}
         <label className="fl">Data <span className="hint">(opcional · aparece em Hoje a partir dela)</span></label>
         <input type="date" className="fi" value={due} onChange={e=>setDue(e.target.value)} style={{maxWidth:200}}/>
       </>}
+      {periodOk&&usesPeriod&&<>
+        <label className="fl" id="tk-per">Período <span className="hint">(opcional · só aparece nesses dias; vazio = sempre)</span></label>
+        <div className="tk-per" role="group" aria-labelledby="tk-per">
+          <label className="onb-f"><span>De</span><input type="date" className="fi" value={from} max={until||undefined} onChange={e=>setFrom(e.target.value)}/></label>
+          <label className="onb-f"><span>Até</span><input type="date" className="fi" value={until} min={from||undefined} onChange={e=>setUntil(e.target.value)}/></label>
+          {(from||until)&&<button type="button" className="btn btn-g" onClick={()=>{setFrom('');setUntil('')}}>Sem período</button>}
+        </div>
+        {badPeriod&&<div className="hint" role="alert" style={{color:'var(--cor-tx)'}}>O "até" precisa ser depois do "de".</div>}
+      </>}
       <label className="fl">Horário <span className="hint">(opcional)</span></label>
-      <input type="time" className="fi" value={time} onChange={e=>setTime(e.target.value)} style={{maxWidth:180}}/>
+      <input type="time" className="fi" aria-label="Horário" value={time} onChange={e=>setTime(e.target.value)} style={{maxWidth:180}}/>
       <label className="fl">Essencial?</label>
       <div className="btng c2">
         <button className={`sbtn ${!ess?'on':''}`} style={{textAlign:'left',padding:'11px 13px'}} onClick={()=>setEss(false)}>Regular<small>Pode ser adiada</small></button>

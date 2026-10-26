@@ -7,7 +7,7 @@ import type { Names, Task, Who } from '@/lib/types'
 import { addDays, homeClock, weekStartOf } from '@/lib/dates'
 import { FPT, WPT } from '@/lib/constants'
 import { planToday } from '@/lib/today'
-import { lastLabel, weekdaysLabel } from '@/lib/frequency'
+import { lastLabel, periodLabel, periodState, weekdaysLabel } from '@/lib/frequency'
 import { loadHousehold, must } from './notify'
 
 export const AI_MODEL = 'claude-opus-5-5'
@@ -22,7 +22,7 @@ export interface WeekFacts {
   focus: boolean
   energy: string | null
   scores: Record<Who, { xp: number, done: number, on_time: number }>
-  tasks: Array<{ title: string, frequency: string, weight: string, owner: string, fixed: boolean, last: string, essential: boolean, weekdays: string, skippedThisWeek: boolean, doneThisPeriod: boolean }>
+  tasks: Array<{ title: string, frequency: string, weight: string, owner: string, fixed: boolean, last: string, essential: boolean, weekdays: string, period?: string, outOfPeriod?: boolean, skippedThisWeek: boolean, doneThisPeriod: boolean }>
   dogs: string[]
   lastMeeting: { overloaded?: string, adjustments?: string, worked?: string } | null
 }
@@ -37,7 +37,7 @@ export function weekContext(f: WeekFacts): string {
     `Energia da semana: ${f.energy || 'média'}${f.focus ? ' (foco só no essencial)' : ''}. Divisão: ${f.split === 'smart' ? 'inteligente (quem fez por último passa a vez)' : 'rodízio fixo'}.`,
     '',
     'Tarefas (nome · frequência · esforço · de quem é · última vez · observações):',
-    ...f.tasks.map(t => `- ${t.title} · ${t.frequency} · ${t.weight} · ${t.fixed ? `sempre ${t.owner}` : `divisão (hoje: ${t.owner})`} · ${t.last}${[t.essential ? 'essencial' : '', t.weekdays ? `dias: ${t.weekdays}` : '', t.skippedThisWeek ? 'pulada nesta semana' : '', t.frequency !== 'diária' && !t.doneThisPeriod ? 'ainda não feita no período' : ''].filter(Boolean).map(x => ` · ${x}`).join('')}`),
+    ...f.tasks.map(t => `- ${t.title} · ${t.frequency} · ${t.weight} · ${t.fixed ? `sempre ${t.owner}` : `divisão (hoje: ${t.owner})`} · ${t.last}${[t.essential ? 'essencial' : '', t.weekdays ? `dias: ${t.weekdays}` : '', t.period ? `período: ${t.period}${t.outOfPeriod ? ' (fora dele hoje)' : ''}` : '', t.skippedThisWeek ? 'pulada nesta semana' : '', t.frequency !== 'diária' && !t.doneThisPeriod ? 'ainda não feita no período' : ''].filter(Boolean).map(x => ` · ${x}`).join('')}`),
   ]
   if (f.lastMeeting && (f.lastMeeting.overloaded || f.lastMeeting.adjustments || f.lastMeeting.worked)) {
     lines.push('', 'Reunião da semana passada:')
@@ -80,7 +80,7 @@ export async function loadWeekFacts(db: SupabaseClient, householdId: string, now
     title: t.title, frequency: (FPT[t.frequency] || t.frequency).toLowerCase(), weight: (WPT[t.weight] || t.weight).toLowerCase(),
     owner: first(plan.ownerOfTask(t)), fixed: t.assigned_to === 'g' || t.assigned_to === 's',
     last: lastLabel(t.completed_today ? today : t.prev_done || null, today), essential: !!t.essential,
-    weekdays: weekdaysLabel(t.weekdays), skippedThisWeek: !!t.skip && t.skip.date >= weekStart,
+    weekdays: weekdaysLabel(t.weekdays), period: t.frequency === 'once' ? '' : periodLabel(t), outOfPeriod: !!periodState(t, today), skippedThisWeek: !!t.skip && t.skip.date >= weekStart,
     doneThisPeriod: !plan.dueList.some(d => d.id === t.id) || !!t.completed_today,
   })
   return {

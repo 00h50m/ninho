@@ -1,7 +1,7 @@
 // Montagem da tela Hoje: grupos por horário e rotinas dos cães agrupadas.
 import type { Dog, DogItem, DogRoutine, Doable, HistEntry, HItem, Task, Who } from './types'
 import { hhmm } from './dates'
-import { dueToday } from './frequency'
+import { dueToday, inPeriod } from './frequency'
 import { buildSlots, dogKey, isFixed, ownerOf, turnBy, type Slots } from './rotation'
 import { smartSplit, type Decision, type FixedLoad, type SplitMode, type SplitUnit } from './split'
 import { DOG_ROUTINE_XP, xpForWeight } from './xp'
@@ -71,7 +71,9 @@ export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { foc
   // Divisão: decide a dona de cada item sem responsável fixa
   const decisions = new Map<string, Decision>()
   if (opts.split === 'smart') {
-    const units: SplitUnit[] = homeTasks.filter(t => !isFixed(t)).map(t => ({
+    // Fora do período (migration 039) a tarefa não pesa na divisão
+    const live = homeTasks.filter(t => inPeriod(t, today))
+    const units: SplitUnit[] = live.filter(t => !isFixed(t)).map(t => ({
       id: t.id, frequency: t.frequency, time: hhmm(t.scheduled_time), title: t.title, weight: xpForWeight(t.weight), hist: t.hist || [],
     }))
     const groups = new Map<string, { r: DogRoutine, n: number, hist: HistEntry[] }>()
@@ -83,7 +85,7 @@ export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { foc
       groups.set(k, g)
     }))
     groups.forEach((g, id) => units.push({ id, frequency: g.r.frequency, time: hhmm(g.r.scheduled_time), title: g.r.title, weight: g.n * DOG_ROUTINE_XP, hist: g.hist }))
-    const fixed: FixedLoad[] = homeTasks.filter(isFixed).map(t => ({ frequency: t.frequency, who: t.assigned_to as Who, weight: xpForWeight(t.weight) }))
+    const fixed: FixedLoad[] = live.filter(isFixed).map(t => ({ frequency: t.frequency, who: t.assigned_to as Who, weight: xpForWeight(t.weight) }))
     const all = [
       ...homeTasks.map(t => ({ weight: xpForWeight(t.weight), hist: t.hist || [] })),
       ...dogs.flatMap(d => d.routines.map(r => ({ weight: DOG_ROUTINE_XP, hist: r.hist || [] }))),

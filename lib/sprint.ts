@@ -2,7 +2,7 @@
 // bloqueado), sugestão de tarefas por cômodo e resumo. Puro, sem React/Supabase.
 import type { Task, Who } from './types'
 import { CAT } from './constants'
-import { dueToday } from './frequency'
+import { dueToday, inPeriod } from './frequency'
 
 export interface Sprint {
   id: string
@@ -53,7 +53,7 @@ const WRANK: Record<string, number> = { light: 0, medium: 1, heavy: 2 }
 export function suggestTasks(tasks: Task[], area: string, today: string, max = 6): Task[] {
   return tasks
     .filter(t => t.active !== false && !t.completed_today && (area === 'casa' || t.category === area))
-    .filter(t => !(t.frequency === 'once' && t.due_date && t.due_date > today))
+    .filter(t => !(t.frequency === 'once' && t.due_date && t.due_date > today) && inPeriod(t, today))
     .map(t => ({ t, due: dueToday(t, today) }))
     .sort((a, b) => Number(b.due) - Number(a.due) || Number(b.t.essential) - Number(a.t.essential) || (WRANK[a.t.weight] ?? 1) - (WRANK[b.t.weight] ?? 1) || a.t.title.localeCompare(b.t.title))
     .slice(0, max).map(x => x.t)
