@@ -12,6 +12,9 @@ import { addDays, weekStartOf } from '@/lib/dates'
 import { urgencyLabel, useSoon, type PantryItem } from '@/lib/despensa'
 import { cookLabel } from '@/lib/jantar'
 import { balanceLine, weekBalance } from '@/lib/balanco'
+import { doneInPeriod } from '@/lib/frequency'
+import { planToday } from '@/lib/today'
+import { weekPriorities } from '@/lib/reuniao'
 import { loadHousehold } from './notify'
 import { DEFAULT_NAMES } from '@/lib/constants'
 import { ddmm, other, parseGift, upcomingDates, whenLabel, type GiftDate, type GiftIdea } from '@/lib/presentes'
@@ -51,6 +54,33 @@ export async function waterTap(db: SupabaseClient, link: Link, ml: number, date:
  * Lembretes de água pelo Telegram (agendador de 5 em 5 min): só nas conversas com a água ligada,
  * só quando a pessoa está atrás do ritmo, e cada horário uma vez (registro em telegram_log).
  */
+/**
+ * Lembretes pelo Telegram (041): resumo da noite (evening) e tarefa no horário / essencial
+ * atrasada (tasks), cada um ligado na conversa. Cada lembrete uma vez (registro em telegram_log).
+ */
+export async function runTelegramReminders(deps: BotDeps): Promise<TgReport & { pending?: string }> {
+  const now = deps.now ?? new Date(), clock = homeClock(now)
+  const report: TgReport & { pending?: string } = { kind: 'lembretes', day: clock.date, sent: 0, skipped: 0, failed: 0, deactivated: 0, errors: [] }
+  const q = await deps.db.from('telegram_links').select('id,household_id,who,chat_id,evening,tasks').eq('active', true).not('chat_id', 'is', null)
+  if (q.error) return { ...report, pending: 'migration 041 ainda não aplicada' }
+  const links = ((q.data || []) as Array<Link & { evening: boolean, tasks: boolean }>).filter(l => l.evening || l.tasks)
+  const byHouse = new Map<string, typeof links>()
+  for (const l of links) byHouse.set(l.household_id, [...(byHouse.get(l.household_id) || []), l])
+  for (const [hh, list] of Array.from(byHouse.entries())) {
+    try {
+      const due = dueReminders(await loadRemState(deps.db, hh, now)).filter(r => r.kind === 'noite' || r.kind === 'tarefa' || r.kind === 'atraso')
+      for (const l of list) for (const r of due.filter(x => x.who === l.who && (x.kind === 'noite' ? l.evening : l.tasks))) {
+        const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind: r.kind, day: clock.date, ref: r.ref.slice(0, 40) }).select('id').maybeSingle()
+        if (claim.error) { if (claim.error.code === '23505') { report.skipped++; continue } throw new Error(claim.error.message) }
+        const res = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${r.title}\n${r.body}${r.kind === 'noite' ? '' : '\n/hoje para ver e concluir'}` })
+        if (res.ok) { report.sent++; await deps.db.from('telegram_log').update({ status: 'sent' }).eq('id', (claim.data as any).id) }
+        else { report.failed++; report.errors.push(`${res.error_code}: ${String(res.description).slice(0, 120)}`); await deps.db.from('telegram_log').update({ status: 'failed', detail: String(res.description).slice(0, 300) }).eq('id', (claim.data as any).id) }
+      }
+    } catch (e: any) { report.failed++; report.errors.push(`casa: ${String(e?.message || e).slice(0, 160)}`) }
+  }
+  return report
+}
+
 export async function runTelegramWater(deps: BotDeps): Promise<TgReport & { pending?: string }> {
   const now = deps.now ?? new Date(), clock = homeClock(now)
   const report: TgReport & { pending?: string } = { kind: 'agua', day: clock.date, sent: 0, skipped: 0, failed: 0, deactivated: 0, errors: [] }
@@ -164,4 +194,27 @@ export async function balanceText(db: SupabaseClient, householdId: string, date:
   ])
   const b = weekBalance({ tasks: h.tasks, dogs: h.dogs, meals: (m.error ? [] : m.data || []) as any[], events: (e.error ? [] : e.data || []) as any[], anyDay: date, today: date })
   return b.verdict === 'vazio' ? null : `⚖️ ${balanceLine(b, h.names, false).replace('; esta semana o rodízio compensa.', '; a próxima semana o rodízio compensa.')}`
+}
+
+/** /semana: o que cada uma fez até hoje, o balanço, o que falta do período e as prioridades da reunião. */
+export async function weekText(db: SupabaseClient, householdId: string, date: string): Promise<string> {
+  const h = await loadHousehold(db, householdId, date)
+  const ws = weekStartOf(date)
+  const [m, e, mt] = await Promise.all([
+    db.from('house_meals').select('id,date,meal,title,cook,recipe_id,ingredients,notes').eq('household_id', householdId).gte('date', ws).lte('date', date),
+    db.from('house_events').select('id,kind,title,date,time,end_time,who,done_at').eq('household_id', householdId).gte('date', ws).lte('date', date),
+    db.from('weekly_meetings').select('week_start,priorities').eq('household_id', householdId).eq('week_start', addDays(ws, -7)),
+  ])
+  const b = weekBalance({ tasks: h.tasks, dogs: h.dogs, meals: (m.error ? [] : m.data || []) as any[], events: (e.error ? [] : e.data || []) as any[], anyDay: date, today: date })
+  const first = (w: Who) => (h.names[w] || '').split(' ')[0]
+  const lines = [`📅 Semana de ${ws.slice(8, 10)}/${ws.slice(5, 7)} (até hoje)`]
+  for (const w of ['g', 's'] as Who[]) lines.push(`• ${first(w)}: ${b[w].done} feita${b[w].done === 1 ? '' : 's'} · ${b[w].points} ponto${b[w].points === 1 ? '' : 's'}${b[w].cooked ? ` · cozinhou ${String(b[w].cooked).replace('.', ',')}` : ''}`)
+  if (b.verdict !== 'vazio') lines.push(`⚖️ ${balanceLine(b, h.names, true)}`)
+  // o que ainda falta do período (semana, quinzena, mês), com a dona
+  const plan = planToday(h.tasks, h.dogs, date, { split: h.split, busy: h.busy, dogPlan: h.dogPlan })
+  const left = plan.homeTasks.filter(t => t.frequency !== 'daily' && t.frequency !== 'once' && !doneInPeriod(t, date))
+  if (left.length) lines.push('', `Falta no período (${left.length}):`, ...left.slice(0, 6).map(t => `• ${t.title} · ${first(plan.ownerOfTask(t))}`), ...(left.length > 6 ? [`… e mais ${left.length - 6}`] : []))
+  const pr = weekPriorities((mt.error ? [] : mt.data || []) as any[], ws)
+  if (pr) lines.push('', '🎯 Prioridades da semana', ...pr.list.map((p, i) => `${i + 1}. ${p}`))
+  return lines.join('\n')
 }

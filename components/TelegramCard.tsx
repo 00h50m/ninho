@@ -10,7 +10,7 @@ const BOT = process.env.NEXT_PUBLIC_TELEGRAM_BOT_USERNAME || ''
 const first = (n: string) => (n || '').split(' ')[0]
 
 /** agua (034): lembrete de água com "+1 copo"; ausente = o banco ainda não tem a coluna */
-interface LinkRow { id: string, who: Who, chat_id: number | null, linked_at: string | null, morning: boolean, weekly: boolean, active: boolean, agua?: boolean }
+interface LinkRow { id: string, who: Who, chat_id: number | null, linked_at: string | null, morning: boolean, weekly: boolean, active: boolean, agua?: boolean, evening?: boolean, tasks?: boolean }
 
 export function TelegramCard({ householdId, me, names, onToast, onError, onNeedIdentity }: {
   householdId: string, me: Who | null, names: Names
@@ -23,8 +23,9 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
 
   const load = useCallback(async () => {
     const q = (cols: string) => supabase.from('telegram_links').select(cols).eq('household_id', householdId).not('chat_id', 'is', null)
-    let r = await q('id,who,chat_id,linked_at,morning,weekly,active,agua')
-    // sem a migration 034: carrega sem a água
+    let r = await q('id,who,chat_id,linked_at,morning,weekly,active,agua,evening,tasks')
+    // sem a migration 041: sem resumo da noite e tarefas; sem a 034: sem a água
+    if (r.error && /evening|tasks/.test(r.error.message || '')) r = await q('id,who,chat_id,linked_at,morning,weekly,active,agua')
     if (r.error && /agua/.test(r.error.message || '')) r = await q('id,who,chat_id,linked_at,morning,weekly,active')
     if (r.error) { logError('carregar Telegram', r.error); setLinks([]); return [] }
     setLinks(r.data as unknown as LinkRow[])
@@ -67,7 +68,7 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
     } catch { /* cancelou */ }
   }
 
-  async function setPref(l: LinkRow, k: 'morning' | 'weekly' | 'agua', v: boolean) {
+  async function setPref(l: LinkRow, k: 'morning' | 'weekly' | 'agua' | 'evening' | 'tasks', v: boolean) {
     setLinks(p => (p || []).map(x => x.id === l.id ? { ...x, [k]: v } : x))
     const r = await supabase.from('telegram_links').update({ [k]: v }).eq('id', l.id).select('id')
     if (r.error) { setLinks(p => (p || []).map(x => x.id === l.id ? l : x)); onError(toNinhoError(r.error, 'salvar Telegram').userMessage) }
@@ -124,6 +125,14 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
             {l.agua !== undefined && <div className="row">
               <div><div className="row-t">💧 Lembretes de água</div><div className="row-s">Só quando estiver atrás do ritmo, com o botão “+1 copo”. A qualquer hora: /agua</div></div>
               <button className={`switch ${l.agua ? 'on' : ''}`} style={l.agua ? { background: 'var(--gdk)' } : undefined} onClick={() => setPref(l, 'agua', !l.agua)} role="switch" aria-checked={!!l.agua} aria-label={`Lembretes de água no Telegram da ${first(names[w])}`} />
+            </div>}
+            {l.evening !== undefined && <div className="row">
+              <div><div className="row-t">🌆 Resumo da noite</div><div className="row-s">Às 21h: quanto do dia foi feito, o que fica para amanhã e o que vence nos próximos dias</div></div>
+              <button className={`switch ${l.evening ? 'on' : ''}`} style={l.evening ? { background: 'var(--gdk)' } : undefined} onClick={() => setPref(l, 'evening', !l.evening)} role="switch" aria-checked={!!l.evening} aria-label={`Resumo da noite no Telegram da ${first(names[l.who])}`}/>
+            </div>}
+            {l.tasks !== undefined && <div className="row">
+              <div><div className="row-t">✅ Tarefas no horário</div><div className="row-s">Na hora da tarefa (quando é a sua vez) e essencial atrasada 1 h depois. Desligado se já recebe pela notificação do app</div></div>
+              <button className={`switch ${l.tasks ? 'on' : ''}`} style={l.tasks ? { background: 'var(--gdk)' } : undefined} onClick={() => setPref(l, 'tasks', !l.tasks)} role="switch" aria-checked={!!l.tasks} aria-label={`Tarefas no horário no Telegram da ${first(names[l.who])}`}/>
             </div>}
             <div className="row"><button className="btn btn-g btn-w" onClick={() => disconnect(l)}>Desconectar</button></div>
           </div>)}

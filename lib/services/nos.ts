@@ -17,7 +17,7 @@ const soft = <T>(r: { data: T[] | null, error: any }, ctx: string): T[] => {
 }
 
 const CH_COLS = 'id,title,kind,ref_id,per_day,days,goal,start_date,status,reward,created_by,created_at,ended_at'
-export interface MeetingRow { week_start: string, wins: string | null, what_worked: string | null, agreements: Agreement[] }
+export interface MeetingRow { week_start: string, wins: string | null, what_worked: string | null, agreements: Agreement[], priorities?: string | null, next_mode?: string | null }
 export interface SprintRow { date: string, status: string, area: string, done: number }
 export interface NosData {
   available: boolean, reason?: string
@@ -43,7 +43,7 @@ export async function loadNos(householdId: string, today: string): Promise<NosDa
     hh('daily_checkins', 'date,who,mood,energy,note,good,need,thanks').gte('date', from),
     hh('task_completions', 'date,completed_by').gte('date', from).limit(5000),
     hh('sprints', 'date,status,area,done_task_ids').gte('date', addDays(today, -120)).order('date', { ascending: false }).limit(60),
-    hh('weekly_meetings', 'week_start,wins,what_worked,agreements').order('week_start', { ascending: false }).limit(26),
+    hh('weekly_meetings', 'week_start,wins,what_worked,agreements,priorities,next_mode').order('week_start', { ascending: false }).limit(26),
   ])
   const ck = soft(checkins as any, 'carregar check-ins') as CheckinRow[]
   const cp = soft(comps as any, 'carregar conclusões') as Array<{ date: string, completed_by: Who | null }>

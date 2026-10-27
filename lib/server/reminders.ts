@@ -10,7 +10,8 @@ import { validatePlan } from '@/lib/dietPlan'
 import { usualWake } from '@/lib/sono'
 import { foodDaysLeft } from '@/lib/caes'
 import { signWater, waterSecret } from './waterToken'
-import { deliver, must, type NotifyDeps, type Report, type Subscription } from './notify'
+import { deliver, loadHousehold, must, type NotifyDeps, type Report, type Subscription } from './notify'
+import { planToday } from '@/lib/today'
 
 export interface ReminderSub extends Subscription { reminders: unknown, quiet_start: string, quiet_end: string }
 /** No máximo por aparelho a cada rodada (o resto vai na próxima, se ainda valer). */
@@ -32,7 +33,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     soft<any>(hh('sprints', 'id,area,participants,duration_min,started_at,paused_at,paused_ms,ended_at').is('ended_at', null)),
     soft<any>(hh('dogs', 'id,name').eq('active', true)),
     soft<any>(hh('dog_health', 'id,dog_id,title,next_date').gte('next_date', date).lte('next_date', addDays(date, 1))),
-    soft<any>(hh('house_events', 'id,title,date,time,who,kind,paid,done_at').gte('date', date).lte('date', addDays(date, 1))),
+    soft<any>(hh('house_events', 'id,title,date,time,who,kind,paid,done_at').gte('date', date).lte('date', addDays(date, 3))),
     soft<any>(hh('couple_challenges', 'id,title,kind,start_date,days').eq('status', 'active').eq('kind', 'livre')),
     soft<any>(hh('challenge_marks', 'challenge_id').eq('date', date)),
     soft<any>(hh('daily_checkins', 'who,mood,energy').eq('date', date)),
@@ -44,6 +45,20 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     soft<any>(hh('gift_dates', 'id,who,title,month,day,for_who')),
     soft<any>(hh('gift_ideas', 'id,who,for_who,date_id,status').neq('status', 'dado')),
   ])
+  // Hoje (a mesma conta do app): itens com a dona de hoje, para o lembrete no horário e o resumo da noite
+  let items: RemState['items'] = [], evening: RemState['evening']
+  try {
+    const h = await loadHousehold(db, householdId, date)
+    const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy, dogPlan: h.dogPlan })
+    items = plan.items.map(i => ({ id: i.id, title: i.task ? i.task.title : i.dog!.title, time: i.scheduled_time ? i.scheduled_time.slice(0, 5) : null, owner: plan.ownerOfItem(i), essential: !!i.essential, done: !!i.completed_today }))
+    // o que ficou: essenciais primeiro, depois as com horário (o resumo mostra só as 3 primeiras)
+    const rank = (i: NonNullable<RemState['items']>[number]) => (i.essential ? 0 : 2) + (i.time ? 0 : 1)
+    const day = (w: Who) => { const mine = items!.filter(i => i.owner === w); return { done: mine.filter(i => i.done).length, total: mine.length, left: mine.filter(i => !i.done).sort((a, b) => rank(a) - rank(b) || String(a.time).localeCompare(String(b.time))).map(i => i.title) } }
+    const dow = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb']
+    const soon = events.filter(e => !e.done_at && e.date > date && (e.kind !== 'vencimento' || !e.paid))
+      .sort((a, b) => a.date.localeCompare(b.date)).map(e => `${e.kind === 'vencimento' ? '💸 ' : ''}${e.title} (${e.date === addDays(date, 1) ? 'amanhã' : dow[new Date(`${e.date}T12:00:00Z`).getUTCDay()]})`)
+    evening = { day: { g: day('g'), s: day('s') }, soon }
+  } catch { /* sem a casa carregada: os outros lembretes seguem */ }
   const g = profiles.find(p => p.role === 'g'), s = profiles.find(p => p.role === 's')
   const names: Names = { g: g?.display_name || DEFAULT_NAMES.g, s: s?.display_name || DEFAULT_NAMES.s }
   const sp = sprints[0]
@@ -64,6 +79,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     challenges: challenges.filter(c => date >= c.start_date && date <= addDays(c.start_date, c.days - 1) && !marks.some(m => m.challenge_id === c.id)).map(c => ({ id: c.id, title: c.title })),
     checkins: checkins.filter(c => c.mood || c.energy).map(c => c.who),
     planMeals: plans.flatMap(p => (validatePlan(p.plan)?.meals || []).filter(m => m.time && m.when !== 'treino').map(m => ({ who: p.who, id: m.id, name: m.name, time: m.time! }))),
+    items, evening,
     planDone: logs.filter(l => l.kind === 'refeicao' && l.data?.plan?.meal_id).map(l => ({ who: l.who, meal_id: String(l.data.plan.meal_id) })),
   }
 }

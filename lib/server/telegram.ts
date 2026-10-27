@@ -15,7 +15,7 @@ import { SHOP_CATS, guessCategory, normalize, parseEntry } from '@/lib/shopping'
 import { loadHousehold, morningPayloads, must, weeklyPayload } from './notify'
 import { execute as executeAi, type Understood } from './telegramAi'
 import { meuDiaWeekLines } from './weekReport'
-import { balanceText, foodLines, houseLines, giftAdd, giftList, menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
+import { balanceText, weekText, foodLines, houseLines, giftAdd, giftList, menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
 import { sobrouAlerts, type SobrouResumo } from '@/lib/sobrou'
 import { addDays } from '@/lib/dates'
 import type { AiAction } from '@/lib/telegramAi'
@@ -52,7 +52,7 @@ export const MENU = {
   keyboard: [
     [{ text: '📋 Hoje' }, { text: '🛒 Compras' }],
     [{ text: '➕ Adicionar à lista' }, { text: '✦ Dicas' }],
-    [{ text: '❓ Ajuda' }],
+    [{ text: '📅 Semana' }, { text: '❓ Ajuda' }],
   ],
   resize_keyboard: true,
   is_persistent: true,
@@ -65,6 +65,7 @@ export function menuCommand(text: string): string | null {
   const t = text.replace(/^[^A-Za-zÀ-ÿ]+/, '').trim().toLowerCase()
   if (t === 'hoje') return '/hoje'
   if (t === 'compras') return '/compras'
+  if (t === 'semana') return '/semana'
   if (t === 'adicionar à lista' || t === 'adicionar a lista') return '/adicionar'
   if (t === 'dicas') return '/dicas'
   if (t === 'ajuda' || t === 'menu') return '/ajuda'
@@ -85,6 +86,7 @@ export const HELP = [
   'Ou use o menu aqui embaixo e os comandos:',
   '/hoje — o que é seu hoje (com botões para concluir)',
   '/feito louça — conclui uma tarefa pelo nome',
+  '/semana — o que cada uma fez, o balanço, o que falta e as prioridades',
   '/compras — a lista de compras',
   '/compras leite, 2 kg arroz — adiciona itens (ou mande "+leite")',
   '/dicas — sugestões da IA para a semana',
@@ -279,6 +281,7 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   else if (cmd === '/menu') await send(deps, chatId, 'Menu aberto aqui embaixo. 👇', { reply_markup: MENU })
   else if (cmd === '/compras' || cmd === '/lista') await (arg ? shoppingAdd(deps, link, arg) : shoppingList(deps, link))
   else if (cmd === '/feito') await doneByName(deps, link, arg, date)
+  else if (cmd === '/semana') await send(deps, chatId, await weekText(deps.db, link.household_id, date).catch(() => '⚠️ Não consegui montar a semana agora. Tente de novo.'))
   else if (cmd === '/presente') await send(deps, chatId, await giftAdd(deps.db, link, arg).catch(() => '⚠️ Não consegui anotar agora. Tente de novo.'))
   else if (cmd === '/presentes') await send(deps, chatId, await giftList(deps.db, link, date).catch(() => '⚠️ Não consegui abrir a lista agora.'))
   else if (cmd === '/dicas') {

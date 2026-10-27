@@ -8,7 +8,7 @@ import { WATER_TIMES, waterBehind, waterLine } from './water'
 import { bedReminder, bedtime } from './sono'
 import { giftReminders, type GiftDate, type GiftIdea } from './presentes'
 
-export type RKind = 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao' | 'dormir' | 'presente'
+export type RKind = 'tarefa' | 'atraso' | 'noite' | 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao' | 'dormir' | 'presente'
 export const RKINDS: Array<[RKind, string, string, string]> = [
   ['remedio', '💊', 'Remédios e vitaminas', 'No horário de cada dose, se ainda não marcou'],
   ['refeicao', '🍽️', 'Refeições do plano', 'No horário de cada refeição do plano alimentar (se ligou no plano), se ainda não marcou'],
@@ -20,10 +20,13 @@ export const RKINDS: Array<[RKind, string, string, string]> = [
   ['agua', '💧', 'Água', 'De 9h30 às 20h, só quando estiver atrás do ritmo, com botão "+1 copo"'],
   ['checkin', '💬', 'Check-in da noite', 'Às 21h30, se ainda não fez o check-in'],
   ['presente', '🎁', 'Datas especiais', 'Das suas datas em Nós › Presentes: 14 e 3 dias antes e no dia, às 9h. Só no seu aparelho'],
+  ['tarefa', '✅', 'Tarefas no horário', 'Na hora marcada da tarefa ou rotina dos cães, só para quem é a vez, se ainda não foi feita'],
+  ['atraso', '⏰', 'Essencial atrasada', '1 hora depois do horário de uma essencial ainda não feita, para as duas'],
+  ['noite', '🌆', 'Resumo da noite', 'Às 21h: quanto do dia foi feito, o que fica para amanhã e o que vence nos próximos dias'],
   ['dormir', '🌙', 'Hora de dormir', '30 min antes da hora de deitar para a sua meta de sono (pelo horário em que costuma acordar). Vale mesmo no horário de silêncio'],
 ]
 export type RPrefs = Record<RKind, boolean>
-export const DEFAULT_RPREFS: RPrefs = { remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false, dormir: false, presente: true }
+export const DEFAULT_RPREFS: RPrefs = { tarefa: true, atraso: true, noite: true, remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false, dormir: false, presente: true }
 export const prefsOf = (x: unknown): RPrefs => ({ ...DEFAULT_RPREFS, ...(x && typeof x === 'object' ? x as Partial<RPrefs> : {}) })
 
 export interface RemState {
@@ -47,6 +50,10 @@ export interface RemState {
   /** refeições com horário dos planos com lembrete ligado (sem as só de treino) e as já marcadas hoje */
   planMeals?: Array<{ who: Who, id: string, name: string, time: string }>
   planDone?: Array<{ who: Who, meal_id: string }>
+  /** itens de Hoje com horário (tarefas e rotinas dos cães), com a dona de hoje */
+  items?: Array<{ id: string, title: string, time: string | null, owner: Who, essential: boolean, done: boolean }>
+  /** resumo da noite: o dia de cada uma e o que vence nos próximos dias */
+  evening?: { day: Record<Who, { done: number, total: number, left: string[] }>, soon: string[] }
 }
 export interface Reminder { who: Who, kind: RKind, ref: string, title: string, body: string, url: string, /** "+1 copo" na própria notificação */ water?: number }
 
@@ -105,6 +112,21 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
     if (r.weekdays && !r.weekdays.includes(dow)) continue
     if ((r.start_date && s.date < r.start_date) || (r.paused_until && s.date <= r.paused_until)) continue
     push(whoList(r.assign_mode), 'rotina', `rotina:${r.id}`, `🔁 ${r.title}`, r.reminder_min ? `Às ${r.scheduled_time.slice(0, 5)} (daqui a ${r.reminder_min} min).` : `Está na hora (${r.scheduled_time.slice(0, 5)}).`, '/?ir=rotinas')
+  }
+  // Tarefas no horário (para quem é a vez) e essencial atrasada 1 h depois (para as duas)
+  for (const t of s.items || []) {
+    if (!t.time || t.done) continue
+    const at = t.time.slice(0, 5)
+    if (due(at, s.hm, win)) push([t.owner], 'tarefa', `tarefa:${t.id}`, `✅ ${t.title}`, `Está na hora (${at}).`, '/?ir=hoje')
+    const late = toMin(at) + 60
+    if (t.essential && late < 24 * 60 && due(fromMin(late), s.hm, win)) push(both, 'atraso', `atraso:${t.id}`, `⏰ Atrasada: ${t.title}`, `Era às ${at}, com ${first(s.names[t.owner])}. É essencial.`, '/?ir=hoje')
+  }
+  // Resumo da noite, às 21h
+  if (s.evening && due('21:00', s.hm, win)) for (const w of both) {
+    const d = s.evening.day[w]
+    const left = d.left.length ? ` Fica para amanhã: ${d.left.slice(0, 3).join(', ')}${d.left.length > 3 ? ` e mais ${d.left.length - 3}` : ''}.` : d.total ? ' Tudo feito! 🎉' : ''
+    const soon = s.evening.soon.length ? ` Próximos dias: ${s.evening.soon.slice(0, 3).join(' · ')}.` : ''
+    push([w], 'noite', 'noite', `🌆 Boa noite, ${first(s.names[w])}`, `Hoje: ${d.done} de ${d.total} feitas.${left}${soon}`, '/?ir=hoje')
   }
   // Fim do sprint
   if (s.sprint && s.sprint.endMs <= s.nowMs && s.nowMs - s.sprint.endMs < win * 60000) {

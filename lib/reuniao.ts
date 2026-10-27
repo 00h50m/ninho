@@ -2,6 +2,7 @@
 // (o que funcionou, o que pesou, ajuste, prioridades, vitórias, combinados e
 // modo da próxima semana). O rascunho só preenche o que ainda está vazio.
 // E o resumo da reunião salva, para mandar no Telegram das duas. Puro, testado.
+import { addDays } from './dates'
 import type { Agreement } from './nos'
 import type { Meeting, Names, Who } from './types'
 
@@ -80,4 +81,31 @@ export function meetingSummary(m: Partial<Meeting>, agreements: Agreement[], nam
   if (m.next_mode) lines.push('', `Próxima semana: ${MODE[m.next_mode] || m.next_mode}`)
   if (m.reward && m.reward.trim()) lines.push(`🎁 Recompensa: ${m.reward.trim()}`)
   return lines.join('\n').slice(0, 3800)
+}
+
+// ── A reunião vira ação ──────────────────────────────────────────────
+
+/** "1. Faxina do quarto\n2) Contas; mercado" → até 3 prioridades limpas. */
+export function priorityList(text: string | null | undefined): string[] {
+  return String(text || '').split(/\n|;|•|·/).flatMap(l => l.split(/(?:^|\s)\d+[.)-]\s+/))
+    .map(l => l.replace(/^[\s\-*–—\d.)]+/, '').trim()).filter(Boolean).slice(0, 3)
+}
+
+/**
+ * Prioridades desta semana: as que a reunião da semana passada combinou (a reunião
+ * acontece no fim de semana e vale para a seguinte). Sem reunião na semana passada: nada.
+ */
+export function weekPriorities(meetings: Array<{ week_start: string, priorities?: string | null }>, weekStart: string): { list: string[], from: string } | null {
+  const prev = addDays(weekStart, -7)
+  const m = meetings.find(x => x.week_start === prev)
+  const list = priorityList(m?.priorities)
+  return list.length ? { list, from: prev } : null
+}
+
+/** Ajustes da semana que vem conforme o modo escolhido na reunião (liga sozinho na segunda). */
+export function modeSettings(mode: string | null | undefined): { energy: 'low' | 'medium' | 'high', survival: boolean } | null {
+  if (mode === 'survival') return { energy: 'low', survival: true }
+  if (mode === 'boss') return { energy: 'high', survival: false }
+  if (mode === 'normal') return { energy: 'medium', survival: false }
+  return null
 }

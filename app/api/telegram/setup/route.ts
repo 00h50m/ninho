@@ -24,6 +24,7 @@ export async function GET(req: Request) {
     { command: 'menu', description: 'Mostrar o menu' },
     { command: 'hoje', description: 'O que é seu hoje' },
     { command: 'feito', description: 'Concluir pelo nome (ex.: /feito louça)' },
+    { command: 'semana', description: 'A semana: quem fez o quê, o que falta e as prioridades' },
     { command: 'compras', description: 'Lista de compras (ou adicionar: /compras leite)' },
     { command: 'dicas', description: 'Sugestões da IA para a semana' },
     { command: 'ajuda', description: 'O que o bot faz' },

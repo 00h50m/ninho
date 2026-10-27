@@ -5,7 +5,7 @@ create or replace function pg_temp.ok(cond boolean, msg text) returns void langu
 begin if cond is distinct from true then raise exception 'FALHOU: %', msg; end if; raise notice 'ok - %', msg; end $$;
 
 select pg_temp.ok((select column_default from information_schema.columns where table_name = 'telegram_links' and column_name = 'agua') = 'false', 'telegram_links.agua existe e começa desligada');
-select pg_temp.ok((select count(*) from pg_constraint where conname = 'telegram_log_kind_check2') = 1, 'tipo do registro aceita agua (uma regra só, mesmo rodando 2x)');
+select pg_temp.ok((select count(*) from pg_constraint where conname in ('telegram_log_kind_check2', 'telegram_log_kind_check3')) = 1, 'tipo do registro aceita agua (uma regra só, mesmo rodando 2x; a 041 amplia)');
 
 insert into public.households (id, name) values ('afafafaf-0000-0000-0000-000000000001', 'Casa água tg') on conflict (id) do nothing;
 insert into public.telegram_links (id, household_id, who, chat_id, linked_at) values ('afafafaf-1111-0000-0000-000000000001', 'afafafaf-0000-0000-0000-000000000001', 'g', 4242424242, now()) on conflict (id) do nothing;

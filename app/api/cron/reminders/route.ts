@@ -4,7 +4,7 @@
 import { NextResponse } from 'next/server'
 import { createDeps, cronAuthorized, missingConfig, pushConfigured } from '@/lib/server/push'
 import { runReminders } from '@/lib/server/reminders'
-import { runTelegramWater } from '@/lib/server/tgExtras'
+import { runTelegramReminders, runTelegramWater } from '@/lib/server/tgExtras'
 import { createBotDeps, telegramConfigured } from '@/lib/server/tg'
 
 export const dynamic = 'force-dynamic'
@@ -22,8 +22,10 @@ async function handle(req: Request) {
   const report = push ? await runReminders({ ...createDeps(), ...(now ? { now } : {}) }) : { skipped_push: 'push não configurado', sent: 0, failed: 0, errors: [] as string[] }
   // água também pelo Telegram (nas conversas que ligaram)
   const telegram = tg ? await runTelegramWater({ ...createBotDeps(), ...(now ? { now } : {}) }).catch(e => ({ error: String(e?.message || e).slice(0, 160) })) : null
-  if (report.sent || report.failed || report.errors.length || (telegram && 'sent' in telegram && telegram.sent)) console.log('[ninho] lembretes', JSON.stringify({ ...report, errors: report.errors.length, telegram }))
-  return NextResponse.json({ ...report, telegram })
+  // resumo da noite e tarefa no horário pelo Telegram (041)
+  const telegramLembretes = tg ? await runTelegramReminders({ ...createBotDeps(), ...(now ? { now } : {}) }).catch(e => ({ error: String(e?.message || e).slice(0, 160) })) : null
+  if (report.sent || report.failed || report.errors.length || (telegram && 'sent' in telegram && telegram.sent) || (telegramLembretes && 'sent' in telegramLembretes && telegramLembretes.sent)) console.log('[ninho] lembretes', JSON.stringify({ ...report, errors: report.errors.length, telegram, telegramLembretes }))
+  return NextResponse.json({ ...report, telegram, telegramLembretes })
 }
 export const GET = handle
 export const POST = handle

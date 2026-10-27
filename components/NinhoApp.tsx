@@ -70,6 +70,7 @@ import { useSoon, urgencyLabel } from '@/lib/despensa'
 import { cookLabel, dinnersFromPantry } from '@/lib/jantar'
 import { packTasks, type Pack, type PackItem } from '@/lib/estacoes'
 import { setAppBadge } from '@/lib/badge'
+import { modeSettings, weekPriorities } from '@/lib/reuniao'
 import { AlbumView } from '@/components/nos/Album'
 import { weekBalance } from '@/lib/balanco'
 import type { Sug } from '@/lib/sugestoes'
@@ -665,6 +666,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     let tgMsg=''
     save('salvar reunião',async()=>{
       await api.saveMeeting(householdId,weekStart,m)
+      // o modo escolhido liga sozinho na segunda que vem
+      const ms=modeSettings(m.next_mode);if(ms)await api.saveWeeklySettings(householdId,addDays(weekStart,7),ms)
       if(agreements){
         const out:Agreement[]=[]
         for(const a of agreements){
@@ -1227,6 +1230,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
           </div>}
 
           {week.available&&showCard('semana')&&<WeekStrip days={weekInfo} names={names}/>}
+          {showCard('prioridades')&&(()=>{const pr=weekPriorities(nos.meetings,weekStart);return pr&&<section className="card prio" aria-labelledby="prio-h">
+            <div className="slbl" id="prio-h">🎯 Prioridades da semana<button className="lnk" onClick={()=>{go('nos');setNosView('semana')}}>Reunião →</button></div>
+            <ol className="prio-l">{pr.list.map((p,i)=><li key={i}>{p}</li>)}</ol>
+            <p className="row-s">Combinadas na reunião de {fmtDate(addDays(pr.from,6))}.</p>
+          </section>})()}
 
           {settings.survival?(
             <div className="banner surv">🛡 <span>Modo sobrevivência — {showAllToday?'mostrando todas as tarefas':`só essenciais${hiddenCount>0?` · ${hiddenCount} ocultas`:''}`}</span>

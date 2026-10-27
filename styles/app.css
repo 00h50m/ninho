@@ -1747,3 +1747,6 @@ html.rp-open body{overflow:hidden}
 .bl-scroll{overflow-x:auto;max-width:100%}
 /* ✕ do aviso */
 .toast .tx{min-width:24px;min-height:24px}
+/* Início: prioridades da semana (da reunião) */
+.prio-l{margin:4px 0 6px;padding-left:22px;display:grid;gap:4px;font-size:15px}
+.prio-l li::marker{color:var(--pri);font-weight:600}
