@@ -4,6 +4,8 @@
 // · /compras lista; "/compras leite, 2 kg arroz" ou "+leite" adiciona
 // · /feito louça conclui pelo nome · /dicas pede sugestões à IA · /sair desliga
 // · Bom dia e resumo de domingo também chegam aqui (mesmo texto do celular)
+import { isQuestion } from './askAi'
+import { MAX_AUDIO_SEC } from './transcribe'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Who } from '@/lib/types'
 import { homeClock } from '@/lib/dates'
@@ -31,6 +33,10 @@ export interface BotDeps {
   tips?: (householdId: string) => Promise<{ ok: true, text: string } | { ok: false, message: string }>
   /** Texto livre interpretado pela IA (opcional: sem a chave, o bot só entende comandos). */
   understand?: (link: { id: string, household_id: string, who: Who, chat_id: number }, text: string) => Promise<Understood>
+  /** "Perguntar ao Ninho": pergunta da casa respondida pela IA (opcional: precisa da chave da IA). */
+  ask?: (link: { id: string, household_id: string, who: Who, chat_id: number }, question: string) => Promise<{ ok: true, text: string } | { ok: false, message: string }>
+  /** Áudio → texto (opcional: precisa da chave do Groq). */
+  transcribe?: (fileId: string) => Promise<string | null>
   /** Foto do prato (opcional: precisa da chave da IA). */
   plate?: (link: { id: string, household_id: string, who: Who, chat_id: number }, fileId: string, caption: string) => Promise<Understood>
   /** "faxinão: …" vira rascunho no app (opcional: precisa da chave da IA). */
@@ -82,6 +88,8 @@ export const HELP = [
   '🏷️ Foto da tabela nutricional com “rótulo” na legenda (ex.: “rótulo iogurte grego”): eu cadastro em Meus alimentos, ou confiro o que já está lá.',
   '🧹 “faxinão: banheiro, cozinha, roupa de cama, quintal” — eu organizo na melhor ordem e divido entre vocês (fica no app para conferir).',
   '🗓️ “organiza meu dia: dentista 14h30, pagar o boleto, mercado” — eu monto o dia em ordem e você confirma.',
+  '💬 Pergunte o que quiser da casa: “como tirar mancha de xixi do sofá?”, “quanto de ração para a Zelda?”',
+  '🎙️ Pode mandar áudio: eu transcrevo e sigo como se tivesse escrito.',
   '',
   'Ou use o menu aqui embaixo e os comandos:',
   '/hoje — o que é seu hoje (com botões para concluir)',
@@ -260,7 +268,29 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   if (!msg?.chat) return
   if (msg.chat.type && msg.chat.type !== 'private') return // só conversas privadas
   if (Array.isArray(msg.photo) && msg.photo.length) { await photo(deps, msg); return }
+  if (msg.voice || msg.audio) { await voice(deps, msg, date); return }
   if (typeof msg.text !== 'string') return
+  await onText(deps, msg, date)
+}
+
+/** Mensagem de voz: vira texto (Groq) e segue como se tivesse sido digitada. */
+async function voice(deps: BotDeps, msg: any, date: string) {
+  const chatId = Number(msg.chat.id)
+  const link = await linkOf(deps.db, chatId)
+  if (!link) { await send(deps, chatId, 'Esta conversa ainda não está ligada ao Ninho. No app: Ajustes › Telegram › Conectar.'); return }
+  const a = msg.voice || msg.audio
+  if (!deps.transcribe) { await send(deps, chatId, '🎙️ O áudio ainda não está ligado no Ninho. Escreva a mensagem, por favor.'); return }
+  if ((a.duration || 0) > MAX_AUDIO_SEC) { await send(deps, chatId, `🎙️ Esse áudio é longo demais para mim (até ${MAX_AUDIO_SEC / 60} minutos). Tente um mais curto ou escreva.`); return }
+  await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
+  let text: string | null = null
+  try { text = await deps.transcribe(String(a.file_id)) } catch (e: any) { console.error('[ninho] telegram áudio', String(e?.message || e).slice(0, 200)) }
+  if (!text) { await send(deps, chatId, '🎙️ Não consegui entender o áudio. Tente de novo ou escreva.'); return }
+  await send(deps, chatId, `🎙️ “${text}”`)
+  await onText(deps, { ...msg, text }, date)
+}
+
+/** Texto (digitado ou do áudio): comandos, menu e texto livre. */
+async function onText(deps: BotDeps, msg: any, date: string) {
   const chatId = Number(msg.chat.id)
   const text = msg.text.trim()
   const [head] = text.split(/\s+/)
@@ -314,6 +344,12 @@ const PENDING_MIN = 30
 
 async function freeText(deps: BotDeps, link: Link, text: string) {
   await deps.tg('sendChatAction', { chat_id: link.chat_id, action: 'typing' })
+  // Pergunta da casa ("como tiro mancha…?", "quanto de ração…"): responde em vez de registrar
+  if (deps.ask && isQuestion(text)) {
+    const r = await deps.ask(link, text).catch(() => ({ ok: false as const, message: 'Não consegui responder agora. Tente de novo.' }))
+    await send(deps, link.chat_id, r.ok === true ? `💬 ${r.text}` : (r as { message: string }).message)
+    return
+  }
   let u: Understood
   try { u = await deps.understand!(link, text) }
   catch (e: any) { console.error('[ninho] telegram ia', String(e?.message || e).slice(0, 200)); u = { ok: false, message: 'Não consegui entender agora. Tente de novo ou use /ajuda.' } }

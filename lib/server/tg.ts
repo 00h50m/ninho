@@ -5,6 +5,8 @@ import { weeklyTips } from './ai'
 import { dayFromTelegram, interpret, isLabelCaption, labelFromPhoto, plateFromPhoto } from './telegramAi'
 import { faxFromTelegram } from './faxinaoAi'
 import { fetchSobrou, sobrouConfigured } from './sobrou'
+import { askNinho } from './askAi'
+import { groqConfigured, transcribeTelegram } from './transcribe'
 
 export function telegramConfigured(env = process.env): boolean {
   return !!env.TELEGRAM_BOT_TOKEN && !!env.TELEGRAM_WEBHOOK_SECRET && !!env.NEXT_PUBLIC_SUPABASE_URL && !!env.SUPABASE_SERVICE_ROLE_KEY
@@ -34,8 +36,11 @@ export function createBotDeps(env = process.env): BotDeps {
       const r = await weeklyTips(db, householdId, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL })
       return r.ok === true ? { ok: true as const, text: r.text } : { ok: false as const, message: (r as { message: string }).message }
     },
+    // Áudio: só com a chave do Groq
+    ...(groqConfigured(env) ? { transcribe: (fileId: string) => transcribeTelegram(env, fileId) } : {}),
     // Texto livre: só com a chave da IA configurada (sem ela, o bot entende só comandos)
     ...(env.ANTHROPIC_API_KEY ? {
+      ask: (link, q) => askNinho(db, link.household_id, link.who, q, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }),
       understand: (link, text) => interpret(db, link, text, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }),
       organizeDay: (link, text) => dayFromTelegram(db, link, text, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }),
       faxinao: (link, text) => faxFromTelegram(db, link, text, { apiKey: env.ANTHROPIC_API_KEY, baseURL: env.ANTHROPIC_BASE_URL }),

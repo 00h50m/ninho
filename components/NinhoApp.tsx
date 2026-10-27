@@ -88,6 +88,7 @@ import { useNos } from '@/hooks/useNos'
 import { useFaxinao } from '@/hooks/useFaxinao'
 import { FaxinaoView, FaxinaoHomeCard } from '@/components/casa/Faxinao'
 import { OrganizarDiaSheet } from '@/components/OrganizarDia'
+import { PerguntarSheet } from '@/components/Perguntar'
 import { toEvent, toTask, type DayItem } from '@/lib/organizar'
 import { guessCategory } from '@/lib/shopping'
 import * as nosApi from '@/lib/services/nos'
@@ -185,6 +186,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const fx=useFaxinao(householdId)
   const fxLive=fx.list.find(f=>f.status==='andamento')
   const [dayOpen,setDayOpen]=useState(false)
+  const [askOpen,setAskOpen]=useState(false)
   /** Cria o que o "Organizar meu dia" montou: tarefas avulsas, agenda e compras. */
   async function createDay(items:DayItem[]){
     try{
@@ -323,6 +325,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
     u.searchParams.delete('ir');window.history.replaceState(null,'',u.pathname+(u.search||'')+u.hash)
     switch(ir){
       case 'meudia':goMd('hoje');break
+      case 'pergunta':setAskOpen(true);break
       case 'hoje':setTab('inicio');setTimeout(()=>document.getElementById('minhas')?.scrollIntoView({behavior:'smooth',block:'start'}),900);break
       case 'compras':setTab('casa');setCasaView('compras');break
       case 'tarefa':setTab('casa');setCasaView('tarefas');setTimeout(()=>openModal('task',null),300);break
@@ -918,7 +921,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
-    ...(me?[{id:'dia',icon:'reuniao',label:'Organizar meu dia',sub:'Fale tudo; a IA põe em ordem',run:()=>setDayOpen(true)}]:[]),
+    ...(me?[{id:'dia',icon:'reuniao',label:'Organizar meu dia',sub:'Fale tudo; a IA põe em ordem',run:()=>setDayOpen(true)},{id:'pergunta',icon:'nos',label:'Perguntar ao Ninho',sub:'Mancha, limpeza, cachorras…',run:()=>setAskOpen(true)}]:[]),
     ...(fx.available?[{id:'faxinao',icon:'casa',label:fxLive?'Faxinão em andamento':'Faxinão com IA',sub:fxLive?'Ver o que é seu agora':'Fale tudo; a IA organiza a ordem',run:()=>goCasa('faxinao')}]:[]),
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
     ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),
@@ -1915,6 +1918,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
       {data.status==='ready'&&screen!=='ajustes'&&!(screen==='casa'&&casaView==='compras')&&<button className={`fab mob-fab ${fabAway?'fab-away':''}`} onClick={()=>openModal('quick')} aria-label="Ação rápida" tabIndex={fabAway?-1:undefined}><Icon name="plus" size={24}/></button>}
       {modal==='quick'&&<QuickActionsSheet onClose={closeModal} actions={quickActions}/>}
+      {askOpen&&me&&<PerguntarSheet householdId={householdId} me={me} onClose={()=>setAskOpen(false)}/>}
       {dayOpen&&me&&<OrganizarDiaSheet householdId={householdId} me={me} names={names} today={today} onClose={()=>setDayOpen(false)} onCreate={createDay}/>}
 
       {md.available&&me&&<AguaPopup key={aguaPop} me={me} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} force={aguaPop>0}

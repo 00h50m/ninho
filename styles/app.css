@@ -1750,3 +1750,7 @@ html.rp-open body{overflow:hidden}
 /* Início: prioridades da semana (da reunião) */
 .prio-l{margin:4px 0 6px;padding-left:22px;display:grid;gap:4px;font-size:15px}
 .prio-l li::marker{color:var(--pri);font-weight:600}
+/* Perguntar ao Ninho */
+.ask-a{margin-top:10px}
+.ask-a .slbl{text-transform:none;letter-spacing:0;font-size:13px;color:var(--sub)}
+.ask-t{white-space:pre-wrap;font-size:14.5px;line-height:1.55}
