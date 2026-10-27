@@ -80,7 +80,12 @@ function NewFax(p: FaxProps & { onCreated: (id: string) => void }) {
       {done.length > 0 && <section className="card" aria-labelledby="fx-feitos">
         <div className="slbl" id="fx-feitos">Últimos faxinões</div>
         {done.map(f => { const s = faxSummary(f); return <div key={f.id} className="md-row"><span className="md-t"><b>✅ {f.title}</b>
-          <small>{f.finished_at ? new Date(f.finished_at).toLocaleDateString('pt-BR') : ''}{s.minutes != null ? ` · ${fmtMin(s.minutes)}` : ''} · {first(p.names.g)} {s.g} · {first(p.names.s)} {s.s}{s.skipped ? ` · ${s.skipped} pulado(s)` : ''}</small></span></div> })}
+          <small>{f.finished_at ? new Date(f.finished_at).toLocaleDateString('pt-BR') : ''}{s.minutes != null ? ` · ${fmtMin(s.minutes)}` : ''} · {first(p.names.g)} {s.g} · {first(p.names.s)} {s.s}{s.skipped ? ` · ${s.skipped} pulado(s)` : ''}</small></span>
+          <button className="ib" aria-label={`Apagar ${f.title} do histórico`} onClick={() => { if (confirm(`Apagar "${f.title}" do histórico?`)) api.deleteFax(f.id).then(p.reload).then(() => p.onToast('Faxinão apagado')).catch(e => p.onError(e, 'apagar faxinão')) }}>✕</button></div> })}
+        <div className="md-acts"><button className="btn btn-g" onClick={() => {
+          const ids = p.list.filter(f => f.status === 'feito' || f.status === 'rascunho').map(f => f.id)
+          if (confirm(`Zerar o Faxinão? Apaga ${ids.length} faxinão(ões) do histórico e os rascunhos. Os modelos ficam.`)) api.deleteFaxMany(ids).then(p.reload).then(() => p.onToast('Faxinão zerado · os modelos ficaram')).catch(e => p.onError(e, 'zerar faxinão'))
+        }}>Zerar Faxinão</button></div>
       </section>}
     </>
   )
@@ -194,7 +199,8 @@ function LiveFax(p: FaxProps & { f: Faxinao }) {
             </li>
           })}</ul>
         </details>
-        <div className="md-acts"><button className="btn btn-s" onClick={() => { if (t.left === 0 || confirm(`Ainda faltam ${t.left} passo(s). Encerrar mesmo assim?`)) finish() }}>Encerrar faxinão</button></div>
+        <div className="md-acts"><button className="btn btn-s" onClick={() => { if (t.left === 0 || confirm(`Ainda faltam ${t.left} passo(s). Encerrar mesmo assim?`)) finish() }}>Encerrar faxinão</button>
+          <button className="btn btn-g" onClick={() => { if (confirm('Cancelar este faxinão? Ele some e não vai para o histórico.')) api.deleteFax(f.id).then(p.reload).then(() => p.onToast('Faxinão cancelado')).catch(e => p.onError(e, 'cancelar faxinão')) }}>Cancelar faxinão</button></div>
       </section>
     </>
   )

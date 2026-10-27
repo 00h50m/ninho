@@ -1735,3 +1735,15 @@ html.rp-open body{overflow:hidden}
 .qa:hover .qa-t small,.qa:focus-visible .qa-t small{color:var(--mu)}
 /* botão escolhido: o texto pequeno acompanha a cor do botão (contraste no tema escuro) */
 .sbtn.on small{color:inherit}
+/* Casa: a segunda linha de abas (Comida, Mais) */
+.casa-sub{margin:-8px 0 16px}
+/* botão + flutuante: sai de cena enquanto rola para baixo */
+.mob-fab{transition:transform .2s ease,opacity .2s ease}
+.mob-fab.fab-away{transform:translateY(140%);opacity:0;pointer-events:none}
+@media (prefers-reduced-motion:reduce){.mob-fab{transition:none}}
+/* caixinhas da reunião: alvo de toque confortável */
+.mt-mk{min-height:32px}.mt-mk input{width:20px;height:20px;flex-shrink:0}
+/* Balanço com letra grande em tela pequena: a tabela rola dentro do cartão, não a página */
+.bl-scroll{overflow-x:auto;max-width:100%}
+/* ✕ do aviso */
+.toast .tx{min-width:24px;min-height:24px}

@@ -41,3 +41,17 @@ export const MD_TABS: Array<{ id: MdTab, icon: string, label: string, short: str
   { id: 'corpo', icon: '📏', label: 'Evolução', short: 'Corpo' },
   { id: 'ajustes', icon: '⚙️', label: 'Metas e privacidade', short: 'Ajustes' },
 ]
+
+/** Casa em 4 grupos (menos abas no topo): Tarefas · Compras · Comida (Jantar, Despensa) · Mais (o resto). */
+export type CasaGroup = 'tarefas' | 'compras' | 'comida' | 'mais'
+export const CASA_GROUP: Record<CasaView, CasaGroup> = {
+  tarefas: 'tarefas', compras: 'compras', jantar: 'comida', despensa: 'comida', manutencao: 'mais', agenda: 'mais', faxinao: 'mais', sugestoes: 'mais',
+}
+export const CASA_GROUP_LABEL: Record<CasaGroup, string> = { tarefas: 'Tarefas', compras: 'Compras', comida: '🍲 Comida', mais: '☰ Mais' }
+
+/** Grupos que têm alguma aba disponível, na ordem, com a soma dos números das abas. */
+export function casaGroups(views: Array<[CasaView, string, number?]>): Array<{ g: CasaGroup, label: string, n: number, views: Array<[CasaView, string, number?]> }> {
+  return (['tarefas', 'compras', 'comida', 'mais'] as CasaGroup[])
+    .map(g => { const vs = views.filter(([v]) => CASA_GROUP[v] === g); return { g, label: CASA_GROUP_LABEL[g], n: vs.reduce((a, [, , n]) => a + (n || 0), 0), views: vs } })
+    .filter(x => x.views.length > 0)
+}

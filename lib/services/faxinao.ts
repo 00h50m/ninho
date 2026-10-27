@@ -38,6 +38,12 @@ export async function deleteFax(id: string): Promise<void> {
   must(await supabase.from('faxinoes').delete().eq('id', id).select('id'), 'apagar faxinão')
 }
 
+/** Zerar: apaga vários de uma vez (concluídos e rascunhos; os modelos ficam). */
+export async function deleteFaxMany(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  must(await supabase.from('faxinoes').delete().in('id', ids).select('id'), 'zerar faxinão')
+}
+
 export async function stepFax(id: string, step: string, action: 'done' | 'skip' | 'undo' | 'later', who: Who | null): Promise<FaxStep[]> {
   return must(await supabase.rpc('ninho_faxinao_step', { p_id: id, p_step: step, p_action: action, p_who: who }), 'marcar passo') as FaxStep[]
 }

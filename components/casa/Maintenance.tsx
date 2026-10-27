@@ -187,10 +187,10 @@ export function MaintenanceForm({ item, today, names, saving, onClose, onSave, o
           <button className={`sbtn ${unit === 'days' ? 'on' : ''}`} onClick={() => { setUnit('days'); setNext('') }}>dias</button>
         </div>
       </div>
-      <label className="fl">Última vez <span className="hint">(opcional)</span></label>
-      <input className="fi" type="date" value={last} max={today} onChange={e => { setLast(e.target.value); setNext('') }} style={{ maxWidth: 200 }}/>
-      <label className="fl">Próxima vez</label>
-      <input className="fi" type="date" value={due} onChange={e => setNext(e.target.value)} style={{ maxWidth: 200 }}/>
+      <label className="fl" htmlFor="mt-last">Última vez <span className="hint">(opcional)</span></label>
+      <input id="mt-last" className="fi" type="date" value={last} max={today} onChange={e => { setLast(e.target.value); setNext('') }} style={{ maxWidth: 200 }}/>
+      <label className="fl" htmlFor="mt-next">Próxima vez</label>
+      <input id="mt-next" className="fi" type="date" value={due} onChange={e => setNext(e.target.value)} style={{ maxWidth: 200 }}/>
       <div className="row-s" style={{ marginTop: 6 }}>{due < today ? 'Já está atrasada — vai aparecer em Hoje.' : due === today ? 'Vence hoje.' : `Vai aparecer em Hoje alguns dias antes (${fmtDate(due)}).`}</div>
       <label className="fl">Quem cuida</label>
       <div className="btng c3">

@@ -82,7 +82,7 @@ import { MeuDiaView, MeuDiaCard, type MdFocus } from '@/components/meudia/MeuDia
 import { AguaPopup } from '@/components/meudia/AguaPopup'
 import { Busca } from '@/components/Busca'
 import type { SearchHit, SearchItem } from '@/lib/search'
-import type { MdTab } from '@/lib/nav'
+import { CASA_GROUP, casaGroups, type CasaGroup, type MdTab } from '@/lib/nav'
 import { useNos } from '@/hooks/useNos'
 import { useFaxinao } from '@/hooks/useFaxinao'
 import { FaxinaoView, FaxinaoHomeCard } from '@/components/casa/Faxinao'
@@ -116,6 +116,8 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   const [screen,setScreenState]=useState<ScreenId>('inicio')
   const [casaView,setCasaView]=useState<CasaView>('tarefas')
   const [nosView,setNosView]=useState<'semana'|'desafios'|'historico'|'equilibrio'|'presentes'|'album'>('semana')
+  // Casa: a última aba aberta de cada grupo (Comida, Mais)
+  const casaLast=useRef<Partial<Record<CasaGroup,CasaView>>>({})
   const [rotView,setRotView]=useState<'rotinas'|'habitos'>('rotinas')
   const [theme,setThemeState]=useState<ThemeId>('aconchego')
   // Conforto do aparelho (Fase 9): tamanho, contraste, movimento, tema automático, cartões do Início
@@ -307,6 +309,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }),[])
   useEffect(()=>{navigateTo({screen,casa:casaView,nos:nosView,rot:rotView,md:mdTab})},[screen,casaView,nosView,rotView,mdTab])
+  useEffect(()=>{casaLast.current[CASA_GROUP[casaView]]=casaView},[casaView])
+  // botão + flutuante: some enquanto rola para baixo (não cobre os botões dos itens) e volta ao subir
+  const [fabAway,setFabAway]=useState(false)
+  useEffect(()=>{let last=window.scrollY
+    const on=()=>{const y=window.scrollY;if(y>last+8&&y>120)setFabAway(true);else if(y<last-8||y<=120)setFabAway(false);last=y}
+    window.addEventListener('scroll',on,{passive:true});return()=>window.removeEventListener('scroll',on)},[])
   useEffect(()=>{
     if(typeof window==='undefined')return
     const u=new URL(window.location.href),ir=u.searchParams.get('ir')
@@ -1406,7 +1414,10 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
         {/* ── CASA ── */}
         {screen==='casa'&&<div className="scr">
-          <SubTabs label="Áreas da Casa" value={casaView} onChange={v=>setCasaView(v)} options={[['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),...(cx.ready?[['despensa','🥫 Despensa',useSoon(cx.pantry,today).length],['jantar','🍲 Jantar']] as [CasaView,string,number?][]:[]),['sugestoes','💡 Sugestões']]}/>
+          {(()=>{const groups=casaGroups([['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),...(cx.ready?[['despensa','🥫 Despensa',useSoon(cx.pantry,today).length],['jantar','🍲 Jantar']] as [CasaView,string,number?][]:[]),['sugestoes','💡 Sugestões']]);const cur=CASA_GROUP[casaView];const grp=groups.find(x=>x.g===cur);return <>
+            <SubTabs label="Áreas da Casa" value={cur} onChange={g=>{const gr=groups.find(x=>x.g===g)!;const last=casaLast.current[g];setCasaView(last&&gr.views.some(([v])=>v===last)?last:gr.views[0][0])}} options={groups.map(x=>[x.g,x.label,x.n] as [CasaGroup,string,number])}/>
+            {grp&&grp.views.length>1&&<div className="fchips casa-sub" role="tablist" aria-label={grp.label.replace(/^\S+ /,'')}>{grp.views.map(([v,l,n])=><button key={v} role="tab" aria-selected={casaView===v} className={`fc ${casaView===v?'on':''}`} onClick={()=>setCasaView(v)}>{l}{!!n&&<span className="subtab-n">{n}</span>}</button>)}</div>}
+          </>})()}
           {casaView==='despensa'?<PantryView ready={cx.ready} items={cx.pantry} history={casa.shopHistory} today={today} ideas={dinnersFromPantry(md.recipes,cx.pantry,today).length} onIdeas={()=>setCasaView('jantar')}
               onSave={x=>cxApi.savePantry(householdId,me,x).then(cx.reload).then(()=>showToast(x.id?'Item salvo':`🥫 ${x.name} na despensa`)).catch(e=>{showError(toNinhoError(e,'guardar na despensa'));throw e})}
               onRemove={it=>cxApi.removePantry(it.id).then(cx.reload).then(()=>showToast(`${it.name} saiu da despensa`)).catch(e=>{showError(toNinhoError(e,'tirar da despensa'));throw e})}
@@ -1473,8 +1484,9 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
                     <div className="tc-info" onClick={()=>openModal('task',t)}>
                       <div className="tc-title">{t.title}</div>
                       <div className="tc-meta">
-                        <button className={`bdg qb ${t.essential?'bdg-e':'bdg-n'}`} onClick={e=>{e.stopPropagation();quickUpdate(t.id,{essential:!t.essential})}} title={t.essential?'Tirar de essencial':'Marcar como essencial'} aria-pressed={t.essential}>{t.essential?'● essencial':'○ essencial'}</button>
-                        <QuickTime value={hhmm(t.scheduled_time)} onSave={v=>quickUpdate(t.id,{scheduled_time:v||null})}/>
+                        {/* só o que tem valor: marcar essencial ou pôr horário fica no formulário (✎) */}
+                        {t.essential&&<button className="bdg qb bdg-e" onClick={e=>{e.stopPropagation();quickUpdate(t.id,{essential:false})}} title="Tirar de essencial" aria-pressed={true}>● essencial</button>}
+                        {t.scheduled_time&&<QuickTime value={hhmm(t.scheduled_time)} onSave={v=>quickUpdate(t.id,{scheduled_time:v||null})}/>}
                         {weekdaysLabel(t.weekdays)&&t.frequency!=='monthly'&&t.frequency!=='once'&&<span className="bdg bdg-t" title="Dias da semana">📆 {weekdaysLabel(t.weekdays)}</span>}
                         {t.frequency==='once'&&t.due_date&&<span className={`bdg ${t.due_date<today?'bdg-h':'bdg-t'}`} title="Data">📆 {fmtDate(t.due_date)}</span>}
                         {pausedOn(t,today)&&<button className="bdg qb bdg-n" onClick={e=>{e.stopPropagation();pauseUntil(t,null)}} title="Despausar" aria-label={`Pausada até ${fmtDate(t.paused_until!)}. Despausar ${t.title}`}>⏸ até {fmtDate(t.paused_until!)}</button>}
@@ -1893,7 +1905,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       </div>
       <BottomNav current={screen} onGo={go}/>
 
-      {data.status==='ready'&&screen!=='ajustes'&&<button className="fab mob-fab" onClick={()=>openModal('quick')} aria-label="Ação rápida"><Icon name="plus" size={24}/></button>}
+      {data.status==='ready'&&screen!=='ajustes'&&!(screen==='casa'&&casaView==='compras')&&<button className={`fab mob-fab ${fabAway?'fab-away':''}`} onClick={()=>openModal('quick')} aria-label="Ação rápida" tabIndex={fabAway?-1:undefined}><Icon name="plus" size={24}/></button>}
       {modal==='quick'&&<QuickActionsSheet onClose={closeModal} actions={quickActions}/>}
       {dayOpen&&me&&<OrganizarDiaSheet householdId={householdId} me={me} names={names} today={today} onClose={()=>setDayOpen(false)} onCreate={createDay}/>}
 
