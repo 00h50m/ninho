@@ -26,6 +26,7 @@ import * as api from '@/lib/services/ninho'
 import { createPendingGuard } from '@/lib/pending'
 import { canEarnOnTime, evaluate, newlyUnlocked, xpWithBonus, TIER_NAMES, type AchievementState } from '@/lib/gamification'
 import { StreaksCard } from '@/components/gamification/StreaksCard'
+import { RetroCard } from '@/components/nos/Retro'
 import { Achievements } from '@/components/gamification/Achievements'
 import { Ring } from '@/components/ui/Ring'
 import { Sheet } from '@/components/ui/Sheet'
@@ -1597,6 +1598,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
             </div>
             <div className="col">
               {nos.available&&<TimelineCard items={nosTl}/>}
+              <RetroCard tasks={tasks} dogs={dogs} today={today} names={names}/>
               <StreaksCard streaks={game.streaks} names={names} me={me}/>
               <Achievements stats={game.stats} names={names} me={me}/>
             </div>

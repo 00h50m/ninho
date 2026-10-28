@@ -59,6 +59,8 @@ export interface Task extends CompletionState {
   checklist?: Array<{ t: string, d: boolean }>
   help_by?: Who | null
   help_at?: string | null
+  /** Quando foi criada (vem do select('*')); a retrospectiva só cobra a partir daí. */
+  created_at?: string | null
 }
 
 export interface DogRoutine extends CompletionState {
