@@ -106,7 +106,7 @@ describe('servidor de notificações', () => {
     expect(missingConfig({ NEXT_PUBLIC_SUPABASE_URL: 'u' } as any)).toEqual(['SUPABASE_SERVICE_ROLE_KEY', 'NEXT_PUBLIC_VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'])
   })
   it('chave service_role nunca vai para o navegador', () => {
-    for (const f of ['components/NinhoApp.tsx', 'components/NotificationsCard.tsx', 'lib/services/ninho.ts', 'lib/pushClient.ts', 'lib/supabase.ts'])
+    for (const f of ['components/NinhoApp.tsx', 'components/app/useNinhoApp.tsx', 'components/NotificationsCard.tsx', 'lib/services/ninho.ts', 'lib/pushClient.ts', 'lib/supabase.ts'])
       expect(readFileSync(f, 'utf8')).not.toContain('SERVICE_ROLE')
   })
   it('agendamentos: manhã ~7h e domingo ~19h em São Paulo (UTC−3)', () => {

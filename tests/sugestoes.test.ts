@@ -38,7 +38,7 @@ describe('sugestões de tarefas', () => {
     expect(all.shown.findIndex(x => x.has)).toBeGreaterThan(all.shown.findIndex(x => !x.has)) // o que falta primeiro
   })
   it('a janela antiga de sugestões saiu; os botões levam para a aba', () => {
-    const src = readFileSync('components/NinhoApp.tsx', 'utf8')
+    const src = ['components/NinhoApp.tsx', 'components/app/useNinhoApp.tsx', 'components/screens/Casa.tsx'].map(f => readFileSync(f, 'utf8')).join('\n')
     expect(src).not.toContain("openModal('sugg')")
     expect(src).toContain("['sugestoes','💡 Sugestões']")
   })
