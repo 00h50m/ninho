@@ -717,7 +717,9 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .wk-leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:10px;font-size:11px;color:var(--faint)}
 .now-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 12px}
 .now-h h2{font-size:var(--fs-lg);font-weight:500}
-.now-s{display:flex;flex-wrap:wrap;gap:6px}
+.now-s{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+/* nome comprido quebra a linha em vez de alargar a tela */
+.now-s .chip{white-space:normal;max-width:100%;overflow-wrap:anywhere;text-align:left}
 .ck-q{font-size:13px;color:var(--mu);margin:4px 0 8px}
 .ck-moods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-bottom:8px}
 .ck-mood{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;min-height:var(--touch);border-radius:var(--rs);border:1px solid var(--bd);background:var(--sf2);color:var(--mu)}
