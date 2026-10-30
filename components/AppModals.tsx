@@ -11,6 +11,7 @@ import { Sheet } from '@/components/ui/Sheet'
 import { fetchAiTips, fetchMeetDraft } from '@/components/TelegramCard'
 import { applyDraft } from '@/lib/reuniao'
 import { type Agreement, type AgendaSection } from '@/lib/nos'
+import { ForgotSection, type Adjust, type ForgotItem } from '@/components/nos/Esquecidas'
 
 export function firstName(n:string){return (n||'').split(' ')[0]}
 export function initials(n:string){return (n||'??').slice(0,2).toUpperCase()}
@@ -237,7 +238,7 @@ export function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>v
   )
 }
 
-export function MeetingModal({householdId,names,weekStart,saving,initial,agenda,agreementsOk,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,initial?:Partial<Meeting>&{agreements?:Agreement[]}|null,agenda?:AgendaSection[],agreementsOk?:boolean,onClose:()=>void,onSave:(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null,sendTg:boolean)=>void}){
+export function MeetingModal({householdId,names,weekStart,saving,initial,agenda,forgot,onAdjust,agreementsOk,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,initial?:Partial<Meeting>&{agreements?:Agreement[]}|null,agenda?:AgendaSection[],forgot?:ForgotItem[],onAdjust?:Adjust,agreementsOk?:boolean,onClose:()=>void,onSave:(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null,sendTg:boolean)=>void}){
   const blank:Meeting={what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''}
   const[form,setForm]=useState<Meeting>(()=>{const i:any=initial||{};return Object.fromEntries(Object.entries(blank).map(([k,v])=>[k,i[k]??v])) as Meeting})
   const[agr,setAgr]=useState<Array<Agreement&{makeTask?:boolean}>>(initial?.agreements||[])
@@ -249,7 +250,8 @@ export function MeetingModal({householdId,names,weekStart,saving,initial,agenda,
   const[sendTg,setSendTg]=useState(false)
   async function askDraft(){
     setDraft({state:'busy'})
-    const r=await fetchMeetDraft(householdId,(agenda||[]).flatMap(s=>s.lines.map(l=>`${s.title}: ${l}`)))
+    const lines=[...(agenda||[]).flatMap(s=>s.lines.map(l=>`${s.title}: ${l}`)),...(forgot||[]).map(f=>`Ficou para trás: ${f.task.title} (feita ${f.done} de ${f.expected})`)]
+    const r=await fetchMeetDraft(householdId,lines)
     if(!r.draft){setDraft({state:'err',error:r.error});return}
     const out=applyDraft(form,agr,r.draft)
     setDraft({state:'ok',summary:r.draft.summary,filled:out.filled,undo:{form,agr}})
@@ -272,6 +274,7 @@ export function MeetingModal({householdId,names,weekStart,saving,initial,agenda,
         <button className="mt-ag-h" id="mt-ag" aria-expanded={showAgenda} onClick={()=>setShowAgenda(v=>!v)}><span>📊 Pauta: o que aconteceu na semana</span><span aria-hidden="true">{showAgenda?'−':'+'}</span></button>
         {showAgenda&&agenda.map(sec=>(<div key={sec.title} className="mt-sec"><div className="mt-sec-t">{sec.icon} {sec.title}</div><ul>{sec.lines.map((l,i)=><li key={i}>{l}</li>)}</ul></div>))}
       </section>}
+      {forgot&&onAdjust&&<ForgotSection items={forgot} names={names} onAdjust={onAdjust} onNote={useTip}/>}
       <div className="aibox">
         {draft.state==='idle'&&<button className="btn btn-pur btn-w" onClick={askDraft}>✦ Rascunho da reunião com IA</button>}
         {draft.state==='busy'&&<div className="ai-wait" role="status"><span className="spin" aria-hidden="true"/>A IA está montando o rascunho da reunião…</div>}

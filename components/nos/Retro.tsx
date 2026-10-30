@@ -4,12 +4,10 @@
 // tokens; a Sabrina também tem listras, para não depender só da cor (daltonismo, impressão).
 import { useMemo, useState } from 'react'
 import type { Dog, Names, Task } from '@/lib/types'
-import { byRoom, forgotten, weeksByPerson } from '@/lib/retro'
+import { byRoom, forgotten, unitOf, weeksByPerson } from '@/lib/retro'
 import { fmtDate } from '@/lib/dates'
 
 const first = (n: string) => (n || '').split(' ')[0]
-const UNIT: Record<string, [string, string]> = { daily: ['dia', 'dias'], weekly: ['semana', 'semanas'], biweekly: ['quinzena', 'quinzenas'], monthly: ['mês', 'meses'] }
-const unit = (freq: string, n: number) => (UNIT[freq] || ['vez', 'vezes'])[n === 1 ? 0 : 1]
 
 // geometria do gráfico (unidades do viewBox)
 const W = 320, H = 150, L = 26, R = 4, TOP = 14, BOT = 20
@@ -96,7 +94,7 @@ export function RetroCard({ tasks, dogs, today, names }: { tasks: Task[], dogs: 
       {!forgot.length ? <p className="row-s">Nenhuma tarefa ficou para trás nas últimas 4 semanas. 👏</p>
         : <ul className="rt-forgot">{forgot.map(f => <li key={f.task.id}>
           <span className="rt-ft">{f.task.title}</span>
-          <span className="rt-fs">feita {f.done} de {f.expected} {unit(f.task.frequency, f.expected)} · {f.last ? `última em ${fmtDate(f.last)}` : 'sem registro em 2 meses'}</span>
+          <span className="rt-fs">feita {f.done} de {f.expected} {unitOf(f.task.frequency, f.expected)} · {f.last ? `última em ${fmtDate(f.last)}` : 'sem registro em 2 meses'}</span>
         </li>)}</ul>}
     </div>
   )

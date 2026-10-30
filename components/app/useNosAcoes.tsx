@@ -1,10 +1,13 @@
 'use client'
 // Nós: semana, nomes, reunião, desafios, linha do tempo e equilíbrio da carga.
 // Parte do estado do app (ver components/app/useNinhoApp.tsx, que junta as partes na ordem).
-import { useCallback } from 'react'
-import type { Energy, Meeting, Who } from '@/lib/types'
+import { useCallback, useEffect, useState } from 'react'
+import type { Energy, Meeting, Task, Who } from '@/lib/types'
 import { FEFF } from '@/lib/constants'
-import { addDays } from '@/lib/dates'
+import { addDays, fmtDate } from '@/lib/dates'
+import { pausedOn } from '@/lib/frequency'
+import { forgotten, stuck } from '@/lib/retro'
+import type { RetroAction } from '@/components/nos/Esquecidas'
 import { isFixed } from '@/lib/rotation'
 import { XPW } from '@/lib/xp'
 import { toNinhoError } from '@/lib/errors'
@@ -22,7 +25,7 @@ import type { RotinasSprint } from './useRotinasSprint'
 import type { CaesAcoes } from './useCaesAcoes'
 
 export function useNosAcoes(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes){
-  const {ag,closeModal,data,dogCareAgenda,dogs,historyData,homeTasks,householdId,loadHistory,md,me,names,nos,save,screen,setNames,setSettings,settings,showError,showToast,tasks,today,weekStart,withPending}=c
+  const {ag,closeModal,data,dogCareAgenda,dogs,historyData,homeTasks,householdId,loadHistory,md,me,names,nos,save,screen,setNames,setSettings,settings,showError,showToast,tasks,today,updateTaskFields,weekStart,withPending}=c
   // ── SEMANA, NOMES, REUNIÃO ────────────────────────────
   async function saveSettings(next:{energy:Energy,survival:boolean},okMsg:string){
     const prev=settings
@@ -115,7 +118,27 @@ export function useNosAcoes(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes){
   const balanced=Math.abs(gS-sS)<=3
   const maxHist=Math.max(1,...(historyData||[]).map(w=>w.completions))
 
+  // ── RETROSPECTIVA QUE VIRA AJUSTE (reunião e sugestão do Início) ──
+  const live=tasks.filter(t=>!pausedOn(t,today))
+  const retroForgot=forgotten({tasks:live,today},28,5)
+  async function adjustForgot(t:Task,a:RetroAction):Promise<string|null>{
+    const patch:Partial<Task>=a.kind==='lighter'?a.patch:a.kind==='pause'?{paused_until:addDays(today,13)}:{assigned_to:a.to}
+    const msg=a.kind==='lighter'?`${t.title}: ${a.label}`:a.kind==='pause'?`${t.title}: pausada até ${fmtDate(addDays(today,13))}`:`${t.title}: só ${firstName(names[a.to])}`
+    if(!await updateTaskFields(t.id,patch))return null
+    showToast(`✓ ${msg}`)
+    return msg
+  }
+  // "Agora não" no cartão de sugestão: some por 4 semanas (neste aparelho)
+  const [ajusteLater,setAjusteLater]=useState<Record<string,string>>({})
+  useEffect(()=>{try{setAjusteLater(JSON.parse(localStorage.getItem('ninho.ajusteAgoraNao')||'{}')||{})}catch{}},[])
+  const stuckTasks=stuck({tasks:live,today}).filter(t=>!(ajusteLater[t.id]>=today))
+  function ajusteNotNow(t:Task){
+    const n={...Object.fromEntries(Object.entries(ajusteLater).filter(([,d])=>d>=today)),[t.id]:addDays(today,27)}
+    setAjusteLater(n);try{localStorage.setItem('ninho.ajusteAgoraNao',JSON.stringify(n))}catch{}
+  }
+
   return {
+    adjustForgot,ajusteNotNow,retroForgot,stuckTasks,
     act,activeCh,activeChs,agenda,allRoutines,balanced,challengeStatus,createChallenge,deleteChallenge,dogLoad,gP,
     gS,histMeeting,inWk,lastMeeting,loadOf,markChallenge,maxHist,nosTl,onAlbumError,rotCount,sS,saveMeeting,
     saveSettings,setEnergy,sharedLines,thisMeeting,thisMeetingRow,together,toggleAgreement,toggleSurvival,tot,

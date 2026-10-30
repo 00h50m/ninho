@@ -36,7 +36,7 @@ export type { Account }
 
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const a=useNinhoApp({householdId,account})
-  const {SKIP_LABEL,addHouseTemplate,addMaintTemplates,addRoutineTemplate,ag,agenda,aguaPop,archiveHabit,archiveRoutine,askHelp,askOpen,busca,casa,casaOk,casaView,closeModal,createDay,data,dayOpen,deleteEvent,deleteHealth,deleteHouseTemplate,deleteTask,device,dogs,en,eventDone,fabAway,finishSprint,go,goMd,handoffToday,loadSetup,lv,md,mdAdd,mdTab,me,modal,modalData,names,nos,nowHM,onb,openModal,outbox,ownerOfTask,pauseOk,pauseSprint,pauseTask,pauseUntil,periodOk,pickSearch,pickTheme,plan,quickActions,removeDog,removeMaint,removeRoutine,rot,routines,saveEvent,saveHabitDraft,saveHealth,saveMaint,saveMeeting,savePet,saveRoutine,saveRoutineDraft,saveRoutineTemplate,saveTask,saving,screen,sendOutbox,setAskOpen,setBusca,setDayOpen,setEnergy,setOnb,setSprintOpen,setSprintTasks,setToast,settings,setup,showError,showToast,sp,spBusy,sprintOpen,startSprint,streak,swapTask,tasks,theme,thisMeeting,toast,today,toggleSurvival,toggleTask,tplBusy,undoHandoff,updateDog,weekStart,xp}=a
+  const {SKIP_LABEL,adjustForgot,retroForgot,addHouseTemplate,addMaintTemplates,addRoutineTemplate,ag,agenda,aguaPop,archiveHabit,archiveRoutine,askHelp,askOpen,busca,casa,casaOk,casaView,closeModal,createDay,data,dayOpen,deleteEvent,deleteHealth,deleteHouseTemplate,deleteTask,device,dogs,en,eventDone,fabAway,finishSprint,go,goMd,handoffToday,loadSetup,lv,md,mdAdd,mdTab,me,modal,modalData,names,nos,nowHM,onb,openModal,outbox,ownerOfTask,pauseOk,pauseSprint,pauseTask,pauseUntil,periodOk,pickSearch,pickTheme,plan,quickActions,removeDog,removeMaint,removeRoutine,rot,routines,saveEvent,saveHabitDraft,saveHealth,saveMaint,saveMeeting,savePet,saveRoutine,saveRoutineDraft,saveRoutineTemplate,saveTask,saving,screen,sendOutbox,setAskOpen,setBusca,setDayOpen,setEnergy,setOnb,setSprintOpen,setSprintTasks,setToast,settings,setup,showError,showToast,sp,spBusy,sprintOpen,startSprint,streak,swapTask,tasks,theme,thisMeeting,toast,today,toggleSurvival,toggleTask,tplBusy,undoHandoff,updateDog,weekStart,xp}=a
   return(
     <>
 
@@ -171,7 +171,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {modal==='rttpl'&&<TemplatesSheet existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)} existingTitles={routines.map(r=>r.title)} house={rot.templates} busy={tplBusy} onAdd={addRoutineTemplate} onAddHouse={addHouseTemplate} onDeleteHouse={deleteHouseTemplate} onClose={closeModal}/>}
       {modal==='hbedit'&&<HabitEditor habit={modalData?.habit??null} preset={modalData?.preset} names={names} saving={saving} onSave={saveHabitDraft} onArchive={archiveHabit} onClose={closeModal}/>}
       {modal==='mainttpl'&&<MaintTemplatesSheet existing={casa.maint} today={today} saving={saving} onClose={closeModal} onAdd={addMaintTemplates}/>}
-      {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} initial={thisMeeting} agenda={nos.available?agenda:undefined} agreementsOk={nos.available} onClose={closeModal} onSave={saveMeeting}/>}
+      {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} initial={thisMeeting} agenda={nos.available?agenda:undefined} forgot={retroForgot} onAdjust={adjustForgot} agreementsOk={nos.available} onClose={closeModal} onSave={saveMeeting}/>}
     </>
   )
 }

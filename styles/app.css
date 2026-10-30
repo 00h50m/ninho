@@ -1786,3 +1786,14 @@ html.rp-open body{overflow:hidden}
 .rt-rn{font-family:'DM Mono',monospace;font-size:12px;min-width:2ch;text-align:right}
 .rt-forgot li{padding:8px 0;border-top:1px solid var(--bd)}.rt-forgot li:first-child{border-top:none}
 .rt-ft{display:block;font-size:13.5px;overflow-wrap:anywhere}.rt-fs{display:block;font-size:12px;color:var(--sub)}
+/* Ficou para trás: ajuste de um toque (reunião e sugestão do Início) */
+.adj-l{list-style:none;margin:6px 0 0;padding:0}
+.adj{padding:8px 0;border-top:1px solid var(--bd)}.adj:first-child{border-top:none}
+.adj-t{display:block;font-size:13.5px;font-weight:500;overflow-wrap:anywhere}
+.adj-s{display:block;font-size:12px;color:var(--sub)}
+.adj-b{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.adj-b .fc{min-height:32px}
+.adj-ok{display:block;font-size:12.5px;font-weight:500;color:var(--tx);margin-top:4px}
+.adj-sec .mt-ag-h{cursor:default}
+.adj-q{font-size:14px;line-height:1.45;margin:0 0 2px}
+.adj-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}

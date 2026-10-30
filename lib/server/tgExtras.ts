@@ -15,6 +15,7 @@ import { balanceLine, weekBalance } from '@/lib/balanco'
 import { doneInPeriod } from '@/lib/frequency'
 import { planToday } from '@/lib/today'
 import { weekPriorities } from '@/lib/reuniao'
+import { retroWeekLines } from '@/lib/retro'
 import { loadHousehold } from './notify'
 import { DEFAULT_NAMES } from '@/lib/constants'
 import { ddmm, other, parseGift, upcomingDates, whenLabel, type GiftDate, type GiftIdea } from '@/lib/presentes'
@@ -194,6 +195,13 @@ export async function balanceText(db: SupabaseClient, householdId: string, date:
   ])
   const b = weekBalance({ tasks: h.tasks, dogs: h.dogs, meals: (m.error ? [] : m.data || []) as any[], events: (e.error ? [] : e.data || []) as any[], anyDay: date, today: date })
   return b.verdict === 'vazio' ? null : `⚖️ ${balanceLine(b, h.names, false).replace('; esta semana o rodízio compensa.', '; a próxima semana o rodízio compensa.')}`
+}
+
+/** Domingo: a retrospectiva da semana (cada uma contra a anterior, cômodo e a mais esquecida). */
+export async function retroText(db: SupabaseClient, householdId: string, date: string): Promise<string | null> {
+  const h = await loadHousehold(db, householdId, date)
+  const lines = retroWeekLines({ tasks: h.tasks, dogs: h.dogs, today: date }, h.names)
+  return lines.length ? lines.join('\n') : null
 }
 
 /** /semana: o que cada uma fez até hoje, o balanço, o que falta do período e as prioridades da reunião. */

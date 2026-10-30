@@ -17,7 +17,7 @@ import { SHOP_CATS, guessCategory, normalize, parseEntry } from '@/lib/shopping'
 import { loadHousehold, morningPayloads, must, weeklyPayload } from './notify'
 import { execute as executeAi, type Understood } from './telegramAi'
 import { meuDiaWeekLines } from './weekReport'
-import { balanceText, weekText, foodLines, houseLines, giftAdd, giftList, menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
+import { balanceText, retroText, weekText, foodLines, houseLines, giftAdd, giftList, menuForMorning, menuTap, waterStatus, waterTap } from './tgExtras'
 import { sobrouAlerts, type SobrouResumo } from '@/lib/sobrou'
 import { addDays } from '@/lib/dates'
 import type { AiAction } from '@/lib/telegramAi'
@@ -486,6 +486,7 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
       const racao = kind === 'morning' ? await foodLines(deps.db, householdId, clock.date).catch(() => [] as string[]) : []
       const house = kind === 'morning' ? await houseLines(deps.db, householdId, clock.date).catch(() => [] as string[]) : []
       const balance = kind === 'weekly' ? await balanceText(deps.db, householdId, clock.date).catch(() => null) : null
+      const retro = kind === 'weekly' ? await retroText(deps.db, householdId, clock.date).catch(() => null) : null
       for (const l of list) {
         if (!isWho(l.who)) continue
         const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind, day: clock.date }).select('id').maybeSingle()
@@ -503,6 +504,7 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
           const lines = await (deps.meuDiaWeek ?? ((h, w, d) => meuDiaWeekLines(deps.db, h, w, d)))(householdId, l.who, clock.date).catch(() => [] as string[])
           if (lines.length) more = `\n\n🌿 Seu Meu dia na semana\n${lines.join('\n')}`
           if (balance) more = `\n\n${balance}${more}`
+          if (retro) more = `\n\n${retro}${more}`
         }
         const extra = kind === 'morning' ? { reply_markup: { inline_keyboard: [...(menu?.rows || []), [{ text: '📋 Ver e concluir', callback_data: 'hoje' }]] } } : {}
         const r = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${p.title}\n${p.body}${more}`.slice(0, 4000), ...extra })

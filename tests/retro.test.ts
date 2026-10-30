@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { byRoom, forgotten, weeksByPerson } from '@/lib/retro'
+import { byRoom, forgotten, lighter, retroWeekLines, stuck, weeksByPerson } from '@/lib/retro'
 import type { Dog, Task } from '@/lib/types'
 
 // Dados fictícios. 2026-10-28 é quarta-feira; a semana começa em 2026-10-26.
@@ -62,5 +62,50 @@ describe('retrospectiva: mais esquecidas', () => {
   })
   it('no máximo 5', () => {
     expect(forgotten({ tasks: Array.from({ length: 8 }, (_, i) => T('t' + i)), today })).toHaveLength(5)
+  })
+})
+
+describe('retrospectiva: ajuste sugerido', () => {
+  it('diária vira 3x por semana; com poucos dias, semanal; semanal, quinzenal; quinzenal, mensal; mensal, nada', () => {
+    expect(lighter({ frequency: 'daily', weekdays: null })).toEqual({ label: '3 vezes por semana (seg, qua e sex)', patch: { weekdays: [1, 3, 5] } })
+    expect(lighter({ frequency: 'daily', weekdays: [1, 2, 3, 4, 5] })!.patch).toEqual({ weekdays: [1, 3, 5] })
+    expect(lighter({ frequency: 'daily', weekdays: [1, 4] })).toEqual({ label: '1 vez por semana', patch: { frequency: 'weekly', weekdays: null } })
+    expect(lighter({ frequency: 'weekly' })!.patch).toEqual({ frequency: 'biweekly' })
+    expect(lighter({ frequency: 'biweekly' })!.patch).toEqual({ frequency: 'monthly' })
+    expect(lighter({ frequency: 'monthly' })).toBeNull()
+  })
+})
+
+describe('retrospectiva: esquecida 3 semanas seguidas', () => {
+  // semanas fechadas antes de 26/10: 19/10, 12/10 e 05/10
+  const at = (...ds: string[]) => ds.map(d => ({ d, by: 'g' as const }))
+  it('menos da metade em cada uma das 3 semanas; uma semana boa já tira da lista', () => {
+    const r = stuck({ today, tasks: [
+      T('esquecida', { hist: at('2026-10-20', '2026-10-13', '2026-10-06') }),
+      T('uma boa', { hist: at('2026-10-19', '2026-10-20', '2026-10-21', '2026-10-22') }),
+      T('semanal nunca', { frequency: 'weekly' }),
+      T('semanal feita', { frequency: 'weekly', hist: at('2026-10-14') }),
+      T('mensal', { frequency: 'monthly' }),
+      T('nova', { created_at: '2026-10-10T12:00:00Z' }),
+    ] })
+    expect(r.map(t => t.id)).toEqual(['esquecida', 'semanal nunca'])
+  })
+})
+
+describe('retrospectiva: resumo de domingo', () => {
+  it('cada uma contra a semana anterior, cômodo e a mais esquecida', () => {
+    const sunday = '2026-11-01'
+    const tasks = [
+      T('Louça', { category: 'kitchen', hist: [{ d: '2026-10-31', by: 'g' }, { d: '2026-10-30', by: 'g' }, { d: '2026-10-29', by: 's' }, { d: '2026-10-22', by: 's' }, { d: '2026-10-21', by: 's' }] }),
+      T('Regar', { category: 'general', hist: [{ d: '2026-10-20', by: 'g' }] }),
+    ]
+    expect(retroWeekLines({ tasks, dogs: [], today: sunday }, { g: 'Giovanna Teste', s: 'Sabrina Teste' })).toEqual([
+      '📊 Retrospectiva da semana',
+      '• Giovanna: 2 (semana passada 1 ↑)',
+      '• Sabrina: 1 (semana passada 2 ↓)',
+      '🏠 Cômodo que mais andou: 🍳 Cozinha (3)',
+      '🧺 Mais esquecida: Regar · feita 1 de 27 dias em 4 semanas',
+    ])
+    expect(retroWeekLines({ tasks: [T('x')], dogs: [], today: sunday }, { g: 'G', s: 'S' })).toEqual([])
   })
 })
