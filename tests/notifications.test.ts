@@ -6,7 +6,7 @@ import { cachedHousehold, isOfflineError, readSnapshot, rememberHousehold, saveS
 import { urlBase64ToUint8Array } from '@/lib/pushClient'
 import { cronAuthorized, missingConfig } from '@/lib/server/push'
 import type { Dog, Task } from '@/lib/types'
-import { readFileSync } from 'node:fs'
+import { readdirSync, readFileSync } from 'node:fs'
 
 const names = { g: 'Giovanna', s: 'Sabrina' }
 const task = (id: string, o: Partial<Task> = {}): Task => ({ id, title: id, category: 'general', weight: 'light', frequency: 'daily', assigned_to: null, scheduled_time: null, essential: false, active: true, ...o })
@@ -106,7 +106,8 @@ describe('servidor de notificações', () => {
     expect(missingConfig({ NEXT_PUBLIC_SUPABASE_URL: 'u' } as any)).toEqual(['SUPABASE_SERVICE_ROLE_KEY', 'NEXT_PUBLIC_VAPID_PUBLIC_KEY', 'VAPID_PRIVATE_KEY', 'VAPID_SUBJECT'])
   })
   it('chave service_role nunca vai para o navegador', () => {
-    for (const f of ['components/NinhoApp.tsx', 'components/app/useNinhoApp.tsx', 'components/NotificationsCard.tsx', 'lib/services/ninho.ts', 'lib/pushClient.ts', 'lib/supabase.ts'])
+    const app = [...readdirSync('components/app'), ...readdirSync('components/screens').map(f => '../screens/' + f)].map(f => 'components/app/' + f)
+    for (const f of ['components/NinhoApp.tsx', ...app, 'components/NotificationsCard.tsx', 'lib/services/ninho.ts', 'lib/pushClient.ts', 'lib/supabase.ts'])
       expect(readFileSync(f, 'utf8')).not.toContain('SERVICE_ROLE')
   })
   it('agendamentos: manhã ~7h e domingo ~19h em São Paulo (UTC−3)', () => {

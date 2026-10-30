@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'fs'
+import { readdirSync, readFileSync } from 'fs'
 import { CATALOG, hasSug, norm, suggestionView } from '@/lib/sugestoes'
 
 // Títulos parecidos com os de uma casa real (fictícios)
@@ -38,7 +38,7 @@ describe('sugestões de tarefas', () => {
     expect(all.shown.findIndex(x => x.has)).toBeGreaterThan(all.shown.findIndex(x => !x.has)) // o que falta primeiro
   })
   it('a janela antiga de sugestões saiu; os botões levam para a aba', () => {
-    const src = ['components/NinhoApp.tsx', 'components/app/useNinhoApp.tsx', 'components/screens/Casa.tsx'].map(f => readFileSync(f, 'utf8')).join('\n')
+    const src = ['components/NinhoApp.tsx', ...readdirSync('components/app').map(f => 'components/app/' + f), 'components/screens/Casa.tsx'].map(f => readFileSync(f, 'utf8')).join('\n')
     expect(src).not.toContain("openModal('sugg')")
     expect(src).toContain("['sugestoes','💡 Sugestões']")
   })
