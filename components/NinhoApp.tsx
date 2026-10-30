@@ -10,32 +10,47 @@ import { MaintenanceForm, MaintTemplatesSheet } from '@/components/casa/Maintena
 import { toNinhoError } from '@/lib/errors'
 import { Sheet } from '@/components/ui/Sheet'
 import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
-import { Onboarding } from '@/components/onboarding/Onboarding'
 import { HabitEditor, RoutineEditor, TemplatesSheet } from '@/components/rotinas/Editors'
-import { SprintPanel } from '@/components/sprint/SprintPanel'
 import { EventSheet } from '@/components/casa/Agenda'
 import { AguaPopup } from '@/components/meudia/AguaPopup'
-import { Busca } from '@/components/Busca'
 import type { SearchItem } from '@/lib/search'
 import { type MdTab } from '@/lib/nav'
-import { OrganizarDiaSheet } from '@/components/OrganizarDia'
-import { PerguntarSheet } from '@/components/Perguntar'
 import { DogProfileSheet, HealthSheet } from '@/components/caes/DogPanels'
 import { areaLabel, fmtClock, remainingMs } from '@/lib/sprint'
 import { firstName, initials, TaskFormModal, PauseSheet, PetModal, DogModal, RoutineModal, EnergyModal, MeetingModal } from '@/components/AppModals'
 import { useNinhoApp, type Account } from '@/components/app/useNinhoApp'
 import { InicioScreen } from '@/components/screens/Inicio'
-import { MeuDiaScreen } from '@/components/screens/MeuDia'
-import { RotinasScreen } from '@/components/screens/Rotinas'
-import { CasaScreen } from '@/components/screens/Casa'
-import { NosScreen } from '@/components/screens/Nos'
-import { CaesScreen } from '@/components/screens/Caes'
-import { AjustesScreen } from '@/components/screens/Ajustes'
+import { useEffect } from 'react'
+import dynamic from 'next/dynamic'
+
+// O Início vem junto com o app; as outras telas e as janelas grandes só quando abertas.
+// Depois que o Início aparece, elas são baixadas em segundo plano (e ficam guardadas para usar sem internet).
+const opening=()=><div className="loadscr" role="status" aria-live="polite"><span className="spin" aria-hidden="true"/>Abrindo…</div>
+const load={
+  meudia:()=>import('@/components/screens/MeuDia'),rotinas:()=>import('@/components/screens/Rotinas'),casa:()=>import('@/components/screens/Casa'),
+  nos:()=>import('@/components/screens/Nos'),caes:()=>import('@/components/screens/Caes'),ajustes:()=>import('@/components/screens/Ajustes'),
+  sprint:()=>import('@/components/sprint/SprintPanel'),busca:()=>import('@/components/Busca'),dia:()=>import('@/components/OrganizarDia'),
+  perguntar:()=>import('@/components/Perguntar'),onboarding:()=>import('@/components/onboarding/Onboarding'),
+}
+const MeuDiaScreen=dynamic(()=>load.meudia().then(m=>m.MeuDiaScreen),{loading:opening})
+const RotinasScreen=dynamic(()=>load.rotinas().then(m=>m.RotinasScreen),{loading:opening})
+const CasaScreen=dynamic(()=>load.casa().then(m=>m.CasaScreen),{loading:opening})
+const NosScreen=dynamic(()=>load.nos().then(m=>m.NosScreen),{loading:opening})
+const CaesScreen=dynamic(()=>load.caes().then(m=>m.CaesScreen),{loading:opening})
+const AjustesScreen=dynamic(()=>load.ajustes().then(m=>m.AjustesScreen),{loading:opening})
+const SprintPanel=dynamic(()=>load.sprint().then(m=>m.SprintPanel))
+const Busca=dynamic(()=>load.busca().then(m=>m.Busca))
+const OrganizarDiaSheet=dynamic(()=>load.dia().then(m=>m.OrganizarDiaSheet))
+const PerguntarSheet=dynamic(()=>load.perguntar().then(m=>m.PerguntarSheet))
+const Onboarding=dynamic(()=>load.onboarding().then(m=>m.Onboarding))
 
 export type { Account }
 
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const a=useNinhoApp({householdId,account})
+  // baixa o resto em segundo plano, depois que a casa carregou
+  const ready=a.data.status==='ready'
+  useEffect(()=>{if(!ready)return;const t=setTimeout(()=>Object.values(load).forEach(f=>f().catch(()=>{})),300);return()=>clearTimeout(t)},[ready])
   const {SKIP_LABEL,adjustForgot,retroForgot,addHouseTemplate,addMaintTemplates,addRoutineTemplate,ag,agenda,aguaPop,archiveHabit,archiveRoutine,askHelp,askOpen,busca,casa,casaOk,casaView,closeModal,createDay,data,dayOpen,deleteEvent,deleteHealth,deleteHouseTemplate,deleteTask,device,dogs,en,eventDone,fabAway,finishSprint,go,goMd,handoffToday,loadSetup,lv,md,mdAdd,mdTab,me,modal,modalData,names,nos,nowHM,onb,openModal,outbox,ownerOfTask,pauseOk,pauseSprint,pauseTask,pauseUntil,periodOk,pickSearch,pickTheme,plan,quickActions,removeDog,removeMaint,removeRoutine,rot,routines,saveEvent,saveHabitDraft,saveHealth,saveMaint,saveMeeting,savePet,saveRoutine,saveRoutineDraft,saveRoutineTemplate,saveTask,saving,screen,sendOutbox,setAskOpen,setBusca,setDayOpen,setEnergy,setOnb,setSprintOpen,setSprintTasks,setToast,settings,setup,showError,showToast,sp,spBusy,sprintOpen,startSprint,streak,swapTask,tasks,theme,thisMeeting,toast,today,toggleSurvival,toggleTask,tplBusy,undoHandoff,updateDog,weekStart,xp}=a
   return(
     <>
