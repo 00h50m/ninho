@@ -24,13 +24,15 @@ import { CASA_GROUP, casaGroups, type CasaGroup } from '@/lib/nav'
 import { FaxinaoView } from '@/components/casa/Faxinao'
 import { bills as agBills } from '@/lib/agenda'
 import { firstName, wCls, byCat, QuickTime } from '@/components/AppModals'
+import { RotinasPanel } from '@/components/screens/Rotinas'
+import { routineOnDay } from '@/lib/rotinas'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function CasaScreen({ a }: { a: App }) {
-  const { addPack, addSuggestion, ag, archiveTasks, archived, assignTask, billPaid, casa, casaLast, casaOk, casaView, cx, deleteTask, dogCareAgenda, dogTasks, dogs, eventDone, filtered, fx, fxLive, go, goCasa, householdId, maintActions, md, me, names, onShoppingFinished, openModal, ownerOfTask, pauseUntil, periodOk, query, quickUpdate, requireMe, restoreTask, saveSobrou, setCasaView, setQuery, setTaskFilter, setToast, showError, showToast, taskFilter, tasks, toastTimer, today, usedCats } = a
+  const { routines, addPack, addSuggestion, ag, archiveTasks, archived, assignTask, billPaid, casa, casaLast, casaOk, casaView, cx, deleteTask, dogCareAgenda, dogTasks, dogs, eventDone, filtered, fx, fxLive, go, goCasa, householdId, maintActions, md, me, names, onShoppingFinished, openModal, ownerOfTask, pauseUntil, periodOk, query, quickUpdate, requireMe, restoreTask, saveSobrou, setCasaView, setQuery, setTaskFilter, setToast, showError, showToast, taskFilter, tasks, toastTimer, today, usedCats } = a
   return (
     <div className="scr">
-      {(()=>{const groups=casaGroups([['tarefas','Tarefas',tasks.length],['compras','Compras',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),...(cx.ready?[['despensa','🥫 Despensa',useSoon(cx.pantry,today).length],['jantar','🍲 Jantar']] as [CasaView,string,number?][]:[]),['sugestoes','💡 Sugestões']]);const cur=CASA_GROUP[casaView];const grp=groups.find(x=>x.g===cur);return <>
+      {(()=>{const groups=casaGroups([['tarefas','Tarefas',tasks.length],['rotinas','🔁 Rotinas',routines.filter(r=>routineOnDay(r,today)).length],['compras','🛒 Lista',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),...(cx.ready?[['despensa','🥫 Despensa',useSoon(cx.pantry,today).length],['jantar','🍲 Jantar']] as [CasaView,string,number?][]:[]),['sugestoes','💡 Sugestões']]);const cur=CASA_GROUP[casaView];const grp=groups.find(x=>x.g===cur);return <>
         <SubTabs label="Áreas da Casa" value={cur} onChange={g=>{const gr=groups.find(x=>x.g===g)!;const last=casaLast.current[g];setCasaView(last&&gr.views.some(([v])=>v===last)?last:gr.views[0][0])}} options={groups.map(x=>[x.g,x.label,x.n] as [CasaGroup,string,number])}/>
         {grp&&grp.views.length>1&&<div className="fchips casa-sub" role="tablist" aria-label={grp.label.replace(/^\S+ /,'')}>{grp.views.map(([v,l,n])=><button key={v} role="tab" aria-selected={casaView===v} className={`fc ${casaView===v?'on':''}`} onClick={()=>setCasaView(v)}>{l}{!!n&&<span className="subtab-n">{n}</span>}</button>)}</div>}
       </>})()}
@@ -52,6 +54,10 @@ export function CasaScreen({ a }: { a: App }) {
         onNew={k=>openModal('event',{event:null,kind:k})} onEdit={e=>openModal('event',{event:e,kind:e.kind})} onDone={eventDone} onPaid={billPaid}
         onOpenMaint={()=>goCasa('manutencao')} onSaveSobrou={saveSobrou}
         footer={<AgendaCelular householdId={householdId} onToast={m=>showToast(m)} onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}/>}/>
+      :casaView==='rotinas'?<>
+        <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos: checklist, horário e rodízio (os hábitos ficam no Meu dia)</p></div></div>
+        <RotinasPanel a={a}/>
+      </>
       :casaView==='manutencao'?<>
         <div className="sh"><div><h2>Manutenção</h2><p>De tempos em tempos: casa, cães, carro e saúde</p></div></div>
         <MaintenanceSection items={casa.maint} log={casa.maintLog} today={today} names={names} state={casa.maintState} error={casa.maintError} actions={maintActions}

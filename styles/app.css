@@ -470,7 +470,7 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .md-nav .fc{display:inline-flex;align-items:center;gap:6px}
 .md-nav .t-short{display:none}
 @media(max-width:860px){
-  .md-nav{top:54px;display:grid!important;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;padding:6px 0}
+  .md-nav{top:54px;display:grid!important;grid-template-columns:repeat(6,minmax(0,1fr));gap:4px;padding:6px 0}
   .md-nav .fc{flex-direction:column;gap:2px;padding:6px 2px;font-size:11.5px;justify-content:center;min-height:52px;min-width:0}
   .md-nav .fc>span:first-child{font-size:18px;line-height:1}
   .md-nav .t-full{display:none}

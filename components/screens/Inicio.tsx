@@ -40,7 +40,7 @@ export function InicioScreen({ a }: { a: App }) {
           <div className="hd-chips">
             {me&&<span className="chip"><span className={`mini av-${me}`} aria-hidden="true">{names[me].slice(0,1).toUpperCase()}</span>{account?'Sua conta':'Este aparelho'}</span>}
             <button className={`chip ${en.cls}`} onClick={()=>openModal('energy')} aria-label={`Energia da semana: ${en.l}. Alterar`}>{en.ic} {en.l}</button>
-            {me&&<button className="chip" onClick={()=>setDayOpen(true)}>🗓️ Organizar meu dia</button>}
+            {me&&<button className="chip" onClick={()=>setDayOpen(true)}>🗓️ Planejar o dia</button>}
             {fx.available&&<button className={`chip ${fxLive?'green':''}`} onClick={()=>goCasa('faxinao')}>🧹 {fxLive?'Faxinão em andamento':'Faxinão'}</button>}
             <button className={`chip ${settings.survival?'coral':''}`} onClick={toggleSurvival} aria-label={settings.survival?'Modo sobrevivência ativo. Desativar':'Modo normal. Ativar modo sobrevivência'}>{settings.survival?'🛡 Modo sobrevivência':'Modo normal'}</button>
           </div>

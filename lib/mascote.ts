@@ -39,7 +39,7 @@ export const TIPS = [
   'Beber água conta como autocuidado. Já tomou um copo?',
   'Em dia corrido, use o modo sobrevivência sem culpa.',
   'Um "obrigada" pelo que a outra fez vale mais que XP.',
-  'Despeje tudo no "Organizar meu dia" e deixe a ordem comigo.',
+  'Despeje tudo no "Planejar o dia" e deixe a ordem comigo.',
   'Faxinão rende mais de cima para baixo e do seco para o molhado.',
   'Os cães agradecem rotina no mesmo horário 🐾',
 ]

@@ -1,4 +1,5 @@
 'use client'
+import type { ReactNode } from 'react'
 // Meu dia: a parte individual de cada uma. Água, sono, autocuidado, remédios,
 // treinos (com cargas) e evolução física. Cada uma escolhe o que a outra vê.
 import type { CatalogFood } from '@/lib/foodCatalog'
@@ -36,6 +37,8 @@ type Tab = MdTab
 export type MdFocus = { what: 'plano' | 'comi' | 'refeicao' | 'peso' | 'foto' | 'cardapio' | 'rotulo', n: number } | null
 
 export interface MeuDiaProps {
+  /** Aba Hábitos (os hábitos vêm das Rotinas; o conteúdo é montado fora) */
+  habitos?: ReactNode
   available: boolean, reason?: string, tab?: Tab, onTab?: (t: Tab) => void, focus?: MdFocus, me: Who, names: Names, today: string, nowHM: string
   settings: PSettings[], logs: PLog[], meds: PMed[], quits: PQuit[], quitsReady?: boolean
   profiles: FoodProfile[], foods: CustomFood[], foodReady?: boolean, plans: PlanRow[], plansReady?: boolean, householdId: string
@@ -88,6 +91,7 @@ export function MeuDiaView(p: MeuDiaProps) {
           <span aria-hidden="true">{t.icon}</span><span className="t-full">{t.label}</span><span className="t-short">{t.short}</span></button>)}
       </div>
       {tab === 'hoje' && <Today {...p} s={mine} other={other} theirs={theirs}/>}
+      {tab === 'habitos' && p.habitos}
       {tab === 'comida' && <FoodTab {...p}/>}
       {tab === 'treinos' && <Workouts {...p}/>}
       {tab === 'corpo' && <Body {...p}/>}

@@ -5,6 +5,7 @@ import { toNinhoError } from '@/lib/errors'
 import * as mdApi from '@/lib/services/meudia'
 import { MeuDiaView } from '@/components/meudia/MeuDia'
 import { planFoods } from '@/lib/dietPlan'
+import { HabitosPanel } from '@/components/screens/Rotinas'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function MeuDiaScreen({ a }: { a: App }) {
@@ -12,7 +13,7 @@ export function MeuDiaScreen({ a }: { a: App }) {
   return (
     <div className="scr">
       <div className="sh"><div><h2>Meu dia</h2><p>Água, sono, alimentação, treinos e corpo · só você vê o que não compartilhar</p></div></div>
-      {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} saved={md.saved} savedReady={md.savedReady} menus={md.menus} menusReady={md.menusReady} recipes={md.recipes} recipesReady={md.recipesReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
+      {me?<MeuDiaView available={md.available} reason={md.reason} me={me} names={names} today={today} nowHM={nowHM} settings={md.settings} logs={md.logs} meds={md.meds} quits={md.quits} quitsReady={md.quitsReady} habitos={<HabitosPanel a={a}/>} tab={mdTab} onTab={setMdTab} focus={mdFocus} profiles={md.profiles} foods={md.foods} foodReady={md.foodReady} plans={md.plans} plansReady={md.plansReady} saved={md.saved} savedReady={md.savedReady} menus={md.menus} menusReady={md.menusReady} recipes={md.recipes} recipesReady={md.recipesReady} householdId={householdId} goals={md.goals} goalsReady={md.goalsReady}
         onCheckin={()=>{go('inicio');setTimeout(()=>document.getElementById('checkin')?.scrollIntoView({behavior:'smooth',block:'center'}),300)}}
         onSaveGoal={g=>mdApi.saveGoal(householdId,me,g).then(md.reload).then(()=>showToast(g.id?'Objetivo salvo':'Objetivo criado 🎯')).catch(e=>{showError(toNinhoError(e,'salvar objetivo'));throw e})}
         onGoalStatus={(g,st)=>mdApi.setGoalStatus(g.id,st).then(md.reload).then(()=>showToast(st==='concluido'?'Parabéns! Objetivo concluído 🎉':'Objetivo arquivado')).catch(e=>{showError(toNinhoError(e,'atualizar objetivo'));throw e})}

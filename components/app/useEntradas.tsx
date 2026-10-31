@@ -78,6 +78,7 @@ export function useEntradas(c:AppBase&Avisos&Preferencias&Navegacao&Dados&FilaOf
       case 'rotulo':goMd('comida','rotulo');break
       case 'alimentacao':goMd('comida','plano');break
       case 'rotinas':setTab('rotinas');setRotView('rotinas');break
+      case 'habitos':goMd('habitos');break
       case 'caes':setTab('caes');break
       case 'agenda':setTab('casa');setCasaView('agenda');break
       case 'faxinao':setTab('casa');setCasaView('faxinao');break

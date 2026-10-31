@@ -28,7 +28,15 @@ export function NosScreen({ a }: { a: App }) {
         <div><h2>Nós</h2><p>Semana de {fmtDate(weekStart)} · {en.l.toLowerCase()}</p></div>
         <div className="sh-a"><button className="btn btn-g" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button><button className="btn btn-g" onClick={()=>go('ajustes')}>⚙️ Ajustes</button></div>
       </div>
-      <SubTabs label="Nós" value={nosView} onChange={v=>setNosView(v)} options={[['semana','Semana'],['desafios','Desafios',activeChs.length],['historico','Histórico'],['equilibrio','Equilíbrio'],['presentes','🎁 Presentes'],['album','📸 Álbum']]}/>
+      {(()=>{
+        // três abas: Semana (resumo e equilíbrio) · Juntas (desafios, álbum, presentes) · Histórico
+        const top=nosView==='semana'||nosView==='equilibrio'?'semana':nosView==='historico'?'historico':'juntas'
+        const subs:Array<[typeof nosView,string,number?]>=top==='semana'?[['semana','Resumo'],['equilibrio','⚖️ Equilíbrio']]:top==='juntas'?[['desafios','🤝 Desafios',activeChs.length],['album','📸 Álbum'],['presentes','🎁 Presentes']]:[]
+        return <>
+          <SubTabs label="Nós" value={top} onChange={v=>setNosView(v==='semana'?'semana':v==='juntas'?'desafios':'historico')} options={[['semana','Semana'],['juntas','Juntas',activeChs.length],['historico','Histórico']]}/>
+          {subs.length>0&&<div className="fchips casa-sub" role="tablist" aria-label={top==='semana'?'Semana':'Juntas'}>{subs.map(([v,l,n])=><button key={v} role="tab" aria-selected={nosView===v} className={`fc ${nosView===v?'on':''}`} onClick={()=>setNosView(v)}>{l}{!!n&&<span className="subtab-n">{n}</span>}</button>)}</div>}
+        </>
+      })()}
       {nosView==='semana'&&<div className="wgrid">
         <div className="col">
           <TogetherCard {...together} xp={game.scores.g.xp+game.scores.s.xp} streak={nos.available?bothCheckinStreak(nos.facts.checkins,today):0} meetingDone={!!thisMeeting&&!!(thisMeeting.what_worked||thisMeeting.wins||thisMeeting.adjustments||(thisMeeting.agreements||[]).length)} onOpenMeeting={()=>openModal('meeting')}/>

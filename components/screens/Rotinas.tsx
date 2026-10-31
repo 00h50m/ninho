@@ -1,22 +1,17 @@
 'use client'
-// Rotinas e hábitos.
+// Rotinas com passos (Casa › Tarefas › Rotinas) e hábitos (Meu dia › Hábitos).
 // O estado e as ações vêm de useNinhoApp (components/app/useNinhoApp.tsx).
 import { FPT } from '@/lib/constants'
-import { SubTabs } from '@/components/shell/Shell'
 import { hhmm } from '@/lib/dates'
-import { routineOnDay } from '@/lib/rotinas'
 import { RoutinesView } from '@/components/rotinas/RoutinesView'
 import { HabitsView } from '@/components/rotinas/HabitsView'
 import { firstName } from '@/components/AppModals'
 import type { App } from '@/components/app/useNinhoApp'
 
-export function RotinasScreen({ a }: { a: App }) {
-  const { finishRoutine, go, goCasa, me, names, openModal, ownerOfRoutine, rot, rotView, routineGroups, routineTurn, routines, setRotView, settings, stepRoutine, today, toggleHabit } = a
+export function RotinasPanel({ a }: { a: App }) {
+  const { finishRoutine, go, goCasa, me, names, openModal, ownerOfRoutine, rot, routineGroups, routineTurn, routines, settings, stepRoutine, today } = a
   return (
-    <div className="scr">
-      <div className="sh"><div><h2>Rotinas</h2><p>Rotinas com passos e hábitos para ganhar constância</p></div></div>
-      <SubTabs label="Rotinas e hábitos" value={rotView} onChange={v=>setRotView(v)} options={[['rotinas','Minhas rotinas',routines.filter(r=>routineOnDay(r,today)).length],['habitos','Hábitos',rot.habits.length]]}/>
-      {rotView==='rotinas'?<>
+    <>
         {!rot.routinesOk&&rot.ready?<div className="card empty"><span className="empty-icon">🔁</span>Rotinas com passos precisam da atualização do banco (migration 014).</div>
         :<>
           {routines.length===0&&rot.ready&&<div className="card intro">
@@ -40,9 +35,13 @@ export function RotinasScreen({ a }: { a: App }) {
               <div className="row-s" style={{textAlign:'center'}}>Tarefas (o que tem começo e fim) ficam em <button className="lnk-inline" onClick={()=>goCasa('tarefas')}>Casa › Tarefas</button>.</div>
             </>}/>
         </>}
-      </>:<HabitsView habits={rot.habits} logs={rot.logs} available={rot.checklistOk} today={today} me={me} names={names}
-        onToggle={toggleHabit} onEdit={h=>openModal('hbedit',{habit:h})} onNew={()=>openModal('hbedit',{habit:null})}
-        onSuggest={sg=>openModal('hbedit',{habit:null,preset:{title:sg.title,owner:sg.owner,weekly_target:sg.weekly_target,weekdays:sg.weekdays}})}/>}
-    </div>
+    </>
   )
+}
+
+export function HabitosPanel({ a }: { a: App }) {
+  const { me, names, openModal, rot, today, toggleHabit } = a
+  return <HabitsView habits={rot.habits} logs={rot.logs} available={rot.checklistOk} today={today} me={me} names={names}
+        onToggle={toggleHabit} onEdit={h=>openModal('hbedit',{habit:h})} onNew={()=>openModal('hbedit',{habit:null})}
+        onSuggest={sg=>openModal('hbedit',{habit:null,preset:{title:sg.title,owner:sg.owner,weekly_target:sg.weekly_target,weekdays:sg.weekdays}})}/>
 }

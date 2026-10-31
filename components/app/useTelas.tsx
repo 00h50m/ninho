@@ -35,7 +35,7 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
-    ...(me?[{id:'dia',icon:'reuniao',label:'Organizar meu dia',sub:'Fale tudo; a IA põe em ordem',run:()=>setDayOpen(true)},{id:'pergunta',icon:'nos',label:'Perguntar ao Ninho',sub:'Mancha, limpeza, cachorras…',run:()=>setAskOpen(true)}]:[]),
+    ...(me?[{id:'dia',icon:'reuniao',label:'Planejar o dia com IA',sub:'Fale tudo; a IA põe em ordem',run:()=>setDayOpen(true)},{id:'pergunta',icon:'nos',label:'Perguntar ao Ninho',sub:'Mancha, limpeza, cachorras…',run:()=>setAskOpen(true)}]:[]),
     ...(fx.available?[{id:'faxinao',icon:'casa',label:fxLive?'Faxinão em andamento':'Faxinão com IA',sub:fxLive?'Ver o que é seu agora':'Fale tudo; a IA organiza a ordem',run:()=>goCasa('faxinao')}]:[]),
     {id:'shop',icon:'compra',label:'Adicionar compra',sub:'Na lista do mercado',run:()=>{goCasa('compras');setTimeout(()=>(document.querySelector('.shop-add input') as HTMLInputElement|null)?.focus(),250)}},
     ...(sp.available?[{id:'sprint',icon:'sprint',label:'Sprint do Ninho',sub:sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão de 10, 15 ou 25 min',run:()=>setSprintOpen(true)}]:[]),

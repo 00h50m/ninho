@@ -42,7 +42,7 @@ export function OrganizarDiaSheet(p: { householdId: string, me: Who, names: Name
   }
   const counts = plan ? (['tarefa', 'compromisso', 'compra'] as const).map(k => plan.items.filter(i => i.kind === k).length) : [0, 0, 0]
   return (
-    <Sheet title="🗓️ Organizar meu dia" size="lg" onClose={p.onClose} footer={plan
+    <Sheet title="🗓️ Planejar o dia com IA" size="lg" onClose={p.onClose} footer={plan
       ? <div className="md-acts" style={{ marginTop: 0 }}><button className="btn btn-p" disabled={busy || !plan.items.length} onClick={create}>{busy ? 'Criando…' : `Criar no app (${plan.items.length})`}</button><button className="btn btn-g" onClick={() => setPlan(null)}>Voltar ao texto</button></div>
       : <button className="btn btn-p" disabled={busy || text.trim().length < 3} onClick={organize}>{busy ? 'Organizando…' : '✨ Organizar'}</button>}>
       {!plan ? <>

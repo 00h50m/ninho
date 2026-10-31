@@ -27,13 +27,12 @@ import dynamic from 'next/dynamic'
 // Depois que o Início aparece, elas são baixadas em segundo plano (e ficam guardadas para usar sem internet).
 const opening=()=><div className="loadscr" role="status" aria-live="polite"><span className="spin" aria-hidden="true"/>Abrindo…</div>
 const load={
-  meudia:()=>import('@/components/screens/MeuDia'),rotinas:()=>import('@/components/screens/Rotinas'),casa:()=>import('@/components/screens/Casa'),
+  meudia:()=>import('@/components/screens/MeuDia'),casa:()=>import('@/components/screens/Casa'),
   nos:()=>import('@/components/screens/Nos'),caes:()=>import('@/components/screens/Caes'),ajustes:()=>import('@/components/screens/Ajustes'),
   sprint:()=>import('@/components/sprint/SprintPanel'),busca:()=>import('@/components/Busca'),dia:()=>import('@/components/OrganizarDia'),
   perguntar:()=>import('@/components/Perguntar'),onboarding:()=>import('@/components/onboarding/Onboarding'),
 }
 const MeuDiaScreen=dynamic(()=>load.meudia().then(m=>m.MeuDiaScreen),{loading:opening})
-const RotinasScreen=dynamic(()=>load.rotinas().then(m=>m.RotinasScreen),{loading:opening})
 const CasaScreen=dynamic(()=>load.casa().then(m=>m.CasaScreen),{loading:opening})
 const NosScreen=dynamic(()=>load.nos().then(m=>m.NosScreen),{loading:opening})
 const CaesScreen=dynamic(()=>load.caes().then(m=>m.CaesScreen),{loading:opening})
@@ -95,7 +94,6 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {/* ── MEU DIA (de cada uma) ── */}
         {screen==='eu'&&<MeuDiaScreen a={a}/>}
 
-        {screen==='rotinas'&&<RotinasScreen a={a}/>}
 
         {/* ── CASA ── */}
         {screen==='casa'&&<CasaScreen a={a}/>}
