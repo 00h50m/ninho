@@ -25,13 +25,17 @@ export function buildTasks(rows: Row[], comps: CompletionRow[], today: string, s
   })
 }
 
-export function buildDogs(rows: Row[], comps: CompletionRow[], today: string): Dog[] {
+/** Linha de dog_skips (042): rotina dos cães pulada no dia. */
+export interface DogSkipRow { id: string, routine_id: string, date: string, skipped_by?: string | null }
+
+export function buildDogs(rows: Row[], comps: CompletionRow[], today: string, skips: DogSkipRow[] = []): Dog[] {
   const info = summarizeCompletions(comps, 'routine_id', today)
+  const sk = (id: string) => { const s = skips.find(x => x.routine_id === id && x.date === today); return s ? { skip: { id: s.id, date: s.date, kind: 'skip' as const, by: isWho(s.skipped_by) ? s.skipped_by : null } } : { skip: null } }
   return rows.map(d => ({
     ...(d as Dog),
     routines: (d.dog_routines || [])
       .filter((r: Row) => r.active !== false)
-      .map((r: Row) => ({ ...r, ...info(r.id) }))
+      .map((r: Row) => ({ ...r, ...info(r.id), ...sk(r.id) }))
       .sort((a: Row, b: Row) => Number(a.frequency !== 'daily') - Number(b.frequency !== 'daily') || byTime(a as any, b as any)),
   }))
 }

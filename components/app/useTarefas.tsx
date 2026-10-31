@@ -80,6 +80,27 @@ export function useTarefas(c:AppCore&Dia){
       }finally{refreshStats()}
     })
   }
+  // "Não deu" numa rotina dos cães (042): sai da lista de hoje, sem XP; dá para desfazer
+  async function skipDogs(rs:DogRoutine[],label:string){
+    const by=requireMe();if(!by)return
+    const list=rs.filter(r=>!r.completed_today&&!r.skip);if(!list.length)return
+    const ids=list.map(r=>r.id)
+    await withPending(ids.map(id=>'dog:'+id),async()=>{
+      patchRoutines(new Map(ids.map(id=>[id,{skip:{id:'tmp',date:today,kind:'skip' as const,by}}])))
+      try{
+        const rows=await api.skipDogRoutines(householdId,ids,today,by)
+        const done=list.map(r=>({...r,skip:{id:rows.find(x=>x.routine_id===r.id)?.id||'',date:today,kind:'skip' as const,by}}))
+        patchRoutines(new Map(done.map(r=>[r.id,{skip:r.skip}])))
+        showToast(`⤼ Não deu · ${label}`,()=>{setToast(null);unskipDogs(done)})
+      }catch(e){patchRoutines(new Map(ids.map(id=>[id,{skip:null}])));showError(toNinhoError(e,'pular rotina dos cães'))}
+    })
+  }
+  async function unskipDogs(rs:DogRoutine[]){
+    const list=rs.filter(r=>r.skip&&r.skip.id&&r.skip.id!=='tmp');if(!list.length)return
+    patchRoutines(new Map(list.map(r=>[r.id,{skip:null}])))
+    try{await api.unskipDogRoutines(list.map(r=>r.skip!.id));showToast(`De volta · ${list[0].title}`)}
+    catch(e){patchRoutines(new Map(list.map(r=>[r.id,{skip:r.skip}])));showError(toNinhoError(e,'desfazer pulo'))}
+  }
   function completeDog(r:DogRoutine){markDogs([r],!r.completed_today)}
   function toggleDogItem(it:DogItem){markDogs(it.parts.map(p=>p.r),!it.completed_today,it.title)}
   // ── TAREFAS ───────────────────────────────────────────
@@ -126,7 +147,7 @@ export function useTarefas(c:AppCore&Dia){
     })
   }
   // ── PULAR / DEIXAR PARA AMANHÃ ────────────────────────
-  const SKIP_LABEL:Record<string,string>={daily:'Pular hoje',weekly:'Pular esta semana',biweekly:'Pular esta quinzena',monthly:'Pular este mês'}
+  const SKIP_LABEL:Record<string,string>={daily:'Não deu hoje (pular)',weekly:'Pular esta semana',biweekly:'Pular esta quinzena',monthly:'Pular este mês'}
   async function pauseTask(t:Task,kind:'snooze'|'skip'){
     const by=requireMe();if(!by)return
     // Pontual: "amanhã" muda a data dela
@@ -228,6 +249,7 @@ export function useTarefas(c:AppCore&Dia){
   }
 
   return {
+    skipDogs,unskipDogs,
     SKIP_LABEL,addPack,addSuggestion,archiveTasks,archived,askHelp,assignTask,completeDog,deleteTask,handoffToday,
     markDogs,pauseTask,pauseUntil,quickUpdate,restoreTask,save,saveTask,setArchived,swapTask,toggleDogItem,
     toggleTask,undoHandoff,unpauseTask,updateTaskFields,

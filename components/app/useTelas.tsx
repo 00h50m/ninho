@@ -31,7 +31,7 @@ import type { NosAcoes } from './useNosAcoes'
 import type { CasaAcoes } from './useCasaAcoes'
 
 export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&CasaAcoes){
-  const {ag,busy,completeDog,dogs,en,fx,fxLive,go,goCasa,goMd,hItems,homeTasks,homeView,isPending,md,mdAdd,me,names,nowHM,openModal,ownerOfItem,ownerOfRoutine,ownerOfTask,person,plan,query,rn,rnRun,routineTurn,routines,setAskOpen,setDayOpen,setShowDone,setSprintOpen,settings,showDone,showError,showToast,sp,swapTask,taskFilter,tasks,today,toggleDogItem,toggleSurvival,toggleTask,unpauseTask,xpOfItem}=c
+  const {SKIP_LABEL,pauseTask,skipDogs,unskipDogs,ag,busy,completeDog,dogs,en,fx,fxLive,go,goCasa,goMd,hItems,homeTasks,homeView,isPending,md,mdAdd,me,names,nowHM,openModal,ownerOfItem,ownerOfRoutine,ownerOfTask,person,plan,query,rn,rnRun,routineTurn,routines,setAskOpen,setDayOpen,setShowDone,setSprintOpen,settings,showDone,showError,showToast,sp,swapTask,taskFilter,tasks,today,toggleDogItem,toggleSurvival,toggleTask,unpauseTask,xpOfItem}=c
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
   const quickActions:QuickAction[]=[
     {id:'task',icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
@@ -96,6 +96,7 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
         {canEarnOnTime(t,nowHM)
           ?<span className={`xp xp-${wCls(t.weight)} bonus`} title={`Até ${hhmm(t.scheduled_time)}: XP ×1,5`}>+{xpWithBonus(XPW[t.weight],true)}⚡</span>
           :<span className={`xp xp-${wCls(t.weight)}`} title={WPT[t.weight]}>+{XPW[t.weight]}</span>}
+        {actions&&late&&!t.skip&&SKIP_LABEL[t.frequency]&&<button className="nd-b" onClick={()=>pauseTask(t,'skip')} aria-label={`Não deu: ${t.title}`} title="Sai da lista de hoje, sem XP e sem quebrar a sequência">⤼ Não deu</button>}
         {actions&&<button className="ib desk" onClick={()=>swapTask(t)} title={`Passar para ${firstName(names[other])}`} aria-label={`Passar para ${firstName(names[other])}`}>⇄</button>}
         {actions&&<button className="ib desk" onClick={()=>openModal('task',t)} title="Editar" aria-label="Editar">✎</button>}
         {actions&&!t.completed_today&&<button className="ib desk" onClick={()=>openModal('taskmenu',t)} title="Pular ou deixar para amanhã" aria-label={`Mais opções de ${t.title}`}>⏭</button>}
@@ -122,6 +123,7 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
             {it.completed_today&&<span className="tag-by" title="Quem concluiu">✓ {by}</span>}
             {!it.completed_today&&dayTag('dog:'+it.key)}
           </div>
+        {late&&!it.completed_today&&<button className="nd-b" onClick={()=>skipDogs(it.parts.map(p=>p.r),it.title)} aria-label={`Não deu: ${it.title}`} title="Sai da lista de hoje, sem XP">⤼ Não deu</button>}
         </div>
         {canEarnOnTime(it,nowHM)
           ?<span className="xp xp-l bonus" title={`Até ${hhmm(it.scheduled_time)}: XP ×1,5`}>+{xpWithBonus(1,true)*it.parts.length}⚡</span>
@@ -182,12 +184,21 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
             {showDone[who]&&done.map(i=>itemRow(i,{actions:false}))}
           </>}
           </>}
-          {(()=>{const paused=homeTasks.filter(t=>pausedToday(t,today)&&ownerOfTask(t)===who);return paused.length>0&&<div className="paused">
-            <div className="paused-h">⏸ Puladas ou para amanhã ({paused.length})</div>
+          {(()=>{const paused=homeTasks.filter(t=>pausedToday(t,today)&&ownerOfTask(t)===who)
+            // rotinas dos cães puladas hoje (as mesmas de vários cães viram uma linha)
+            const dp=new Map<string,DogRoutine[]>();dogs.forEach(d=>d.routines.forEach(r=>{if(pausedToday(r,today)&&ownerOfRoutine(r)===who){const k=dogKey(r);dp.set(k,[...(dp.get(k)||[]),r])}}))
+            const dogPaused=Array.from(dp.values())
+            return (paused.length>0||dogPaused.length>0)&&<div className="paused">
+            <div className="paused-h">⏸ Não deu ou para amanhã ({paused.length+dogPaused.length})</div>
             {paused.map(t=><div key={t.id} className="paused-r">
               <span className="paused-t">{t.title}</span>
-              <span className="paused-k">{t.skip!.kind==='snooze'?'amanhã':t.frequency==='daily'?'pulada hoje':'pulada no período'}</span>
+              <span className="paused-k">{t.skip!.kind==='snooze'?'amanhã':t.frequency==='daily'?'não deu hoje':'pulada no período'}</span>
               <button className="lnk" disabled={isPending('task:'+t.id)} onClick={()=>unpauseTask(t)}>↺ Voltar</button>
+            </div>)}
+            {dogPaused.map(rs=><div key={'dog:'+rs[0].id} className="paused-r">
+              <span className="paused-t">🐾 {rs[0].title}</span>
+              <span className="paused-k">não deu hoje</span>
+              <button className="lnk" disabled={rs.some(r=>isPending('dog:'+r.id))} onClick={()=>unskipDogs(rs)}>↺ Voltar</button>
             </div>)}
           </div>})()}
         </>}

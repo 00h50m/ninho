@@ -1822,3 +1822,6 @@ html.rp-open body{overflow:hidden}
 .fx-all{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 8px}
 .fx-all-l{font-size:12.5px;color:var(--sub);margin-right:2px}
 .fx-all .fc{min-height:32px}
+/* "Não deu": tarefa ou rotina atrasada sai da lista de hoje */
+.nd-b{flex-shrink:0;align-self:center;border:1px solid var(--bd2);background:var(--sf2);color:var(--mu);border-radius:999px;font-size:12px;padding:5px 10px;min-height:30px;white-space:nowrap}
+.nd-b:hover{color:var(--tx);border-color:var(--sub)}

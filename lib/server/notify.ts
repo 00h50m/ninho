@@ -2,7 +2,7 @@
 // Nunca importe este arquivo em componentes do navegador.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { HItem, Names, Who } from '@/lib/types'
-import { buildDogs, buildTasks, type HandoffRow, type SkipRow } from '@/lib/build'
+import { buildDogs, buildTasks, type DogSkipRow, type HandoffRow, type SkipRow } from '@/lib/build'
 import { busyWindows } from '@/lib/busy'
 import { cellsFromDb, type DogPlan } from '@/lib/escala'
 import { addDays, homeClock, weekStartOf } from '@/lib/dates'
@@ -45,6 +45,9 @@ export async function loadHousehold(db: SupabaseClient, householdId: string, tod
   // 036: "passar só hoje" e compromissos do dia (sem a migration, segue sem eles)
   const ho = await db.from('task_handoffs').select('id,task_id,date,to_who,by_who').eq('household_id', householdId).eq('date', today)
   const handoffs = (ho.error ? [] : ho.data || []) as HandoffRow[]
+  // 042: rotinas dos cães puladas hoje (sem a migration, segue sem elas)
+  const dsk = await db.from('dog_skips').select('id,routine_id,date,skipped_by').eq('household_id', householdId).eq('date', today)
+  const dogSkips = (dsk.error ? [] : dsk.data || []) as DogSkipRow[]
   const evq = (cols: string) => db.from('house_events').select(cols).eq('household_id', householdId).eq('date', today)
   let ev: any = await evq('id,kind,title,date,time,end_time,who,done_at')
   if (ev.error) ev = await evq('id,kind,title,date,time,who,done_at')
@@ -65,7 +68,7 @@ export async function loadHousehold(db: SupabaseClient, householdId: string, tod
   const st = settings as any
   return {
     tasks: buildTasks(tasks as any[], [...(tcomps as any[]), ...(old as any[])], today, skips, handoffs),
-    dogs: buildDogs(dogs as any[], dcomps as any[], today),
+    dogs: buildDogs(dogs as any[], dcomps as any[], today, dogSkips),
     focus: !!st?.survival || st?.energy === 'low',
     bet: (st?.bet as string | null) ?? null,
     names, split, maint, busy, dogPlan,

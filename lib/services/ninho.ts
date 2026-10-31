@@ -5,7 +5,7 @@ import { NinhoError, isMissingTable, logError } from '@/lib/errors'
 import { addDays } from '@/lib/dates'
 import type { Accident, CompletionRow, Dog, Energy, HistoryWeek, Meeting, Names, Task, Who } from '@/lib/types'
 import { DEFAULT_NAMES } from '@/lib/constants'
-import type { HandoffRow, SkipRow } from '@/lib/build'
+import type { DogSkipRow, HandoffRow, SkipRow } from '@/lib/build'
 import { EMPTY_SCORES, EMPTY_STREAKS, type AchievementStats, type Streaks, type WeeklyScores } from '@/lib/gamification'
 
 type Res<T> = { data: T | null, error: unknown }
@@ -81,6 +81,16 @@ export async function skipTask(householdId: string, taskId: string, date: string
     .upsert({ household_id: householdId, task_id: taskId, date, kind, skipped_by: by }, { onConflict: 'task_id,date' }).select('id,task_id,date,kind,skipped_by').single()) as SkipRow
 }
 
+/** "Não deu" numa rotina dos cães (042): sai da lista de hoje, sem XP. */
+export async function skipDogRoutines(householdId: string, ids: string[], date: string, by: Who | null): Promise<DogSkipRow[]> {
+  return await run('pular rotina dos cães', supabase.from('dog_skips')
+    .upsert(ids.map(routine_id => ({ household_id: householdId, routine_id, date, skipped_by: by })), { onConflict: 'routine_id,date' }).select('id,routine_id,date,skipped_by')) as DogSkipRow[]
+}
+
+export async function unskipDogRoutines(ids: string[]) {
+  await run('desfazer pulo', supabase.from('dog_skips').delete().in('id', ids).select('id'))
+}
+
 export async function unskipTask(id: string) {
   await run('desfazer pausa', supabase.from('task_skips').delete().eq('id', id).select('id'))
 }
@@ -91,7 +101,9 @@ export async function loadDogs(householdId: string, today: string) {
     run('carregar cães', supabase.from('dogs').select('*,dog_routines(*)').eq('household_id', householdId).eq('active', true)),
     run('carregar rotinas concluídas', supabase.from('dog_completions').select('id,routine_id,date,completed_by').eq('household_id', householdId).gte('date', since)),
   ])
-  return { dogs: dogs as any[], completions: comps as CompletionRow[] }
+  // 042: rotinas puladas hoje (sem a migration, segue sem elas)
+  const sk = await supabase.from('dog_skips').select('id,routine_id,date,skipped_by').eq('household_id', householdId).eq('date', today)
+  return { dogs: dogs as any[], completions: comps as CompletionRow[], skips: (sk.error ? [] : sk.data || []) as DogSkipRow[] }
 }
 
 export async function loadSettings(householdId: string, weekStart: string) {

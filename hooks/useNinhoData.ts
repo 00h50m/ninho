@@ -62,7 +62,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   const reloadDogs = useCallback(async () => {
     const r = await api.loadDogs(householdId, ctx.current.today)
     indexCompletions('dog', r.completions)
-    const d = buildDogs(r.dogs, r.completions, ctx.current.today)
+    const d = buildDogs(r.dogs, r.completions, ctx.current.today, r.skips)
     setDogs(d)
     return d
   }, [householdId])
@@ -207,6 +207,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
     ch.on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'dog_completions' }, h('completion'))
     on(ch, 'tasks', 'task')
     ch.on('postgres_changes', { event: '*', schema: 'public', table: 'task_skips' }, () => later('task', reloadTasks))
+    ch.on('postgres_changes', { event: '*', schema: 'public', table: 'dog_skips' }, () => later('dogs', reloadDogs))
     on(ch, 'dogs', 'dogs')
     on(ch, 'dog_routines', 'dogs')
     on(ch, 'weekly_settings', 'settings')
