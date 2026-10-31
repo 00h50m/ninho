@@ -717,7 +717,9 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 .wk-leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:10px;font-size:11px;color:var(--faint)}
 .now-h{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:4px 0 12px}
 .now-h h2{font-size:var(--fs-lg);font-weight:500}
-.now-s{display:flex;flex-wrap:wrap;gap:6px}
+.now-s{display:flex;flex-wrap:wrap;gap:6px;min-width:0}
+/* nome comprido quebra a linha em vez de alargar a tela */
+.now-s .chip{white-space:normal;max-width:100%;overflow-wrap:anywhere;text-align:left}
 .ck-q{font-size:13px;color:var(--mu);margin:4px 0 8px}
 .ck-moods{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-bottom:8px}
 .ck-mood{display:flex;flex-direction:column;align-items:center;gap:2px;padding:8px 2px;min-height:var(--touch);border-radius:var(--rs);border:1px solid var(--bd);background:var(--sf2);color:var(--mu)}
@@ -1689,10 +1691,10 @@ html.rp-open body{overflow:hidden}
 .bl-h{margin-bottom:6px;font-size:14px}
 .bl-bar{display:flex;height:10px;border-radius:99px;overflow:hidden;margin-bottom:8px;gap:2px}
 .bl-g{background:var(--gdk)}
-.bl-s{background:var(--pri)}
+.bl-s{background:var(--pur)}
 .bl-dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:6px}
 .bl-dot.bl-g{background:var(--gdk)}
-.bl-dot.bl-s{background:var(--pri)}
+.bl-dot.bl-s{background:var(--pur)}
 .bl-t{width:100%;border-collapse:collapse;font-size:13px;margin-bottom:6px}
 .bl-t th,.bl-t td{padding:4px;text-align:right;border-bottom:1px solid var(--bd)}
 .bl-t th[scope=row],.bl-t thead th:first-child{text-align:left;font-weight:500}
@@ -1797,3 +1799,26 @@ html.rp-open body{overflow:hidden}
 .adj-sec .mt-ag-h{cursor:default}
 .adj-q{font-size:14px;line-height:1.45;margin:0 0 2px}
 .adj-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
+/* Revisão de UX (out/2026) */
+/* Início: os números numa linha só */
+.qstats{display:flex;gap:8px;margin-bottom:14px;overflow-x:auto;scrollbar-width:none}
+.qstats::-webkit-scrollbar{display:none}
+.qs{flex:1 0 auto;min-width:86px;display:flex;flex-direction:column;align-items:flex-start;gap:1px;background:var(--sf);border:1px solid var(--bd);border-radius:12px;padding:8px 12px;text-align:left;color:var(--tx);font:inherit}
+.qs b{font-size:18px;font-weight:500;line-height:1.2;white-space:nowrap}
+.qs small{font-size:11.5px;color:var(--sub)}
+.qs-l{font-size:11px;color:var(--sub);font-weight:500;white-space:nowrap}
+.qs-ch{flex:2 1 160px;min-width:140px}
+.qs-t{font-size:14px!important;white-space:normal!important;line-height:1.25!important}
+/* Atalhos em uma linha de botões */
+.qa-chips{gap:8px;flex-wrap:wrap;overflow:visible}.qa-chips .fc{min-height:36px;flex-shrink:1}
+/* Sobrou fora do ar: uma linha discreta */
+.sob-slim{font-size:12.5px;color:var(--sub);padding:2px 4px}
+/* Nós */
+.tg-line{font-size:14.5px;line-height:1.45;margin:2px 0 0}
+.nos-ch-link{display:block;font-size:13px;padding:4px 2px;margin:2px 0 10px;text-align:left}
+/* Meu dia: resumo mais enxuto (3 por linha no celular) */
+@media(max-width:560px){.md-sum{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}.md-sum-i{padding:7px 9px;min-height:50px}.md-sum-i b{font-size:14px}}
+/* Faxinão: quem faz tudo */
+.fx-all{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:4px 0 8px}
+.fx-all-l{font-size:12.5px;color:var(--sub);margin-right:2px}
+.fx-all .fc{min-height:32px}

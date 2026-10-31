@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { faxContext, faxSummary, faxTotals, fallbackFax, fmtMin, nextFor, resetSteps, validateFax, type FaxStep } from '@/lib/faxinao'
+import { faxContext, faxSummary, faxTotals, fallbackFax, fmtMin, nextFor, resetSteps, validateFax, type FaxStep, soloOf, assignAll } from '@/lib/faxinao'
 
 const RAW = { title: 'Faxinão de sábado', tips: ['Abra as janelas', ''], steps: [
   { title: 'Colocar roupa de cama na máquina', room: 'Área de serviço', who: 'g', min: 5, wait: true, note: null },
@@ -41,5 +41,23 @@ describe('faxinão', () => {
     const c = faxContext({ text: 'banheiro', names: { g: 'Giovanna Cupo', s: 'Sabrina' }, who: 'both', minutes: 120, dogs: ['Penélope', 'Zelda'] })
     expect(c).toContain('Participam: as duas'); expect(c).toContain('120 minutos'); expect(c).toContain('<pedido>banheiro</pedido>')
     expect([fmtMin(45), fmtMin(60), fmtMin(135)]).toEqual(['45 min', '1h', '2h15'])
+  })
+})
+
+describe('faxinão de uma pessoa só', () => {
+  const st = (who: 'g' | 's' | 'both', min: number) => ({ id: `x${min}${who}`, title: 't', room: 'Casa', who, min, wait: false, note: null })
+  it('reconhece quando é tudo de uma pessoa', () => {
+    expect(soloOf([st('g', 10), st('g', 5)])).toBe('g')
+    expect(soloOf([st('g', 10), st('s', 5)])).toBeNull()
+    expect(soloOf([st('both', 10)])).toBeNull()
+    expect(soloOf([])).toBeNull()
+  })
+  it('tudo com uma pessoa (inclusive o que era "juntas")', () => {
+    expect(assignAll([st('g', 10), st('both', 5), st('s', 20)], 's').map(x => x.who)).toEqual(['s', 's', 's'])
+  })
+  it('de volta para as duas: divide pelo tempo, quem tem menos minutos pega o próximo', () => {
+    const r = assignAll([st('g', 30), st('g', 10), st('g', 10), st('g', 15)], 'both')
+    expect(r.map(x => x.who)).toEqual(['g', 's', 's', 's'])
+    expect(faxTotals(r)).toMatchObject({ g: 30, s: 35 })
   })
 })

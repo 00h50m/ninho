@@ -32,7 +32,7 @@ import { StuckCard } from '@/components/nos/Esquecidas'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function InicioScreen({ a }: { a: App }) {
-  const { adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
+  const { fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
   return (
     <div className="scr">
       <div className="sh">
@@ -41,6 +41,7 @@ export function InicioScreen({ a }: { a: App }) {
             {me&&<span className="chip"><span className={`mini av-${me}`} aria-hidden="true">{names[me].slice(0,1).toUpperCase()}</span>{account?'Sua conta':'Este aparelho'}</span>}
             <button className={`chip ${en.cls}`} onClick={()=>openModal('energy')} aria-label={`Energia da semana: ${en.l}. Alterar`}>{en.ic} {en.l}</button>
             {me&&<button className="chip" onClick={()=>setDayOpen(true)}>🗓️ Organizar meu dia</button>}
+            {fx.available&&<button className={`chip ${fxLive?'green':''}`} onClick={()=>goCasa('faxinao')}>🧹 {fxLive?'Faxinão em andamento':'Faxinão'}</button>}
             <button className={`chip ${settings.survival?'coral':''}`} onClick={toggleSurvival} aria-label={settings.survival?'Modo sobrevivência ativo. Desativar':'Modo normal. Ativar modo sobrevivência'}>{settings.survival?'🛡 Modo sobrevivência':'Modo normal'}</button>
           </div>
         </div>
@@ -53,43 +54,13 @@ export function InicioScreen({ a }: { a: App }) {
         <button className="lnk-inline" onClick={()=>{setA11y({setupSnooze:addDays(today,14)});showToast('Ok! O aviso volta em 2 semanas. Dá para configurar a qualquer hora em Ajustes.')}}>Agora não</button>
       </div>}
 
-      {showCard('mascote')&&<MascoteCard say={mascot} today={today}/>}
-
-      {showCard('resumo')&&<div className="stats">
-        <div className="stat">
-          <div className="stat-l">Hoje</div>
-          <div className="stat-v">{dayPct}%<small>{doneToday}/{allToday.length}</small></div>
-          <div className="bar"><div className="barf" style={{width:dayPct+'%',background:'var(--gdk)'}}/></div>
-        </div>
-        <div className="stat">
-          <div className="stat-l">Casa</div>
-          <div className="stat-v stat-txt" style={{color:ci.color}}>{ci.label}</div>
-          <div className="bar"><div className="barf" style={{width:chaos+'%',background:ci.color}}/></div>
-        </div>
-        <button className="stat" onClick={()=>setTab('week')}>
-          <div className="stat-l">Nível {lv.l}<span className="lg-only"> · {lv.n}</span></div>
-          <div className="stat-v">{xp}<small>/ {lv.max} XP</small></div>
-          <div className="bar"><div className="barf" style={{width:xpPct+'%',background:'var(--pur)'}}/></div>
-        </button>
-        <div className="stat">
-          <div className="stat-l">Sequência do casal{game.streaks.house_best>0&&<span className="lg-only"> · recorde {game.streaks.house_best}</span>}</div>
-          <div className="stat-v">🔥 {streak}<small>dia{streak!==1?'s':''}</small></div>
-          <div className="week-dots">{weekDots(todayIndex,streak,doneToday>0).map((c,i)=><div key={i} className={`wd ${c}`}/>)}</div>
-        </div>
-        {activeCh?<button className="stat stat-ch" onClick={()=>{go('nos');setNosView('desafios')}}>
-          <div className="stat-l">Desafio em dupla</div>
-          <div className="stat-v stat-txt">{activeCh.c.title}</div>
-          <div className="stat-s">{activeCh.p.hits}/{activeCh.c.goal} dias{activeCh.p.todayHit?' · hoje ✓':''}</div>
-        </button>
-        :<button className="stat stat-ch" onClick={()=>nos.available?(go('nos'),setNosView('desafios')):challenge?go('nos'):setOnb(setup?.completed?'redo':'open')}>
-          <div className="stat-l">Desafio{challenge?' sugerido':''}</div>
-          <div className="stat-v stat-txt">{challenge?challenge.title:nos.available?'Escolher um':'Nenhum ainda'}</div>
-          <div className="stat-s">{challenge?`${challenge.days} dias, as duas juntas`:nos.available?'As duas do mesmo lado':setup?.available?'Sugerido na configuração':'Em breve'}</div>
-        </button>}
+      {showCard('resumo')&&<div className="qstats" role="group" aria-label="Resumo">
+        <div className="qs"><span className="qs-l">Hoje</span><b>{dayPct}%</b><small>{doneToday}/{allToday.length}</small></div>
+        <button className="qs" onClick={()=>setTab('week')}><span className="qs-l">Nível {lv.l}</span><b>{xp}</b><small>/ {lv.max} XP</small></button>
+        <div className="qs" title={game.streaks.house_best>0?`Recorde: ${game.streaks.house_best} dias`:undefined}><span className="qs-l">Sequência</span><b>🔥 {streak}</b><small>dia{streak!==1?'s':''}</small></div>
+        {activeCh?<button className="qs qs-ch" onClick={()=>{go('nos');setNosView('desafios')}}><span className="qs-l">Desafio · {activeCh.p.hits}/{activeCh.c.goal}{activeCh.p.todayHit?' ✓':''}</span><b className="qs-t">{activeCh.c.title}</b></button>
+        :challenge&&nos.available?<button className="qs qs-ch" onClick={()=>{go('nos');setNosView('desafios')}}><span className="qs-l">Desafio sugerido</span><b className="qs-t">{challenge.title}</b></button>:null}
       </div>}
-
-      {week.available&&showCard('semana')&&<WeekStrip days={weekInfo} names={names}/>}
-      {showCard('ajuste')&&stuckTasks.length>0&&<StuckCard task={stuckTasks[0]} more={stuckTasks.length-1} names={names} onAdjust={adjustForgot} onLater={()=>ajusteNotNow(stuckTasks[0])}/>}
       {showCard('prioridades')&&(()=>{const pr=weekPriorities(nos.meetings,weekStart);return pr&&<section className="card prio" aria-labelledby="prio-h">
         <div className="slbl" id="prio-h">🎯 Prioridades da semana<button className="lnk" onClick={()=>{go('nos');setNosView('semana')}}>Reunião →</button></div>
         <ol className="prio-l">{pr.list.map((p,i)=><li key={i}>{p}</li>)}</ol>
@@ -131,12 +102,13 @@ export function InicioScreen({ a }: { a: App }) {
         {personCard('g')}
         {personCard('s')}
         <aside className="side">
+          {showCard('mascote')&&<MascoteCard say={mascot} today={today}/>}
           {week.available&&me&&showCard('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
           {fxLive&&<FaxinaoHomeCard f={fxLive} me={me} names={names} onOpen={()=>goCasa('faxinao')}/>}
           {md.available&&me&&showCard('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} profiles={md.profiles} goals={md.goals}
             onUndo={l=>{md.remove(l).catch(e=>showError(toNinhoError(e,'desfazer')))}} today={today} nowHM={nowHM}
             onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>goMd('hoje')}/>}
-          {setup?.available&&showCard('rotina')&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
+          {setup?.available&&showCard('rotina')&&rn.today.length>0&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
             turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
           {showCard('caes')&&<div className="card">
             <div className="slbl">🐾 Cães hoje {dogDaily.length>0&&<span className="mono" style={{color:'var(--faint)'}}>{dogDone}/{dogDaily.length}</span>}<button className="lnk" onClick={()=>setTab('pets')}>Ver →</button></div>
@@ -192,16 +164,18 @@ export function InicioScreen({ a }: { a: App }) {
             </button>)})()}
           {showCard('atalhos')&&<div className="card">
             <div className="slbl">Atalhos</div>
-            <div className="acts">
-              {actionBtn('✦','Distribuir tarefas','Equilibra a carga entre vocês',autoDistribute,'var(--pbg)')}
-              {actionBtn(en.ic,'Energia da semana',en.l,()=>openModal('energy'))}
-              {actionBtn('🛡',settings.survival?'Sair do modo sobrevivência':'Modo sobrevivência',settings.survival?'Ativo · só essenciais':'Só o essencial por um tempo',toggleSurvival,settings.survival?'var(--cbg)':undefined)}
-              {actionBtn('📋','Reunião semanal','15 minutos, sem cobranças',()=>openModal('meeting'))}
-              {sp.available&&actionBtn('⏱','Sprint do Ninho',sp.active?`Em andamento · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Mutirão curto com cronômetro',()=>setSprintOpen(true))}
+            <div className="fchips qa-chips">
+              <button className="fc" onClick={autoDistribute}>✦ Distribuir tarefas</button>
+              <button className="fc" onClick={()=>openModal('energy')}>{en.ic} {en.l}</button>
+              <button className={`fc ${settings.survival?'on':''}`} aria-pressed={settings.survival} onClick={toggleSurvival}>🛡 Modo sobrevivência</button>
+              <button className="fc" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button>
+              {sp.available&&<button className="fc" onClick={()=>setSprintOpen(true)}>⏱ {sp.active?`Sprint · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Sprint do Ninho'}</button>}
             </div>
           </div>}
         </aside>
       </div>
+      {showCard('ajuste')&&stuckTasks.length>0&&<StuckCard task={stuckTasks[0]} more={stuckTasks.length-1} names={names} onAdjust={adjustForgot} onLater={()=>ajusteNotNow(stuckTasks[0])}/>}
+      {week.available&&showCard('semana')&&<WeekStrip days={weekInfo} names={names}/>}
     </div>
   )
 }

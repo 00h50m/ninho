@@ -31,9 +31,12 @@ export async function planFax(db: SupabaseClient, householdId: string, req: { te
 
 /** Telegram: "faxinão: …" vira um rascunho no app (para conferir e começar lá). */
 export async function faxFromTelegram(db: SupabaseClient, link: { household_id: string, who: Who }, text: string, opts: AiOpts = {}): Promise<string> {
-  const body = text.replace(/^\s*(faxin[aã]o|mutir[aã]o)\s*[:\-–]?\s*/i, '').trim()
-  if (body.length < 3) return 'Me diga o que precisa ser feito, por exemplo: "faxinão: banheiro, cozinha, roupa de cama, quintal".'
-  const r = await planFax(db, link.household_id, { text: body, who: 'both', minutes: null }, opts)
+  let body = text.replace(/^\s*(faxin[aã]o|mutir[aã]o)\s*[:\-–]?\s*/i, '')
+  // "faxinão só eu: …" / "faxinão sozinha: …": tudo para quem mandou
+  const solo = /^(s[oó]\s+eu|sozinh[ao])\b/i.test(body)
+  body = body.replace(/^(s[oó]\s+eu|sozinh[ao])\b/i, '').replace(/^\s*[:\-–]?\s*/, '').trim()
+  if (body.length < 3) return 'Me diga o que precisa ser feito, por exemplo: "faxinão: banheiro, cozinha, roupa de cama, quintal" (ou "faxinão só eu: …" para fazer sozinha).'
+  const r = await planFax(db, link.household_id, { text: body, who: solo ? link.who : 'both', minutes: null }, opts)
   if (r.ok === false) return (r as { message: string }).message
   const ins = await db.from('faxinoes').insert({ household_id: link.household_id, title: r.plan.title, steps: r.plan.steps, tips: r.plan.tips, status: 'rascunho', created_by: link.who })
   if (ins.error) return 'Montei o plano, mas não consegui guardar agora (o faxinão precisa da atualização do banco). Tente pelo app.'

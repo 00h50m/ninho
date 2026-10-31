@@ -37,7 +37,7 @@ export function NosScreen({ a }: { a: App }) {
           {!nos.available&&nos.ready&&<div className="card empty"><span className="empty-icon">🤝</span>Registro do dia, desafios em dupla e combinados precisam da atualização do banco (migration 022).{nos.reason&&<div className="row-s" style={{marginTop:6}}>Detalhe: {nos.reason}</div>}</div>}
         </div>
         <div className="col">
-          {nos.available&&<section className="card" aria-labelledby="ag-h">
+          {nos.available&&((thisMeetingRow?.agreements||[]).length>0||(lastMeeting?.agreements||[]).length>0)&&<section className="card" aria-labelledby="ag-h">
             <div className="slbl" id="ag-h">Combinados {(thisMeetingRow?.agreements||[]).length>0?'desta semana':lastMeeting?.agreements?.length?'da semana passada':''}</div>
             {(()=>{const ws=(thisMeetingRow?.agreements||[]).length?weekStart:addDays(weekStart,-7);const list=(thisMeetingRow?.agreements||[]).length?thisMeetingRow!.agreements:(lastMeeting?.agreements||[])
               return list.length===0?<div className="row-s">Nenhum combinado ainda. Eles nascem na reunião semanal.</div>
@@ -45,7 +45,8 @@ export function NosScreen({ a }: { a: App }) {
                 <button className={`mt-chk ${a.done?'on':''}`} role="checkbox" aria-checked={a.done} aria-label={`Cumprido: ${a.text}`} onClick={()=>toggleAgreement(ws,list,i)}>{a.done?'✓':''}</button>
                 <span className="mt-agr-t">{a.text}<small>{a.who==='both'?'as duas':firstName(names[a.who])}{a.task_id?' · é uma tarefa':''}</small></span></li>)}</ul>})()}
           </section>}
-          {nos.available&&<section className="card" aria-labelledby="dc-h">
+          {nos.available&&activeChs.length===0&&<button className="lnk-inline nos-ch-link" onClick={()=>setNosView('desafios')}>🤝 Nenhum desafio em dupla agora. Escolher um de 7 dias →</button>}
+          {nos.available&&activeChs.length>0&&<section className="card" aria-labelledby="dc-h">
             <div className="slbl" id="dc-h">Desafios em dupla<button className="lnk" onClick={()=>setNosView('desafios')}>{activeChs.length?'Ver →':'Escolher →'}</button></div>
             {activeChs.length===0?<div className="row-s">Nenhum desafio agora. Que tal um de 7 dias?</div>
               :activeChs.slice(0,2).map(({c})=><ChallengeCard key={c.id} c={c} facts={nos.facts} today={today} names={names} compact onMark={markChallenge}/>)}

@@ -86,7 +86,7 @@ export const HELP = [
   '📷 Mande a foto do prato (com “almoço”, “jantar”… na legenda, se quiser) e eu estimo as calorias.',
   '💧 /agua — a água de hoje, com o botão “+1 copo” (os lembretes de água no Telegram ligam no app: Ajustes › Telegram)',
   '🏷️ Foto da tabela nutricional com “rótulo” na legenda (ex.: “rótulo iogurte grego”): eu cadastro em Meus alimentos, ou confiro o que já está lá.',
-  '🧹 “faxinão: banheiro, cozinha, roupa de cama, quintal” — eu organizo na melhor ordem e divido entre vocês (fica no app para conferir).',
+  '🧹 “faxinão: banheiro, cozinha, roupa de cama, quintal” — eu organizo na melhor ordem e divido entre vocês (fica no app para conferir). Sozinha? “faxinão só eu: …”.',
   '🗓️ “organiza meu dia: dentista 14h30, pagar o boleto, mercado” — eu monto o dia em ordem e você confirma.',
   '💬 Pergunte o que quiser da casa: “como tirar mancha de xixi do sofá?”, “quanto de ração para a Zelda?”',
   '🎙️ Pode mandar áudio: eu transcrevo e sigo como se tivesse escrito.',

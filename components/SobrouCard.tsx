@@ -37,9 +37,9 @@ export function SobrouCard({ householdId, today, link, onGuide }: { householdId:
     <p className="row-s">Não usam o Sobrou? Esconda este cartão em Ajustes › Cartões do Início.</p>
   </div> : null
   const open = link && /^https?:\/\//.test(link) ? <a className="lnk" href={link} target="_blank" rel="noopener noreferrer">Abrir ↗<span className="sr-only"> o Sobrou (abre em outra aba)</span></a> : null
-  if (st.s === 'err') return <div className="card sob">
-    <div className="slbl">💰 Sobrou{open}</div>
-    <p className="row-s">{st.msg} <button className="lnk-inline" onClick={() => { setSt({ s: 'loading' }); load() }}>Tentar de novo</button>{onGuide && <> · <button className="lnk-inline" onClick={onGuide}>passo a passo</button></>}</p>
+  // fora do ar: uma linha discreta (não ocupa um cartão inteiro)
+  if (st.s === 'err') return <div className="sob-slim" role="status">
+    <span>💰 Sobrou fora do ar agora.</span> <button className="lnk-inline" onClick={() => { setSt({ s: 'loading' }); load() }}>Tentar de novo</button>{onGuide && <> · <button className="lnk-inline" onClick={onGuide}>passo a passo</button></>}
   </div>
   const r = st.r, pos = r.sobraProjetada >= 0, tomorrow = addDays(today, 1)
   const pct = Math.max(0, Math.min(100, r.pctComprometido ?? 0))

@@ -240,12 +240,15 @@ export function TimelineCard({ items }: { items: TimelineItem[] }) {
 export function TogetherCard({ done, runs, habits, sprints, xp, streak, onOpenMeeting, meetingDone }: {
   done: number, runs: number, habits: number, sprints: number, xp: number, streak: number, onOpenMeeting: () => void, meetingDone: boolean
 }) {
-  const box = (n: number, l: string) => <div className="tg-b"><b>{n}</b><small>{l}</small></div>
+  // só o que aconteceu, numa frase (sem fileira de zeros)
+  const parts = ([[done, 'tarefa', 'tarefas'], [runs, 'rotina', 'rotinas'], [habits, 'registro de hábito', 'registros de hábito'], [sprints, 'sprint', 'sprints']] as Array<[number, string, string]>)
+    .filter(([n]) => n > 0).map(([n, a, b]) => `${n} ${n === 1 ? a : b}`)
+  const line = parts.length > 1 ? `${parts.slice(0, -1).join(', ')} e ${parts[parts.length - 1]}` : parts[0]
   return (
     <section className="card tg" aria-labelledby="tg-h">
       <div className="slbl" id="tg-h">Juntas nesta semana</div>
-      <div className="tg-grid">{box(done, 'tarefas')}{box(runs, 'rotinas')}{box(habits, 'hábitos')}{box(sprints, 'sprints')}</div>
-      <div className="row-s" style={{ marginTop: 10 }}>{xp} XP do casal nesta semana{streak > 1 ? ` · 💬 ${streak} dias seguidos de check-in das duas` : ''}</div>
+      <p className="tg-line">{line ? <>Vocês já fizeram <b>{line}</b>.</> : 'A semana está começando: o que vocês fizerem aparece aqui.'}</p>
+      <div className="row-s" style={{ marginTop: 6 }}>{xp} XP do casal nesta semana{streak > 1 ? ` · 💬 ${streak} dias seguidos de check-in das duas` : ''}</div>
       <button className={`btn btn-w ${meetingDone ? 'btn-g' : 'btn-p'}`} style={{ marginTop: 12 }} onClick={onOpenMeeting}>{meetingDone ? '📋 Ver a reunião da semana' : '📋 Fazer a reunião da semana'}</button>
     </section>
   )

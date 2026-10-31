@@ -82,6 +82,29 @@ export function faxTotals(steps: FaxStep[]): { g: number, s: number, total: numb
   return { g, s, total: Math.max(g, s), done: steps.filter(x => !open(x)).length, count: steps.length, left: steps.filter(open).length }
 }
 
+/** Faxinão de uma pessoa só? 'g' ou 's' quando todos os passos são dela; null quando é das duas. */
+export function soloOf(steps: Pick<FaxStep, 'who'>[]): Who | null {
+  if (!steps.length) return null
+  const w = steps[0].who
+  return w !== 'both' && steps.every(x => x.who === w) ? w : null
+}
+
+/**
+ * Quem faz tudo: 'g' ou 's' põe todos os passos com uma pessoa (inclusive os "juntas");
+ * 'both' divide de novo entre as duas, passo a passo para quem está com menos minutos
+ * (os passos já marcados como "juntas" continuam juntos).
+ */
+export function assignAll<T extends Pick<FaxStep, 'who' | 'min'>>(steps: T[], who: FaxWho): T[] {
+  if (who !== 'both') return steps.map(x => ({ ...x, who }))
+  let g = 0, s = 0
+  return steps.map(x => {
+    if (x.who === 'both' && !soloOf(steps)) { g += x.min; s += x.min; return x }
+    const w: Who = g <= s ? 'g' : 's'
+    if (w === 'g') g += x.min; else s += x.min
+    return { ...x, who: w }
+  })
+}
+
 /** O que cada uma faz agora e em seguida. */
 export function nextFor(steps: FaxStep[], w: Who): { now: FaxStep | null, then: FaxStep | null } {
   const list = steps.filter(x => open(x) && mine(x, w))

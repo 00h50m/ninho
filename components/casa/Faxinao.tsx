@@ -4,7 +4,7 @@
 // de cada uma, cronômetro e resumo. Modelos para repetir.
 import { useEffect, useRef, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
-import { fallbackFax, faxSummary, faxTotals, fmtMin, nextFor, resetSteps, type FaxStep, type FaxWho, type Faxinao } from '@/lib/faxinao'
+import { assignAll, fallbackFax, faxSummary, faxTotals, fmtMin, nextFor, resetSteps, soloOf, type FaxStep, type FaxWho, type Faxinao } from '@/lib/faxinao'
 import * as api from '@/lib/services/faxinao'
 import { useSpeech } from '@/hooks/useSpeech'
 
@@ -59,7 +59,7 @@ function NewFax(p: FaxProps & { onCreated: (id: string) => void }) {
         <div className="fx-chips" aria-label="Adicionar rápido">{ROOMS.map(([ic, t]) => <button key={t} className="fc" onClick={() => add(t)}>{ic} {t}</button>)}</div>
         <div className="onb-q">Quem participa</div>
         <div className="onb-days" role="radiogroup" aria-label="Quem participa">
-          {([['both', 'As duas'], ['g', first(p.names.g)], ['s', first(p.names.s)]] as Array<[FaxWho, string]>).map(([k, l]) => <button key={k} role="radio" aria-checked={who === k} className={`onb-day wide ${who === k ? 'on' : ''}`} onClick={() => setWho(k)}>{l}</button>)}
+          {([['both', 'As duas'], ['g', p.me === 'g' ? `Só eu (${first(p.names.g)})` : `Só ${first(p.names.g)}`], ['s', p.me === 's' ? `Só eu (${first(p.names.s)})` : `Só ${first(p.names.s)}`]] as Array<[FaxWho, string]>).map(([k, l]) => <button key={k} role="radio" aria-checked={who === k} className={`onb-day wide ${who === k ? 'on' : ''}`} onClick={() => setWho(k)}>{l}</button>)}
         </div>
         <div className="onb-q">Tempo disponível</div>
         <div className="onb-days wrap" role="radiogroup" aria-label="Tempo disponível">
@@ -105,7 +105,8 @@ function DraftFax(p: FaxProps & { f: Faxinao, others: number, onNew: () => void 
   async function asModel() {
     try { await api.saveDraft(p.f.id, title, steps); await api.createFax(p.householdId, p.me, { title, steps, tips: p.f.tips }, 'modelo'); await p.reload(); p.onToast('Guardado como modelo') } catch (e) { p.onError(e, 'guardar modelo') }
   }
-  const whoBtn = (i: number, s: FaxStep) => <span className="fx-who" role="radiogroup" aria-label={`Quem faz: ${s.title}`}>
+  const solo = soloOf(steps)
+  const whoBtn = (i: number, s: FaxStep) => solo ? null : <span className="fx-who" role="radiogroup" aria-label={`Quem faz: ${s.title}`}>
     {([['g', first(p.names.g).slice(0, 1)], ['s', first(p.names.s).slice(0, 1)], ['both', '2']] as Array<[FaxWho, string]>).map(([k, l]) =>
       <button key={k} role="radio" aria-checked={s.who === k} aria-label={k === 'both' ? 'As duas' : first(p.names[k as Who])} className={`fx-wb ${s.who === k ? 'on' : ''} ${k}`} onClick={() => set(i, { who: k })}>{l}</button>)}
   </span>
@@ -113,7 +114,14 @@ function DraftFax(p: FaxProps & { f: Faxinao, others: number, onNew: () => void 
     <section className="card" aria-labelledby="fx-conf">
       <div className="slbl" id="fx-conf">🧹 Confira o faxinão {p.others > 0 && <span className="chip">+{p.others} rascunho(s)</span>}</div>
       <input className="fi fx-title" value={title} maxLength={80} aria-label="Nome do faxinão" onChange={e => setTitle(e.target.value)}/>
-      <div className="fx-sum">Cerca de <b>{fmtMin(t.total)}</b> · {first(p.names.g)}: {fmtMin(t.g)} · {first(p.names.s)}: {fmtMin(t.s)} · {steps.length} passos</div>
+      <div className="fx-all" role="radiogroup" aria-label="Quem faz tudo">
+        <span className="fx-all-l">Quem faz:</span>
+        {([['both', 'As duas dividem'], ['g', p.me === 'g' ? 'Tudo comigo' : `Tudo com ${first(p.names.g)}`], ['s', p.me === 's' ? 'Tudo comigo' : `Tudo com ${first(p.names.s)}`]] as Array<[FaxWho, string]>).map(([k, l]) => {
+          const on = k === 'both' ? !solo : solo === k
+          return <button key={k} role="radio" aria-checked={on} className={`fc ${on ? 'on' : ''}`} onClick={() => { if (!on) setSteps(l => assignAll(l, k)) }}>{l}</button>
+        })}
+      </div>
+      <div className="fx-sum">Cerca de <b>{fmtMin(t.total)}</b> · {solo ? `só ${first(p.names[solo])}` : `${first(p.names.g)}: ${fmtMin(t.g)} · ${first(p.names.s)}: ${fmtMin(t.s)}`} · {steps.length} passos</div>
       {p.f.tips.length > 0 && <ul className="fx-tips">{p.f.tips.map(x => <li key={x}>💡 {x}</li>)}</ul>}
       <ol className="fx-steps">{steps.map((s, i) => <li key={s.id} className={s.wait ? 'wait' : ''}>
         <span className="fx-n mono">{i + 1}</span>
