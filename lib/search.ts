@@ -2,13 +2,49 @@
 // Meus alimentos e refeições salvas. Sem acento e sem maiúscula; começo da palavra vale mais. Puro, testado.
 import { norm } from './nutricao'
 
-export type SearchKind = 'tarefa' | 'compra' | 'agenda' | 'rotina' | 'cao' | 'alimento' | 'salva'
+export type SearchKind = 'funcao' | 'tarefa' | 'compra' | 'agenda' | 'rotina' | 'cao' | 'alimento' | 'salva'
 export interface SearchItem { kind: SearchKind, id: string, title: string, sub?: string }
 export interface SearchHit extends SearchItem { score: number }
 
 export const KIND_LABEL: Record<SearchKind, string> = {
-  tarefa: '✓ Tarefas', compra: '🛒 Compras', agenda: '📅 Agenda', rotina: '🔁 Rotinas', cao: '🐾 Cães', alimento: '🥗 Meus alimentos', salva: '⭐ Refeições salvas',
+  funcao: '⚡ Abrir no app', tarefa: '✓ Tarefas', compra: '🛒 Compras', agenda: '📅 Agenda', rotina: '🔁 Rotinas', cao: '🐾 Cães', alimento: '🥗 Meus alimentos', salva: '⭐ Refeições salvas',
 }
+
+/**
+ * Funções do app que a busca encontra ("faxinão", "telegram", "escala"…). O id diz para onde ir;
+ * o texto de baixo tem palavras parecidas para achar mesmo sem o nome exato.
+ */
+export const FEATURES: SearchItem[] = ([
+  ['faxinao', 'Faxinão', 'faxina geral limpeza grande mutirão'],
+  ['planejar', 'Planejar o dia com IA', 'organizar meu dia agenda ordem'],
+  ['perguntar', 'Perguntar ao Ninho', 'dúvida dica ajuda mancha'],
+  ['reuniao', 'Reunião semanal', 'pauta combinados semana'],
+  ['semana', 'Como está a semana', 'energia modo sobrevivência cansada'],
+  ['sprint', 'Sprint do Ninho', 'mutirão cronômetro rápido'],
+  ['rotinas', 'Rotinas com passos', 'checklist fechar a cozinha'],
+  ['habitos', 'Hábitos', 'constância meta semanal'],
+  ['agenda', 'Agenda da casa', 'compromisso consulta vencimento conta'],
+  ['compras', 'Lista de compras', 'mercado supermercado'],
+  ['despensa', 'Despensa', 'validade geladeira estoque'],
+  ['jantar', 'Jantar', 'cardápio cozinhar comida'],
+  ['manutencao', 'Manutenção', 'filtro revisão conserto'],
+  ['sugestoes', 'Sugestões de tarefas', 'ideias estação catálogo'],
+  ['caes', 'Cães', 'cachorras saúde vacina ração passeio'],
+  ['escala', 'Escala dos cães', 'quem cuida período rodízio cachorras'],
+  ['agua', 'Água', 'beber copo hidratação meu dia'],
+  ['alimentacao', 'Alimentação', 'refeição dieta plano calorias'],
+  ['treinos', 'Treinos', 'academia exercício'],
+  ['corpo', 'Peso e medidas', 'evolução bioimpedância foto'],
+  ['desafios', 'Desafios em dupla', 'juntas meta'],
+  ['album', 'Álbum', 'fotos lembranças'],
+  ['presentes', 'Presentes', 'ideias aniversário data'],
+  ['historico', 'Histórico e retrospectiva', 'gráficos semanas esquecidas'],
+  ['equilibrio', 'Divisão da carga', 'equilíbrio distribuir rodízio inteligente'],
+  ['notificacoes', 'Notificações', 'lembretes avisos horário de silêncio'],
+  ['telegram', 'Telegram', 'bot mensagens resumo'],
+  ['aparencia', 'Aparência e tema', 'cores escuro claro letra contraste'],
+  ['ajustes', 'Ajustes', 'configurações conta'],
+] as Array<[string, string, string]>).map(([id, title, sub]) => ({ kind: 'funcao' as const, id, title, sub }))
 
 const clean = (s: string) => ` ${norm(s).replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim()} `
 

@@ -13,12 +13,16 @@ import { firstName, initials } from '@/components/AppModals'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function AjustesScreen({ a }: { a: App }) {
-  const { a11y, account, ag, device, dogs, go, householdId, lv, me, names, openModal, pickTheme, setA11y, setOnb, setToast, setup, showCard, showToast, shownTheme, streak, tasks, theme, toastTimer, updateName, xp } = a
+  const { goMd, setNosView, a11y, account, ag, device, dogs, go, householdId, lv, me, names, openModal, pickTheme, setA11y, setOnb, setToast, setup, showCard, showToast, shownTheme, streak, tasks, theme, toastTimer, updateName, xp } = a
   return (
     <div className="scr narrow">
-      <button className="back" onClick={()=>go('nos')}>← Nós</button>
-      <div className="sh"><div><h2>Ajustes</h2><p>Aparência, conta, integrantes e guia de uso</p></div></div>
-      <div className="card" style={{marginBottom:14}}>
+      <button className="back" onClick={()=>go('inicio')}>← Início</button>
+      <div className="sh"><div><h2>Ajustes</h2><p>Tudo o que dá para configurar, num lugar só</p></div></div>
+      <nav className="fchips aj-idx" aria-label="Partes dos Ajustes">
+        {([['aj-aparencia','🎨 Aparência'],['aj-inicio','🏠 Início'],['aj-notif','🔔 Notificações'],['aj-tg','✈️ Telegram'],['aj-conta','👤 Conta'],['aj-casa','🏡 Casa'],['aj-ajuda','❓ Ajuda']] as const).map(([id,l])=>
+          <button key={id} className="fc" onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})}>{l}</button>)}
+      </nav>
+      <div className="card aj-sec" id="aj-aparencia" style={{marginBottom:14}}>
         <div className="slbl">Aparência</div>
         <div className="themes" role="radiogroup" aria-label="Tema">
           {THEMES.map(t=>(
@@ -48,18 +52,20 @@ export function AjustesScreen({ a }: { a: App }) {
           <div><div className="row-t">🐢 Menos animação</div><div className="row-s">Desliga transições e animações (o celular também pode pedir isso)</div></div>
           <button className={`switch ${a11y.motion==='reduce'?'on':''}`} role="switch" aria-checked={a11y.motion==='reduce'} aria-label="Menos animação" onClick={()=>setA11y({motion:a11y.motion==='reduce'?'system':'reduce'})}/>
         </div>
-        <div className="a11y-row" style={{display:'block'}}>
-          <div className="row-t">🏠 O que aparece no Início</div><div className="row-s">Desmarque o que não usa. O resto continua nas outras áreas.</div>
-          <div className="a11y-cards">{HOME_CARDS.map(([k,l])=><label key={k}><input type="checkbox" checked={showCard(k)} onChange={e=>setA11y({hidden:e.target.checked?a11y.hidden.filter(x=>x!==k):[...a11y.hidden,k]})}/>{l}</label>)}</div>
-        </div>
         <div className="row-s" style={{marginTop:8}}>Tudo aqui vale só para este aparelho: cada uma escolhe o que é mais confortável.</div>
+      </div>
+      <div className="card aj-sec" id="aj-inicio" style={{marginBottom:14}}>
+        <div className="slbl">O que aparece no Início</div>
+        <div>
+          <div className="row-s">Desmarque o que não usa. O resto continua nas outras áreas. Vale só para este aparelho.</div>          <div className="a11y-cards">{HOME_CARDS.map(([k,l])=><label key={k}><input type="checkbox" checked={showCard(k)} onChange={e=>setA11y({hidden:e.target.checked?a11y.hidden.filter(x=>x!==k):[...a11y.hidden,k]})}/>{l}</label>)}</div>
+        </div>
       </div>
       {setup?.available&&<div className="card" style={{marginBottom:14}}>
         <div className="slbl">Configuração do Ninho</div>
         <div className="row-s" style={{marginBottom:10}}>{setup.completed?'Feita. Dá para refazer: rotinas que já existem não são duplicadas e nada é apagado.':'Ainda não feita: rotinas, essenciais, semana e aparência em 9 etapas.'}</div>
         <button className="btn btn-g" onClick={()=>setOnb(setup.completed?'redo':'open')}>{setup.completed?'Refazer configuração':'Configurar agora'}</button>
       </div>}
-      <div className="card" style={{marginBottom:14}}>
+      <div className="card aj-sec" id="aj-conta" style={{marginBottom:14}}>
         <div className="slbl">{account?'Sua conta':'Este aparelho'}</div>
         {account?<div className="field-row">
           <div className={`av av-${account.who}`}>{initials(names[account.who])}</div>
@@ -78,13 +84,23 @@ export function AjustesScreen({ a }: { a: App }) {
           <button className="btn btn-g" style={{marginLeft:'auto'}} onClick={()=>openModal('device')}>Trocar</button>
         </div>}
       </div>
+      <div id="aj-notif" className="aj-sec"/>
       <NotificationsCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
         onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
         onNeedIdentity={()=>openModal('device')}/>
       <SobrouGuide householdId={householdId} link={ag.sobrouUrl}/>
+      <div id="aj-tg" className="aj-sec"/>
       <TelegramCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
         onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
         onNeedIdentity={()=>openModal('device')}/>
+      <div className="card aj-sec" id="aj-casa" style={{marginBottom:14}}>
+        <div className="slbl">Ajustes da casa</div>
+        <div className="aj-links">
+          <button className="aj-link" onClick={()=>{go('nos');setNosView('equilibrio')}}><span>⚖️ Divisão da carga</span><small>Divisão inteligente ou rodízio · Nós › Semana › Equilíbrio</small></button>
+          <button className="aj-link" onClick={()=>go('caes')}><span>🐾 Escala dos cães</span><small>Quem cuida em cada período · Cães</small></button>
+          <button className="aj-link" onClick={()=>goMd('ajustes')}><span>🌿 Meu dia: metas e privacidade</span><small>Água, sono, comida e o que a outra vê · Meu dia › Ajustes</small></button>
+        </div>
+      </div>
       <div className="card" style={{marginBottom:14}}>
         <div className="slbl">Integrantes</div>
         {(['g','s'] as Who[]).map(w=>(
@@ -102,7 +118,7 @@ export function AjustesScreen({ a }: { a: App }) {
         <div className="row"><span className="row-t">XP total</span><span className="mono" style={{marginLeft:'auto',color:'var(--sub)'}}>{xp} · Nv{lv.l}</span></div>
         <div className="row"><span className="row-t">Sequência</span><span className="mono" style={{marginLeft:'auto',color:'var(--sub)'}}>🔥 {streak} dias</span></div>
       </div>
-      <div className="card guide">
+      <div className="card guide aj-sec" id="aj-ajuda">
         <div className="slbl">Guia do Ninho</div>
         <details open><summary>☀️ Hoje</summary><div className="gb">
           <p>A tela do dia. Cada uma tem sua coluna (no celular, troque pelo seletor no topo) com o anel de progresso e só o que está pendente <b>hoje</b>.</p>

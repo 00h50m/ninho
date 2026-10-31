@@ -223,9 +223,10 @@ export function RoutineModal({routine,dogName,saving,onClose,onSave,onDelete}:{r
   )
 }
 
-export function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>void,onPick:(e:'high'|'medium'|'low')=>void}){
+/** "Como está a semana": energia e modo sobrevivência num lugar só. */
+export function EnergyModal({energy,survival,onClose,onPick,onSurvival}:{energy:string,survival?:boolean,onClose:()=>void,onPick:(e:'high'|'medium'|'low')=>void,onSurvival?:()=>void}){
   return(
-    <Sheet size="sm" title="Energia da semana" onClose={onClose}>
+    <Sheet size="sm" title="Como está a semana" onClose={onClose}>
       <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>Como vocês chegam nessa semana?</div>
       <div className="btng" style={{gap:8}}>
         {(['high','medium','low'] as const).map(v=>(
@@ -234,6 +235,10 @@ export function EnergyModal({energy,onClose,onPick}:{energy:string,onClose:()=>v
           </button>
         ))}
       </div>
+      {onSurvival&&<div className="a11y-row" style={{marginTop:14}}>
+        <div><div className="row-t">🛡 Modo sobrevivência</div><div className="row-s">Só o essencial por um tempo. O resto fica guardado.</div></div>
+        <button className={`switch ${survival?'on':''}`} role="switch" aria-checked={!!survival} aria-label="Modo sobrevivência" onClick={onSurvival}/>
+      </div>}
     </Sheet>
   )
 }

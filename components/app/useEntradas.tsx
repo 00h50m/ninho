@@ -22,7 +22,7 @@ import type { Dados } from './useDados'
 import type { FilaOffline } from './useFilaOffline'
 
 export function useEntradas(c:AppBase&Avisos&Preferencias&Navegacao&Dados&FilaOffline){
-  const {ag,casa,data,game,goCasa,goMd,householdId,md,mdAdd,me,now,openModal,refreshStats,requireMe,setAguaPop,setAskOpen,setCasaView,setNosView,setRotView,setSetup,setSprintOpen,setTab,setWantCup,setWantSprint,showError,showToast,sp,tasks,toastRef,today,wantCup,wantSprint}=c
+  const {ag,casa,data,game,goCasa,goMd,householdId,md,mdAdd,me,now,openModal,refreshStats,requireMe,setAguaPop,setAskOpen,setCasaView,setDayOpen,setNosView,setRotView,setSetup,setSprintOpen,setTab,setWantCup,setWantSprint,showError,showToast,sp,tasks,toastRef,today,wantCup,wantSprint}=c
   /** Cria o que o "Organizar meu dia" montou: tarefas avulsas, agenda e compras. */
   async function createDay(items:DayItem[]){
     try{
@@ -98,8 +98,33 @@ export function useEntradas(c:AppBase&Avisos&Preferencias&Navegacao&Dados&FilaOf
     mdAdd(me,'agua',cup).then(()=>{showToast(`💧 +${cup} ml`);setAguaPop(p=>p+1)}).catch(e=>showError(toNinhoError(e,'registrar água')))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   },[wantCup,md.available,me])
+  /** Abre uma função do app pela busca (FEATURES em lib/search). */
+  function openFeature(id:string){
+    const aj=(sec:string)=>{setTab('ajustes');setTimeout(()=>document.getElementById(sec)?.scrollIntoView({behavior:'smooth',block:'start'}),400)}
+    const nos=(v:string)=>{setTab('nos');setNosView(v as any)}
+    switch(id){
+      case 'faxinao':case 'agenda':case 'compras':case 'despensa':case 'jantar':case 'manutencao':case 'sugestoes':case 'rotinas':goCasa(id as any);break
+      case 'planejar':setDayOpen(true);break
+      case 'perguntar':setAskOpen(true);break
+      case 'reuniao':openModal('meeting');break
+      case 'semana':openModal('energy');break
+      case 'sprint':setSprintOpen(true);break
+      case 'habitos':goMd('habitos');break
+      case 'caes':case 'escala':setTab('caes');break
+      case 'agua':goMd('hoje');break
+      case 'alimentacao':goMd('comida');break
+      case 'treinos':goMd('treinos');break
+      case 'corpo':goMd('corpo');break
+      case 'desafios':case 'album':case 'presentes':case 'historico':case 'equilibrio':nos(id);break
+      case 'notificacoes':aj('aj-notif');break
+      case 'telegram':aj('aj-tg');break
+      case 'aparencia':aj('aj-aparencia');break
+      default:setTab('ajustes')
+    }
+  }
   function pickSearch(h:SearchHit){
     switch(h.kind){
+      case 'funcao':openFeature(h.id);break
       case 'tarefa':{const t=tasks.find((x:any)=>x.id===h.id);if(t)openModal('task',t);break}
       case 'compra':goCasa('compras');break
       case 'agenda':{const e=(ag.events||[]).find((x:any)=>x.id===h.id);setTab('casa');setCasaView('agenda');if(e)openModal('event',{event:e,kind:e.kind});break}

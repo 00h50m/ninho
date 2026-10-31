@@ -13,7 +13,7 @@ import { DeviceIdentityModal } from '@/components/DeviceIdentityModal'
 import { HabitEditor, RoutineEditor, TemplatesSheet } from '@/components/rotinas/Editors'
 import { EventSheet } from '@/components/casa/Agenda'
 import { AguaPopup } from '@/components/meudia/AguaPopup'
-import type { SearchItem } from '@/lib/search'
+import { FEATURES, type SearchItem } from '@/lib/search'
 import { type MdTab } from '@/lib/nav'
 import { DogProfileSheet, HealthSheet } from '@/components/caes/DogPanels'
 import { areaLabel, fmtClock, remainingMs } from '@/lib/sprint'
@@ -123,6 +123,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         onAdd={ml=>mdAdd(me,'agua',ml).then(()=>showToast(`💧 +${ml} ml`)).catch(e=>{showError(toNinhoError(e,'registrar água'));throw e})}
         onUndo={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'desfazer'));throw e})} onClose={()=>{}}/>}
       {busca&&<Busca onClose={()=>setBusca(false)} onPick={pickSearch} items={([] as SearchItem[]).concat(
+        FEATURES,
         tasks.filter((t:any)=>t.active!==false).map((t:any)=>({kind:'tarefa' as const,id:t.id,title:t.title,sub:t.assigned_to?firstName(names[t.assigned_to as Who]):undefined})),
         (casa.shop||[]).map((i:any)=>({kind:'compra' as const,id:i.id,title:i.title,sub:[i.qty,i.checked_at?'no carrinho':null].filter(Boolean).join(' · ')||undefined})),
         (ag.events||[]).map((e:any)=>({kind:'agenda' as const,id:e.id,title:e.title,sub:`${e.date.slice(8,10)}/${e.date.slice(5,7)}${e.time?` às ${String(e.time).slice(0,5)}`:''}`})),
@@ -164,7 +165,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       )})()}
       {modal==='dog'&&<DogModal dog={modalData} saving={saving} onClose={closeModal} onSave={updateDog} onDelete={removeDog}/>}
       {modal==='routine'&&<RoutineModal routine={modalData.routine} dogName={modalData.dog.name} saving={saving} onClose={closeModal} onSave={(d,id)=>saveRoutine(modalData.dog.id,d,id)} onDelete={removeRoutine}/>}
-      {modal==='energy'&&<EnergyModal energy={settings.energy} onClose={closeModal} onPick={setEnergy}/>}
+      {modal==='energy'&&<EnergyModal energy={settings.energy} survival={settings.survival} onClose={closeModal} onPick={setEnergy} onSurvival={toggleSurvival}/>}
       {onb&&me&&setup&&<Onboarding householdId={householdId} me={me} names={names} dogs={dogs.map(d=>({id:d.id,name:d.name}))}
         dogRoutineTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} tasks={tasks} existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)}
         setup={setup} redo={onb==='redo'} theme={theme} onTheme={pickTheme}

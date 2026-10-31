@@ -14,9 +14,9 @@ export const MODULES: Array<{ id: ModuleId, label: string, hint: string }> = [
   { id: 'nos', label: 'Nós', hint: 'Semana, reunião e conquistas' },
 ]
 
-/** A área do menu que fica destacada em cada tela (Ajustes pertence a Nós). */
-export function moduleOf(screen: ScreenId): ModuleId {
-  return screen === 'ajustes' ? 'nos' : screen === 'rotinas' ? 'casa' : screen
+/** A área do menu que fica destacada em cada tela (Ajustes fica à parte: nenhuma aba acesa). */
+export function moduleOf(screen: ScreenId): ModuleId | null {
+  return screen === 'ajustes' ? null : screen === 'rotinas' ? 'casa' : screen
 }
 
 /** Abas da versão anterior → nova tela (links antigos, atalhos, preferências guardadas). */

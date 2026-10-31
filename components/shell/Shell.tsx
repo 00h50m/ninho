@@ -82,19 +82,32 @@ export function BottomNav({ current, onGo }: { current: ScreenId, onGo: (s: Scre
   )
 }
 
-export interface QuickAction { id: string, icon: string, label: string, sub: string, run: () => void }
+export interface QuickAction { id: string, icon: string, label: string, sub: string, run: () => void, group?: QaGroup }
+export type QaGroup = 'registrar' | 'organizar' | 'casa' | 'semana'
+const QA_GROUPS: Array<[QaGroup, string]> = [['registrar', 'Registrar'], ['organizar', 'Organizar'], ['casa', 'Casa e cães'], ['semana', 'Semana']]
+/** Os mais usados ficam em destaque no topo. */
+const QA_TOP = ['task', 'shop', 'dia', 'meudia']
 
 export function QuickActionsSheet({ actions, onClose }: { actions: QuickAction[], onClose: () => void }) {
   return (
     <Sheet size="sm" title="Ação rápida" onClose={onClose}>
-      <div className="qa-grid">
-        {actions.map(a => (
+      {(() => {
+        const btn = (a: QuickAction) => (
           <button key={a.id} className="qa" onClick={() => { onClose(); a.run() }}>
             <span className="qa-ic"><Icon name={a.icon} size={20}/></span>
             <span className="qa-t"><b>{a.label}</b><small>{a.sub}</small></span>
           </button>
-        ))}
-      </div>
+        )
+        const top = QA_TOP.map(id => actions.find(a => a.id === id)).filter((a): a is QuickAction => !!a)
+        const rest = actions.filter(a => !top.includes(a))
+        return <>
+          <div className="qa-grid qa-top">{top.map(btn)}</div>
+          {QA_GROUPS.map(([g, l]) => { const list = rest.filter(a => (a.group || 'organizar') === g); return list.length > 0 && <section key={g} className="qa-sec" aria-label={l}>
+            <div className="qa-h">{l}</div>
+            <div className="qa-grid">{list.map(btn)}</div>
+          </section> })}
+        </>
+      })()}
     </Sheet>
   )
 }

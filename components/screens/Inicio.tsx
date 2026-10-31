@@ -39,10 +39,9 @@ export function InicioScreen({ a }: { a: App }) {
         <div><h1>{hello}{me?`, ${firstName(names[me])}`:''} 👋</h1><p>{dateLabel}</p>
           <div className="hd-chips">
             {me&&<span className="chip"><span className={`mini av-${me}`} aria-hidden="true">{names[me].slice(0,1).toUpperCase()}</span>{account?'Sua conta':'Este aparelho'}</span>}
-            <button className={`chip ${en.cls}`} onClick={()=>openModal('energy')} aria-label={`Energia da semana: ${en.l}. Alterar`}>{en.ic} {en.l}</button>
+            <button className={`chip ${settings.survival?'coral':en.cls}`} onClick={()=>openModal('energy')} aria-label={`A semana: ${en.l}${settings.survival?', modo sobrevivência':''}. Alterar`}>{settings.survival?'🛡 Sobrevivência':`${en.ic} ${en.l}`}</button>
             {me&&<button className="chip" onClick={()=>setDayOpen(true)}>🗓️ Planejar o dia</button>}
             {fx.available&&<button className={`chip ${fxLive?'green':''}`} onClick={()=>goCasa('faxinao')}>🧹 {fxLive?'Faxinão em andamento':'Faxinão'}</button>}
-            <button className={`chip ${settings.survival?'coral':''}`} onClick={toggleSurvival} aria-label={settings.survival?'Modo sobrevivência ativo. Desativar':'Modo normal. Ativar modo sobrevivência'}>{settings.survival?'🛡 Modo sobrevivência':'Modo normal'}</button>
           </div>
         </div>
         <div className="sh-a desk-only"><button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button></div>
@@ -166,8 +165,7 @@ export function InicioScreen({ a }: { a: App }) {
             <div className="slbl">Atalhos</div>
             <div className="fchips qa-chips">
               <button className="fc" onClick={autoDistribute}>✦ Distribuir tarefas</button>
-              <button className="fc" onClick={()=>openModal('energy')}>{en.ic} {en.l}</button>
-              <button className={`fc ${settings.survival?'on':''}`} aria-pressed={settings.survival} onClick={toggleSurvival}>🛡 Modo sobrevivência</button>
+              <button className="fc" onClick={()=>openModal('energy')}>{settings.survival?'🛡 Semana: sobrevivência':`${en.ic} Semana: ${en.l.toLowerCase()}`}</button>
               <button className="fc" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button>
               {sp.available&&<button className="fc" onClick={()=>setSprintOpen(true)}>⏱ {sp.active?`Sprint · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Sprint do Ninho'}</button>}
             </div>

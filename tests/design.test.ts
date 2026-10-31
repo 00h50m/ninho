@@ -81,8 +81,8 @@ describe('navegação', () => {
     expect(legacyScreen('caes')).toEqual({ screen: 'caes' })
     expect(legacyScreen('qualquer')).toEqual({ screen: 'inicio' })
   })
-  it('Ajustes destaca Nós no menu', () => {
-    expect(moduleOf('ajustes')).toBe('nos')
+  it('Ajustes fica à parte (nenhuma aba acesa)', () => {
+    expect(moduleOf('ajustes')).toBeNull()
     expect(moduleOf('casa')).toBe('casa')
   })
 })
