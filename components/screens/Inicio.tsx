@@ -29,6 +29,7 @@ import { bills as agBills, agendaEntries, kindIcon } from '@/lib/agenda'
 import { fmtClock, remainingMs } from '@/lib/sprint'
 import { firstName } from '@/components/AppModals'
 import { StuckCard } from '@/components/nos/Esquecidas'
+import { NewsCard } from '@/components/Guia'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function InicioScreen({ a }: { a: App }) {
@@ -172,6 +173,7 @@ export function InicioScreen({ a }: { a: App }) {
           </div>}
         </aside>
       </div>
+      <NewsCard onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('aj-ajuda')?.scrollIntoView({behavior:'smooth',block:'start'}),400)}}/>
       {showCard('ajuste')&&stuckTasks.length>0&&<StuckCard task={stuckTasks[0]} more={stuckTasks.length-1} names={names} onAdjust={adjustForgot} onLater={()=>ajusteNotNow(stuckTasks[0])}/>}
       {week.available&&showCard('semana')&&<WeekStrip days={weekInfo} names={names}/>}
     </div>

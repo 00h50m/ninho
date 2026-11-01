@@ -123,10 +123,8 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
   }
   // Resumo da noite, às 21h
   if (s.evening && due('21:00', s.hm, win)) for (const w of both) {
-    const d = s.evening.day[w]
-    const left = d.left.length ? ` Fica para amanhã: ${d.left.slice(0, 3).join(', ')}${d.left.length > 3 ? ` e mais ${d.left.length - 3}` : ''}.` : d.total ? ' Tudo feito! 🎉' : ''
-    const soon = s.evening.soon.length ? ` Próximos dias: ${s.evening.soon.slice(0, 3).join(' · ')}.` : ''
-    push([w], 'noite', 'noite', `🌆 Boa noite, ${first(s.names[w])}`, `Hoje: ${d.done} de ${d.total} feitas.${left}${soon}`, '/?ir=hoje')
+    const body = eveningBody(s.evening.day[w], s.evening.soon)
+    if (body) push([w], 'noite', 'noite', `🌆 Boa noite, ${first(s.names[w])}`, body, '/?ir=hoje')
   }
   // Fim do sprint
   if (s.sprint && s.sprint.endMs <= s.nowMs && s.nowMs - s.sprint.endMs < win * 60000) {
@@ -173,4 +171,16 @@ export function forDevice(list: Reminder[], sub: { who: Who, reminders: unknown,
   const quiet = inQuiet(hm, sub.quiet_start || '22:00', sub.quiet_end || '07:00')
   const p = prefsOf(sub.reminders)
   return list.filter(r => r.who === sub.who && p[r.kind] && (!quiet || r.kind === 'dormir'))
+}
+
+/**
+ * Texto do resumo da noite, curto: dia fechado → só o parabéns; faltou pouco (até 2) → o que faltou;
+ * faltou mais → só quantas. Os próximos dias só quando há algo. null = nada no dia e nada vindo (não manda).
+ */
+export function eveningBody(d: { done: number, total: number, left: string[] }, soon: string[]): string | null {
+  const next = soon.length ? ` Amanhã em diante: ${soon.slice(0, 2).join(' · ')}.` : ''
+  if (!d.total) return next ? next.trim() : null
+  if (!d.left.length) return `Dia fechado: ${d.done} de ${d.total} feitas. 🎉${next}`
+  if (d.left.length <= 2) return `${d.done} de ${d.total} feitas. Ficou para amanhã: ${d.left.join(' e ')}.${next}`
+  return `${d.done} de ${d.total} feitas. ${d.left.length} ficaram para amanhã, sem pressa.${next}`
 }

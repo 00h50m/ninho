@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dueReminders, forDevice, DEFAULT_RPREFS, type RemState } from '@/lib/reminders'
+import { dueReminders, eveningBody, forDevice, DEFAULT_RPREFS, type RemState } from '@/lib/reminders'
 import { modeSettings, priorityList, weekPriorities } from '@/lib/reuniao'
 
 // Dados fictícios. 2026-10-26 é segunda-feira.
@@ -42,15 +42,27 @@ describe('lembrete de tarefa, atraso e resumo da noite', () => {
     const s = base({ hm: '21:03', evening: { day: { g: { done: 3, total: 5, left: ['Louça', 'Lixo'] }, s: { done: 4, total: 4, left: [] } }, soon: ['💸 Luz (amanhã)', 'Dentista (qui)'] } })
     const r = dueReminders(s).filter(x => x.kind === 'noite')
     expect(r.map(x => x.who)).toEqual(['g', 's'])
-    expect(r[0].body).toBe('Hoje: 3 de 5 feitas. Fica para amanhã: Louça, Lixo. Próximos dias: 💸 Luz (amanhã) · Dentista (qui).')
-    expect(r[1].body).toBe('Hoje: 4 de 4 feitas. Tudo feito! 🎉 Próximos dias: 💸 Luz (amanhã) · Dentista (qui).')
+    expect(r[0].body).toBe('3 de 5 feitas. Ficou para amanhã: Louça e Lixo. Amanhã em diante: 💸 Luz (amanhã) · Dentista (qui).')
+    expect(r[1].body).toBe('Dia fechado: 4 de 4 feitas. 🎉 Amanhã em diante: 💸 Luz (amanhã) · Dentista (qui).')
   })
   it('ligados por padrão e respeitam o horário de silêncio', () => {
     expect(DEFAULT_RPREFS.tarefa && DEFAULT_RPREFS.atraso && DEFAULT_RPREFS.noite).toBe(true)
-    const r = dueReminders(base({ hm: '21:03', evening: { day: { g: { done: 0, total: 0, left: [] }, s: { done: 0, total: 0, left: [] } }, soon: [] } }))
+    const r = dueReminders(base({ hm: '21:03', evening: { day: { g: { done: 1, total: 2, left: ['Lixo'] }, s: { done: 0, total: 0, left: [] } }, soon: [] } }))
+    // a Sabrina não tinha nada hoje nem nos próximos dias: não recebe resumo
+    expect(r.filter(x => x.kind === 'noite').map(x => x.who)).toEqual(['g'])
     const sub = (q: string) => ({ who: 'g' as const, reminders: {}, quiet_start: q, quiet_end: '07:00' })
     expect(forDevice(r, sub('22:00'), '21:03').length).toBe(1)
     expect(forDevice(r, sub('21:00'), '21:03').length).toBe(0)
     expect(forDevice(r, { ...sub('22:00'), reminders: { noite: false } }, '21:03').length).toBe(0)
+  })
+})
+
+describe('resumo da noite mais leve', () => {
+  it('fechado, pouco, muito, nada', () => {
+    expect(eveningBody({ done: 5, total: 5, left: [] }, [])).toBe('Dia fechado: 5 de 5 feitas. 🎉')
+    expect(eveningBody({ done: 4, total: 5, left: ['Lixo'] }, [])).toBe('4 de 5 feitas. Ficou para amanhã: Lixo.')
+    expect(eveningBody({ done: 2, total: 7, left: ['a', 'b', 'c', 'd', 'e'] }, [])).toBe('2 de 7 feitas. 5 ficaram para amanhã, sem pressa.')
+    expect(eveningBody({ done: 0, total: 0, left: [] }, [])).toBeNull()
+    expect(eveningBody({ done: 0, total: 0, left: [] }, ['Dentista (qui)'])).toBe('Amanhã em diante: Dentista (qui).')
   })
 })

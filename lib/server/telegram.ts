@@ -438,6 +438,21 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
     await send(deps, chatId, msg)
     return
   }
+  // Lembrete de tarefa: ✓ Feito ou ⤼ Não deu, e a mensagem mostra o que aconteceu (sem os botões)
+  const rm = data.match(/^(rt|nd):([0-9a-f-]{36})$/)
+  if (rm) {
+    const key = `${chatId}:${data}`
+    if (inflight.has(key)) { await deps.tg('answerCallbackQuery', { callback_query_id: cq.id }); return }
+    inflight.add(key)
+    let msg: string
+    try { msg = rm[1] === 'rt' ? await completeItem(deps.db, link, 't', rm[2], date) : await skipFromTelegram(deps.db, link, rm[2], date) }
+    catch { msg = '⚠️ Não consegui registrar agora. Tente de novo.' }
+    finally { inflight.delete(key) }
+    await deps.tg('answerCallbackQuery', { callback_query_id: cq.id, text: msg.slice(0, 190) })
+    if (cq.message?.message_id && !msg.startsWith('⚠️')) await deps.tg('editMessageText', { chat_id: chatId, message_id: cq.message.message_id, text: `${String(cq.message.text || '').split('\n')[0]}\n${msg}` })
+    else await send(deps, chatId, msg)
+    return
+  }
   const dm = data.match(/^(ok|no):([0-9a-f-]{36})$/)
   if (dm) { await decide(deps, cq, link, dm[1] === 'ok', dm[2]); return }
   const m = data.match(/^([tdm]):([0-9a-f-]{36})$/)
@@ -465,6 +480,17 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
 }
 
 const inflight = new Set<string>()
+
+/** ⤼ Não deu (lembrete do Telegram): pula a tarefa hoje, sem XP e sem quebrar a sequência. */
+async function skipFromTelegram(db: SupabaseClient, link: { household_id: string, who: Who }, taskId: string, date: string): Promise<string> {
+  const t = await db.from('tasks').select('id,title,household_id').eq('id', taskId).maybeSingle()
+  if (t.error || !t.data || (t.data as any).household_id !== link.household_id) return '⚠️ Não achei essa tarefa.'
+  const c = await db.from('task_completions').select('id').eq('task_id', taskId).eq('date', date).maybeSingle()
+  if (c.data) return `Já estava feita · ${(t.data as any).title}`
+  const r = await db.from('task_skips').upsert({ household_id: link.household_id, task_id: taskId, date, kind: 'skip', skipped_by: link.who }, { onConflict: 'task_id,date' })
+  if (r.error) return '⚠️ Não consegui pular agora. Tente de novo.'
+  return `⤼ Não deu hoje · ${(t.data as any).title}. Sai da lista de hoje, sem XP; volta no app em ↺ Voltar.`
+}
 
 // ── Bom dia e resumo no Telegram ────────────────────────────────────────
 

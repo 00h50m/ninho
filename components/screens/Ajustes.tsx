@@ -10,6 +10,7 @@ import { NotificationsCard } from '@/components/NotificationsCard'
 import { TelegramCard } from '@/components/TelegramCard'
 import { SobrouGuide } from '@/components/SobrouGuide'
 import { firstName, initials } from '@/components/AppModals'
+import { GuideContent } from '@/components/Guia'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function AjustesScreen({ a }: { a: App }) {
@@ -120,117 +121,7 @@ export function AjustesScreen({ a }: { a: App }) {
       </div>
       <div className="card guide aj-sec" id="aj-ajuda">
         <div className="slbl">Guia do Ninho</div>
-        <details open><summary>☀️ Hoje</summary><div className="gb">
-          <p>A tela do dia. Cada uma tem sua coluna (no celular, troque pelo seletor no topo) com o anel de progresso e só o que está pendente <b>hoje</b>.</p>
-          <ul>
-            <li><b>Grupos por horário:</b> ⚠ Atrasadas (diárias com horário que já passou), 🌅 Manhã, ☀️ Tarde, 🌙 Noite, a qualquer hora e, por fim, as do período (até o fim da semana, quinzena ou mês) e as pontuais.</li>
-            <li><b>▸ próxima</b> destaca a próxima tarefa com horário.</li>
-            <li>Toque na tarefa para concluir. Aparece <b>+XP · Desfazer</b> por alguns segundos. As concluídas ficam recolhidas no fim da coluna, com <b>quem concluiu</b> (conclusões anteriores a esta versão aparecem como “não identificado”).</li>
-            <li><b>Sua conta</b> (e-mail e senha) diz quem está usando o celular; é isso que fica registrado ao concluir. Ver a coluna da outra pessoa não muda isso. Se o banco recusar uma alteração, o app desfaz na tela e mostra o aviso com “Tentar novamente”.</li>
-            <li>No computador, <b>⇄</b> passa para a outra e <b>✎</b> edita. No celular, tudo isso fica no <b>⋯</b>.</li>
-            <li>Indicadores do topo: % do dia, estado da <b>Casa</b> (quanto das diárias ainda falta: organizada, atenção ou alerta), nível/XP e sequência.</li>
-          </ul>
-        </div></details>
-        <details><summary>📋 Tarefas</summary><div className="gb">
-          <p>A lista completa, agrupada por cômodo, com busca e filtros (essenciais, por pessoa, rodízio, sem horário e por cômodo).</p>
-          <ul>
-            <li><b>Ajuste rápido:</b> toque em “○ essencial” para ligar/desligar e em “+ horário” para definir a hora — sem abrir o formulário.</li>
-            <li><b>Responsável:</b> escolha {firstName(names.g)}, {firstName(names.s)} ou ↻ rodízio direto no card.</li>
-            <li>Toque no nome para editar tudo (cômodo, esforço, frequência, horário) ou remover.</li>
-            <li><b>✦ Sugestões:</b> listas prontas por cômodo; selecione várias ou toque em ✎ para ajustar antes de criar.</li>
-          </ul>
-        </div></details>
-        <details><summary>📅 Frequência</summary><div className="gb">
-          <ul>
-            <li><b>Diária:</b> volta todo dia.</li>
-            <li><b>Semanal:</b> aparece até ser feita; depois some até a próxima segunda.</li>
-            <li><b>Quinzenal:</b> uma vez a cada duas semanas (blocos fixos de 2 semanas).</li>
-            <li><b>Mensal:</b> uma vez por mês do calendário.</li>
-            <li><b>Pontual:</b> feita uma vez, some de vez.</li>
-          </ul>
-          <p>Cada tarefa mostra quando foi feita pela última vez (“há 9 dias”, “nunca feita”). Só dá para desmarcar o que foi feito hoje.</p>
-          <ul>
-            <li><b>📆 Dias da semana</b> (no formulário da tarefa): a diária aparece só nesses dias (ex.: lixo seg, qua e sex). A semanal ou quinzenal aparece a partir do primeiro dia escolhido (ex.: faxina a partir de sábado).</li>
-            <li><b>Pontual com data:</b> aparece em Hoje a partir da data e fica em ⚠ Atrasadas se passar.</li>
-            <li><b>⤼ Pular</b> (no ⋯ da tarefa, ou ⏭ no computador): resolve o dia, a semana ou o mês sem XP e <b>sem quebrar a sequência</b>. <b>⏭ Deixar para amanhã:</b> some só hoje. As puladas ficam no fim da coluna com “↺ Voltar”.</li>
-          </ul>
-        </div></details>
-        <details><summary>↻ Divisão das tarefas</summary><div className="gb">
-          <p>Tarefas sem responsável fixa (↻) são divididas entre vocês. Escolha o jeito em <b>Semana › Divisão da carga</b>:</p>
-          <ul>
-            <li><b>✦ Inteligente</b> (padrão): <b>quem fez por último passa a vez</b>. Se uma cobriu a outra, a vez se ajusta sozinha. Se uma já está com bem mais carga (o que é fixo dela + o que fez na semana), a próxima vai para a outra. Diárias são decididas a cada dia; semanais, quinzenais e mensais uma vez por período, para não trocarem de dona no meio da semana.</li>
-            <li><b>↻ Rodízio fixo:</b> alterna sempre na mesma ordem (a cada dia, semana ou mês).</li>
-          </ul>
-          <p>No celular, toque em <b>⋯</b> numa tarefa para ver <b>por que é a vez de quem</b>. A conta é a mesma nos dois celulares e no bom dia.</p>
-          <p>Usar ⇄ numa tarefa de rodízio fixa ela com a outra pessoa (dá para desfazer).</p>
-          <p>Em <b>Semana › Divisão da carga</b> vocês veem os pontos de cada uma (esforço × frequência; rodízio conta metade para cada). <b>✦ Distribuir automaticamente</b> reparte tudo de forma equilibrada — atenção: ele define responsável fixo para todas e tira do rodízio.</p>
-        </div></details>
-        <details><summary>🛒 Compras</summary><div className="gb">
-          <ul>
-            <li>Lista compartilhada <b>ao vivo</b>: o que uma adiciona ou risca aparece na hora no celular da outra.</li>
-            <li>Digite com a quantidade (“2 kg arroz”, “leite 3”) e a categoria é escolhida sozinha (dá para trocar). A lista fica na ordem dos corredores do mercado.</li>
-            <li>Item repetido não duplica; se estava riscado, volta para a lista.</li>
-            <li>No mercado, toque para riscar. <b>Finalizar compra</b> tira os riscados (com Desfazer) e oferece marcar a tarefa “Mercado semanal”.</li>
-            <li><b>Comprar de novo:</b> os itens mais comprados nos últimos meses, a um toque.</li>
-          </ul>
-        </div></details>
-        <details><summary>🔧 Manutenção</summary><div className="gb">
-          <ul>
-            <li>Em <b>Tarefas › Manutenção</b>: coisas de tempos em tempos (filtro do ar, vermífugo, vacina, revisão do carro). Use <b>✦ Modelos prontos</b> para começar.</li>
-            <li>Ao marcar <b>✓ Feita</b> (+3 XP), a próxima data é calculada sozinha. Dá para desfazer.</li>
-            <li>Aparece em <b>Hoje</b> quando falta pouco (3 dias) ou está atrasada, e no <b>bom dia</b> no dia em que vence.</li>
-          </ul>
-        </div></details>
-        <details><summary>🐾 Cães</summary><div className="gb">
-          <ul>
-            <li>Cada cão tem suas <b>rotinas</b> (diárias, semanais, quinzenais ou mensais, com horário opcional). Use ✎ no cão para editar nome, raça e fase, e ✎ na rotina para mudar ou remover. “+ Nova rotina” adiciona.</li>
-            <li>Em Hoje, a mesma rotina de cães diferentes (ex.: Ração manhã) vira <b>um item só</b>: um toque marca para todos. Elas entram no rodízio e aparecem na lista de quem é a vez; a bolinha com a inicial na aba Cães mostra de quem é.</li>
-            <li><b>Modo filhote:</b> registre acidentes por cômodo e acompanhe o dia.</li>
-            <li>Tarefas da categoria Cães repetem as rotinas e por isso não aparecem em Hoje; dá para arquivá-las pelo aviso em Tarefas.</li>
-          </ul>
-        </div></details>
-        <details><summary>📲 App e notificações</summary><div className="gb">
-          <ul>
-            <li><b>Instalar:</b> no Android, “Instalar” em Ajustes (ou menu ⋮ → Instalar app). No iPhone, Safari → Compartilhar → Adicionar à Tela de Início. O Ninho vira um ícone e abre como app.</li>
-            <li><b>Sem internet:</b> o app abre com os últimos dados que carregou neste aparelho. Marcar e editar voltam quando a conexão voltar.</li>
-            <li><b>☀️ Bom dia</b> (por volta das 7h): o que é seu hoje — fixo ou pela vez do rodízio — e o que vale ⚡ no horário.</li>
-            <li><b>🏆 Resumo de domingo</b> (por volta das 19h): placar, quem paga a aposta, sequência e o que ficou para trás.</li>
-            <li>Cada aparelho ativa as próprias notificações em Ajustes, e elas seguem “Este aparelho”. No iPhone, só com o app instalado (iOS 16.4+).</li>
-          </ul>
-        </div></details>
-        <details><summary>💬 Telegram e ✦ IA</summary><div className="gb">
-          <ul>
-            <li><b>Telegram:</b> em Ajustes › Telegram: <b>Conectar</b> liga o seu; <b>Gerar convite</b> cria um link para mandar à outra pelo WhatsApp. O bom dia e o resumo de domingo chegam lá também.</li>
-            <li><b>Menu fixo</b> no Telegram: 📋 Hoje, 🛒 Compras, ➕ Adicionar à lista, ✦ Dicas e ❓ Ajuda. Ao tocar no ✓ de uma tarefa, o botão some na hora e o resultado aparece no topo da lista.</li>
-            <li>Comandos: <b>/hoje</b> (o que é seu, com botões ✓ para concluir), <b>/feito louça</b>, <b>/compras</b> (ver a lista), <b>/compras leite, 2 kg arroz</b> ou <b>+leite</b> (adicionar), <b>/dicas</b> e <b>/sair</b>.</li>
-            <li><b>✦ IA:</b> na Reunião semanal (e no /dicas), a IA lê a semana (placar, quem fez o quê, puladas, o que pesou na reunião passada) e sugere de 3 a 5 ajustes. São sugestões, não regras. Limite de 6 pedidos por dia. O resumo da semana é enviado à Anthropic para gerar as sugestões.</li>
-          </ul>
-        </div></details>
-        <details><summary>🌤 Energia e modo sobrevivência</summary><div className="gb">
-          <p>Escolham a <b>energia da semana</b> (alta, média ou baixa). Em energia baixa ou no <b>🛡 modo sobrevivência</b>, Hoje mostra só as essenciais e as rotinas dos cães, com o botão “Mostrar todas”. Vale para a semana atual.</p>
-        </div></details>
-        <details><summary>📋 Reunião semanal</summary><div className="gb">
-          <p>15 minutos, sem cobranças: o que funcionou, o que pesou, ajuste, prioridades, como cada uma chega, vitórias, modo da próxima semana e recompensa. Fica no histórico em Semana.</p>
-        </div></details>
-        <details><summary>🏆 XP, níveis e sequência</summary><div className="gb">
-          <ul>
-            <li>Cada tarefa vale pelo esforço: <span className="xp xp-l">+1</span> leve, <span className="xp xp-m">+2</span> médio, <span className="xp xp-h">+3</span> pesado. Rotina de cão vale +1 por cão. O nível é do casal.</li>
-            <li><b>⚡ Bônus no horário:</b> diária com horário feita até o horário vale ×1,5 (leve 2, média 3, pesada 5). Feita atrasada no mesmo dia vale o normal: ninguém perde pontos. O ⚡ aparece no XP enquanto ainda dá tempo.</li>
-            <li><b>🏆 Placar da semana:</b> o XP de cada uma de segunda a domingo, com a aposta simbólica (troque em Semana). Conta pelo aparelho identificado de quem concluiu.</li>
-            <li><b>🔥 Sequências:</b> casa ativa (algo feito no dia), casa em dia (todas as essenciais diárias feitas) e a de cada uma, com recordes. A de hoje só entra depois do primeiro check; ninguém perde a sequência no meio do dia.</li>
-            <li><b>🏅 Conquistas:</b> bronze, prata e ouro por cômodo, cães, pontualidade, madrugada, tarefas pesadas, faxina relâmpago (várias tarefas em 1 hora) e recorde de sequência.</li>
-            <li>Níveis: {LEVELS.map(l=>`${l.n} (${l.min})`).join(' · ')}.</li>
-          </ul>
-        </div></details>
-        <details><summary>🔣 Símbolos</summary><div className="gb">
-          <ul>
-            <li><span className="tag-e">● essencial</span> — não pode falhar; caixinha laranja; aparece mesmo no modo sobrevivência.</li>
-            <li><span className="tag-t">⏰ 08:00</span> horário · <span className="tag-t late">⏰ 07:00</span> atrasada.</li>
-            <li><span className="tag-r">↻</span> rodízio · <span className="tag-next">▸ próxima</span> próxima com horário.</li>
-            <li>Bolinha <span style={{color:'var(--green)'}}>●</span> leve, <span style={{color:'var(--amb)'}}>●</span> média, <span style={{color:'var(--cor)'}}>●</span> pesada (na lista de Tarefas).</li>
-          </ul>
-          <p>Tudo sincroniza na hora entre os celulares de vocês.</p>
-        </div></details>
+        <GuideContent names={names}/>
       </div>
     </div>
   )

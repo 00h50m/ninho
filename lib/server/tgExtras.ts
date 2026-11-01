@@ -73,7 +73,9 @@ export async function runTelegramReminders(deps: BotDeps): Promise<TgReport & { 
       for (const l of list) for (const r of due.filter(x => x.who === l.who && (x.kind === 'noite' ? l.evening : l.tasks))) {
         const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind: r.kind, day: clock.date, ref: r.ref.slice(0, 40) }).select('id').maybeSingle()
         if (claim.error) { if (claim.error.code === '23505') { report.skipped++; continue } throw new Error(claim.error.message) }
-        const res = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${r.title}\n${r.body}${r.kind === 'noite' ? '' : '\n/hoje para ver e concluir'}` })
+        // tarefa no horário ou atrasada: resolve ali mesmo (✓ Feito / ⤼ Não deu)
+        const tid = r.kind === 'noite' ? null : r.ref.split(':')[1]
+        const res = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${r.title}\n${r.body}`, ...(tid ? { reply_markup: { inline_keyboard: [[{ text: '✓ Feito', callback_data: `rt:${tid}` }, { text: '⤼ Não deu', callback_data: `nd:${tid}` }], [{ text: '📋 Ver hoje', callback_data: 'hoje' }]] } } : {}) })
         if (res.ok) { report.sent++; await deps.db.from('telegram_log').update({ status: 'sent' }).eq('id', (claim.data as any).id) }
         else { report.failed++; report.errors.push(`${res.error_code}: ${String(res.description).slice(0, 120)}`); await deps.db.from('telegram_log').update({ status: 'failed', detail: String(res.description).slice(0, 300) }).eq('id', (claim.data as any).id) }
       }

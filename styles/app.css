@@ -1835,3 +1835,6 @@ html.rp-open body{overflow:hidden}
 .qa-sec{margin-top:12px}
 .qa-h{font-size:var(--fs-xs);font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:0 0 6px}
 .qa-top{margin-bottom:4px}
+/* "O que mudou no Ninho" (uma vez por aparelho) */
+.news-l{margin:0 0 10px;padding-left:18px;font-size:13.5px;line-height:1.5;display:grid;gap:4px}
+.news-f{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
