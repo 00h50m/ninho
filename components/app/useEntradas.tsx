@@ -119,6 +119,7 @@ export function useEntradas(c:AppBase&Avisos&Preferencias&Navegacao&Dados&FilaOf
       case 'notificacoes':aj('aj-notif');break
       case 'telegram':aj('aj-tg');break
       case 'aparencia':aj('aj-aparencia');break
+      case 'sistema':aj('aj-sistema');break
       default:setTab('ajustes')
     }
   }

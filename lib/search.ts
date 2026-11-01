@@ -43,6 +43,7 @@ export const FEATURES: SearchItem[] = ([
   ['notificacoes', 'Notificações', 'lembretes avisos horário de silêncio'],
   ['telegram', 'Telegram', 'bot mensagens resumo'],
   ['aparencia', 'Aparência e tema', 'cores escuro claro letra contraste'],
+  ['sistema', 'Backup e erros do app', 'sistema cópia exportar baixar dados'],
   ['ajustes', 'Ajustes', 'configurações conta'],
 ] as Array<[string, string, string]>).map(([id, title, sub]) => ({ kind: 'funcao' as const, id, title, sub }))
 

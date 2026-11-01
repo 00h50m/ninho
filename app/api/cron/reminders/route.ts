@@ -2,7 +2,8 @@
 // Chamado a cada 5 minutos pelo agendador (supabase/scripts/agendar-lembretes.sql).
 // Protegido por CRON_SECRET. Repetir a chamada não repete o lembrete.
 import { NextResponse } from 'next/server'
-import { createDeps, cronAuthorized, missingConfig, pushConfigured } from '@/lib/server/push'
+import { createDb, createDeps, cronAuthorized, missingConfig, pushConfigured } from '@/lib/server/push'
+import { logServerErrors } from '@/lib/server/sistema'
 import { runReminders } from '@/lib/server/reminders'
 import { runTelegramReminders, runTelegramWater } from '@/lib/server/tgExtras'
 import { createBotDeps, telegramConfigured } from '@/lib/server/tg'
@@ -25,6 +26,8 @@ async function handle(req: Request) {
   // resumo da noite e tarefa no horário pelo Telegram (041)
   const telegramLembretes = tg ? await runTelegramReminders({ ...createBotDeps(), ...(now ? { now } : {}) }).catch(e => ({ error: String(e?.message || e).slice(0, 160) })) : null
   if (report.sent || report.failed || report.errors.length || (telegram && 'sent' in telegram && telegram.sent) || (telegramLembretes && 'sent' in telegramLembretes && telegramLembretes.sent)) console.log('[ninho] lembretes', JSON.stringify({ ...report, errors: report.errors.length, telegram, telegramLembretes }))
+  const errs = [...report.errors, ...(telegram && 'errors' in telegram ? telegram.errors : telegram && 'error' in telegram ? [telegram.error] : []), ...(telegramLembretes && 'errors' in telegramLembretes ? telegramLembretes.errors : telegramLembretes && 'error' in telegramLembretes ? [telegramLembretes.error] : [])]
+  if (errs.length) await logServerErrors(createDb(), 'lembretes', errs).catch(() => {})
   return NextResponse.json({ ...report, telegram, telegramLembretes })
 }
 export const GET = handle

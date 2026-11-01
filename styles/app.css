@@ -1838,3 +1838,10 @@ html.rp-open body{overflow:hidden}
 /* "O que mudou no Ninho" (uma vez por aparelho) */
 .news-l{margin:0 0 10px;padding-left:18px;font-size:13.5px;line-height:1.5;display:grid;gap:4px}
 .news-f{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+/* Ajustes › Sistema */
+.sys-l{list-style:none;margin:8px 0;padding:0}
+.sys-l li{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--bd);font-size:13px}
+.sys-l li:first-child{border-top:none}
+.sys-t{min-width:0;overflow-wrap:anywhere}.sys-t small{display:block;font-size:12px;color:var(--sub)}
+.sys-err .sys-t b{font-weight:500}
+.sys-acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:4px}

@@ -11,16 +11,17 @@ import { TelegramCard } from '@/components/TelegramCard'
 import { SobrouGuide } from '@/components/SobrouGuide'
 import { firstName, initials } from '@/components/AppModals'
 import { GuideContent } from '@/components/Guia'
+import { SistemaCard } from '@/components/Sistema'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function AjustesScreen({ a }: { a: App }) {
-  const { goMd, setNosView, a11y, account, ag, device, dogs, go, householdId, lv, me, names, openModal, pickTheme, setA11y, setOnb, setToast, setup, showCard, showToast, shownTheme, streak, tasks, theme, toastTimer, updateName, xp } = a
+  const { today, goMd, setNosView, a11y, account, ag, device, dogs, go, householdId, lv, me, names, openModal, pickTheme, setA11y, setOnb, setToast, setup, showCard, showToast, shownTheme, streak, tasks, theme, toastTimer, updateName, xp } = a
   return (
     <div className="scr narrow">
       <button className="back" onClick={()=>go('inicio')}>← Início</button>
       <div className="sh"><div><h2>Ajustes</h2><p>Tudo o que dá para configurar, num lugar só</p></div></div>
       <nav className="fchips aj-idx" aria-label="Partes dos Ajustes">
-        {([['aj-aparencia','🎨 Aparência'],['aj-inicio','🏠 Início'],['aj-notif','🔔 Notificações'],['aj-tg','✈️ Telegram'],['aj-conta','👤 Conta'],['aj-casa','🏡 Casa'],['aj-ajuda','❓ Ajuda']] as const).map(([id,l])=>
+        {([['aj-aparencia','🎨 Aparência'],['aj-inicio','🏠 Início'],['aj-notif','🔔 Notificações'],['aj-tg','✈️ Telegram'],['aj-conta','👤 Conta'],['aj-casa','🏡 Casa'],['aj-sistema','🧰 Sistema'],['aj-ajuda','❓ Ajuda']] as const).map(([id,l])=>
           <button key={id} className="fc" onClick={()=>document.getElementById(id)?.scrollIntoView({behavior:'smooth',block:'start'})}>{l}</button>)}
       </nav>
       <div className="card aj-sec" id="aj-aparencia" style={{marginBottom:14}}>
@@ -119,6 +120,8 @@ export function AjustesScreen({ a }: { a: App }) {
         <div className="row"><span className="row-t">XP total</span><span className="mono" style={{marginLeft:'auto',color:'var(--sub)'}}>{xp} · Nv{lv.l}</span></div>
         <div className="row"><span className="row-t">Sequência</span><span className="mono" style={{marginLeft:'auto',color:'var(--sub)'}}>🔥 {streak} dias</span></div>
       </div>
+      <SistemaCard householdId={householdId} me={me} names={names} today={today} onToast={m=>showToast(m)}
+        onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}/>
       <div className="card guide aj-sec" id="aj-ajuda">
         <div className="slbl">Guia do Ninho</div>
         <GuideContent names={names}/>

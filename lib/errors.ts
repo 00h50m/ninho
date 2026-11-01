@@ -41,16 +41,41 @@ function friendly(e: RawError, context = ''): { message: string, retryable: bool
   return { message: 'Não foi possível salvar. Tente de novo.', retryable: true }
 }
 
-/** Log técnico sem dados sensíveis. */
+/** Para onde mandar os erros além do console (043: Ajustes › Sistema). O app liga depois do login. */
+type Sink = (row: { context: string, message: string, code: string | null }) => void
+let sink: Sink | null = null
+let sent = 0
+const recent = new Map<string, number>()
+export function setErrorSink(s: Sink | null): void { sink = s }
+
+/** Decide se manda para o registro: no máximo 30 por sessão e o mesmo erro só 1 vez por minuto. Puro, testado. */
+export function shouldReport(key: string, now: number, seen: Map<string, number>, count: number): boolean {
+  if (count >= 30) return false
+  const last = seen.get(key)
+  return last === undefined || now - last > 60_000
+}
+
+/** Log técnico sem dados sensíveis (e no registro de erros do app, se estiver ligado). */
 export function logError(context: string, err: unknown): void {
   const e = (err ?? {}) as RawError & { userMessage?: string }
+  const message = (e.message || String(err)).slice(0, 600)
   // eslint-disable-next-line no-console
-  console.error('[ninho]', context, { code: e.code || undefined, message: e.message || String(err), hint: e.hint || undefined })
+  console.error('[ninho]', context, { code: e.code || undefined, message, hint: e.hint || undefined })
+  if (!sink) return
+  // sem internet (ou o tempo real caindo e voltando sozinho) não é erro do app: não registra
+  if (/Failed to fetch|NetworkError|Load failed|offline|transport failure|CHANNEL_ERROR|TIMED_OUT/i.test(message) || /^realtime/.test(context)) return
+  const key = `${context}|${message}`, now = Date.now()
+  if (!shouldReport(key, now, recent, sent)) return
+  recent.set(key, now); sent++
+  try { sink({ context: context.slice(0, 120), message, code: e.code ? String(e.code).slice(0, 40) : null }) } catch { /* o registro nunca derruba o app */ }
 }
 
 /** Converte qualquer erro em NinhoError (para exibir userMessage). */
 export function toNinhoError(err: unknown, context: string): NinhoError {
-  return err instanceof NinhoError ? err : new NinhoError(err, context)
+  const n = err instanceof NinhoError ? err : new NinhoError(err, context)
+  // erro que chega para a pessoa também vai para o registro (menos falta de internet)
+  if (!(err instanceof NinhoError)) logError(context, err)
+  return n
 }
 
 /** Tabela inexistente (migration não aplicada): Postgres 42P01 ou PostgREST PGRST205. */

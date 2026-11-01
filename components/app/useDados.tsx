@@ -5,7 +5,8 @@ import { useEffect, useState, useRef } from 'react'
 import type { DogRoutine, HistoryWeek, Task, Who } from '@/lib/types'
 import { addDays } from '@/lib/dates'
 import { useCasa } from '@/hooks/useCasa'
-import { logError } from '@/lib/errors'
+import { logError, setErrorSink } from '@/lib/errors'
+import { reportError } from '@/lib/services/sistema'
 import * as api from '@/lib/services/ninho'
 import { useHomeClock } from '@/hooks/useHomeClock'
 import { useDeviceIdentity } from '@/hooks/useDeviceIdentity'
@@ -82,6 +83,15 @@ export function useDados(c:AppBase&Avisos&Preferencias&Navegacao){
   function patchTask(id:string,patch:Partial<Task>){setTasks(ts=>ts.map(x=>x.id===id?{...x,...patch}:x))}
   function patchRoutines(patches:Map<string,Partial<DogRoutine>>){setDogs(ds=>ds.map(d=>({...d,routines:d.routines.map(r=>patches.has(r.id)?{...r,...patches.get(r.id)}:r)})))}
   const refreshStats=()=>{data.refreshStats().catch(e=>logError('atualizar XP',e))}
+
+  // 043: erros do app vão para o registro (Ajustes › Sistema), com quem está usando
+  useEffect(()=>{
+    setErrorSink(row=>reportError(householdId,me??null,row))
+    const onErr=(e:ErrorEvent)=>logError('erro na tela',e.error||{message:e.message})
+    const onRej=(e:PromiseRejectionEvent)=>logError('erro sem tratamento',e.reason)
+    window.addEventListener('error',onErr);window.addEventListener('unhandledrejection',onRej)
+    return()=>{setErrorSink(null);window.removeEventListener('error',onErr);window.removeEventListener('unhandledrejection',onRej)}
+  },[householdId,me])
 
   return {
     accidents,ag,casa,cx,cz,data,device,dogs,fx,fxLive,game,historyData,historyError,hour,loadHistory,md,me,names,

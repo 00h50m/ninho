@@ -1,7 +1,8 @@
 // Bom dia (agendado pela Vercel: vercel.json). Protegido por CRON_SECRET.
 // Manda pelo push (se as chaves VAPID estão configuradas) e pelo Telegram (se o bot está configurado).
 import { NextResponse } from 'next/server'
-import { createDeps, cronAuthorized, missingConfig, pushConfigured } from '@/lib/server/push'
+import { createDb, createDeps, cronAuthorized, missingConfig, pushConfigured } from '@/lib/server/push'
+import { logServerErrors } from '@/lib/server/sistema'
 import { runMorning } from '@/lib/server/notify'
 import { runTelegramDigest } from '@/lib/server/telegram'
 import { createBotDeps, telegramConfigured } from '@/lib/server/tg'
@@ -17,5 +18,6 @@ export async function GET(req: Request) {
   const report = push ? await runMorning(createDeps()) : { skipped_push: 'push não configurado' }
   const telegram = tg ? await runTelegramDigest(createBotDeps(), 'morning') : null
   console.log('[ninho] cron manhã', JSON.stringify({ ...report, errors: (report as any).errors?.length, telegram: telegram && { ...telegram, errors: telegram.errors.length } }))
+  await logServerErrors(createDb(), 'bom dia', [...((report as any).errors || []), ...(telegram?.errors || [])]).catch(() => {})
   return NextResponse.json({ ...report, telegram })
 }
