@@ -54,7 +54,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   const reloadTasks = useCallback(async () => {
     const r = await api.loadTasks(householdId, ctx.current.today)
     indexCompletions('task', r.completions)
-    const t = buildTasks(r.tasks, r.completions, ctx.current.today, r.skips, r.handoffs, r.laters)
+    const t = buildTasks(r.tasks, r.completions, ctx.current.today, r.skips, r.handoffs, r.laters, r.plans)
     setTasks(t)
     return t
   }, [householdId])
@@ -228,6 +228,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
     const ch2 = supabase.channel(`ninho-dia:${householdId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_handoffs', filter: f }, () => later('task', reloadTasks))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_later', filter: f }, () => later('task', reloadTasks))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'week_plan', filter: f }, () => later('task', reloadTasks))
       .subscribe()
     const t = timers.current
     return () => {

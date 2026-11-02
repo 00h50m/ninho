@@ -2,10 +2,10 @@
 // Nenhuma usa service_role: só a chave anon do app e o login anônimo atual.
 import { supabase } from '@/lib/supabase'
 import { NinhoError, isMissingTable, logError } from '@/lib/errors'
-import { addDays } from '@/lib/dates'
+import { addDays, weekStartOf } from '@/lib/dates'
 import type { Accident, CompletionRow, Dog, Energy, HistoryWeek, Meeting, Names, Task, Who } from '@/lib/types'
 import { DEFAULT_NAMES } from '@/lib/constants'
-import type { DogSkipRow, HandoffRow, LaterRow, SkipRow } from '@/lib/build'
+import type { DogSkipRow, HandoffRow, LaterRow, SkipRow, WeekPlanRow } from '@/lib/build'
 import { EMPTY_SCORES, EMPTY_STREAKS, type AchievementStats, type Streaks, type WeeklyScores } from '@/lib/gamification'
 
 type Res<T> = { data: T | null, error: unknown }
@@ -50,7 +50,7 @@ export async function loadTasks(householdId: string, today: string) {
   const old = onceIds.length
     ? await run('carregar conclusões antigas', supabase.from('task_completions').select('id,task_id,date,completed_by').eq('household_id', householdId).in('task_id', onceIds).lt('date', since))
     : []
-  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])], skips: await loadSkips(householdId, today), handoffs: await loadHandoffs(householdId, today), laters: await loadLaters(householdId, today) }
+  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])], skips: await loadSkips(householdId, today), handoffs: await loadHandoffs(householdId, today), laters: await loadLaters(householdId, today), plans: await loadWeekPlans(householdId, today) }
 }
 
 /** Pular/adiar do último mês (o período mais longo). Sem a migration 008, segue sem pausas. */
@@ -66,6 +66,20 @@ export async function loadHandoffs(householdId: string, today: string): Promise<
   if (r.error) { if (!isMissingTable(r.error)) logError('carregar tarefas passadas', r.error); return [] }
   return (r.data || []) as HandoffRow[]
 }
+/** Plano da semana (045): desta semana e da próxima. Sem a migration, segue sem. */
+export async function loadWeekPlans(householdId: string, today: string): Promise<WeekPlanRow[]> {
+  const ws = weekStartOf(today)
+  const r = await supabase.from('week_plan').select('id,task_id,week_start,date,by_who').eq('household_id', householdId).gte('week_start', ws).lte('week_start', addDays(ws, 7))
+  if (r.error) { if (!isMissingTable(r.error)) logError('carregar plano da semana', r.error); return [] }
+  return (r.data || []) as WeekPlanRow[]
+}
+/** Aprova o plano: um dia por tarefa nesta semana (troca o que já havia). */
+export async function saveWeekPlan(householdId: string, weekStart: string, items: Array<{ task_id: string, date: string }>, by: Who | null): Promise<void> {
+  if (!items.length) return
+  await run('aprovar plano da semana', supabase.from('week_plan')
+    .upsert(items.map(i => ({ household_id: householdId, task_id: i.task_id, week_start: weekStart, date: i.date, by_who: by })), { onConflict: 'task_id,week_start' }).select('id'))
+}
+
 /** "Mais tarde" (044). Sem a migration, segue sem. */
 export async function loadLaters(householdId: string, today: string): Promise<LaterRow[]> {
   const r = await supabase.from('task_later').select('id,task_id,date,at,by_who').eq('household_id', householdId).eq('date', today)

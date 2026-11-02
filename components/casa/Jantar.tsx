@@ -4,7 +4,7 @@
 import { useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { addDays, fmtDate, weekStartOf } from '@/lib/dates'
-import { cookLabel, dinnersFromPantry, firstFreeDay, weekPlan, weekShopping, type Cook, type HouseMeal } from '@/lib/jantar'
+import { cookLabel, dinnersFromPantry, firstFreeDay, shopsNow, splitByPantry, weekPlan, weekShopping, type Cook, type HouseMeal } from '@/lib/jantar'
 import { urgencyLabel, type PantryItem } from '@/lib/despensa'
 import { recipeShopping, type Recipe } from '@/lib/receitas'
 import type { MealInput } from '@/lib/services/despensaJantar'
@@ -22,7 +22,9 @@ export function DinnerView({ ready, meals, recipes, pantry = [], names, today, o
   if (!ready) return <div className="narrow"><div className="card empty"><span className="empty-icon">🍲</span>O jantar das duas precisa da atualização do banco (migration 038).</div></div>
   const plan = weekPlan(meals, week)
   const planned = plan.flatMap(d => d.meal ? [d.meal] : [])
-  const lines = weekShopping(planned.filter(m => m.date >= today))
+  // o que já tem na despensa fica de fora da lista
+  const wk = splitByPantry(weekShopping(planned.filter(m => m.date >= today)), pantry, today)
+  const lines = wk.buy
   const cooks = planned.reduce((a, m) => { if (m.cook === 'g' || m.cook === 's') a[m.cook]++; return a }, { g: 0, s: 0 } as Record<Who, number>)
   const cur = weekStartOf(today)
   const ideas = dinnersFromPantry(recipes, pantry, today)
@@ -43,7 +45,7 @@ export function DinnerView({ ready, meals, recipes, pantry = [], names, today, o
             <b>{recipe.name}</b><small>usa {uses.map(u => `${u.name} (${urgencyLabel(u, today)})`).join(', ')}</small></button>
         </li>)}</ul>
       </section>}
-      {edit && <MealForm value={edit} recipes={recipes} names={names} onCancel={() => setEdit(null)} onSave={async v => { await onSave(v); setEdit(null) }}/>}
+      {edit && <MealForm value={edit} recipes={recipes} names={names} pantry={pantry} today={today} onCancel={() => setEdit(null)} onSave={async v => { await onSave(v); setEdit(null) }}/>}
       <section className="card">
         <ul className="jt-list">{plan.map(({ date, meal }) => <li key={date} className={`jt-d ${date === today ? 'jt-today' : ''} ${date < today ? 'jt-past' : ''}`}>
           <span className="jt-day"><b>{DOW[new Date(`${date}T12:00:00Z`).getUTCDay()]}</b><small className="mono">{fmtDate(date)}</small></span>
@@ -54,15 +56,16 @@ export function DinnerView({ ready, meals, recipes, pantry = [], names, today, o
         </li>)}</ul>
       </section>
       {lines.length > 0 && <div className="md-acts">
-        <button className="btn btn-s" disabled={busy} onClick={async () => { setBusy(true); try { await onShopping(lines) } catch { /* aviso já mostrado */ } finally { setBusy(false) } }}>🛒 Ingredientes da semana ({lines.length})</button>
+        <button className="btn btn-s" disabled={busy} onClick={async () => { setBusy(true); try { await onShopping(lines) } catch { /* aviso já mostrado */ } finally { setBusy(false) } }}>🛒 Ingredientes da semana ({lines.length}){wk.have.length ? ` · ${wk.have.length} já na despensa` : ''}</button>
       </div>}
       <p className="row-s">Escolha uma receita (as suas e as que a outra compartilhou) para os ingredientes irem juntos; ou escreva o prato. O jantar de hoje aparece no Início e no bom dia do Telegram.</p>
     </div>
   )
 }
 
-function MealForm({ value, recipes, names, onSave, onCancel }: { value: MealInput, recipes: Recipe[], names: Names, onSave: (v: MealInput) => Promise<void>, onCancel: () => void }) {
-  const [v, setV] = useState(value), [busy, setBusy] = useState(false)
+function MealForm({ value, recipes, names, pantry, today, onSave, onCancel }: { value: MealInput, recipes: Recipe[], names: Names, pantry: PantryItem[], today: string, onSave: (v: MealInput) => Promise<void>, onCancel: () => void }) {
+  const [v, setV] = useState<MealInput>({ toShop: true, ...value }), [busy, setBusy] = useState(false)
+  const split = splitByPantry(v.ingredients, pantry, v.date)
   const pick = (title: string) => {
     const r = recipes.find(x => x.name.toLowerCase() === title.trim().toLowerCase())
     setV(x => ({ ...x, title, recipe_id: r ? r.id : null, ingredients: r ? recipeShopping(r) : x.recipe_id ? [] : x.ingredients }))
@@ -72,7 +75,12 @@ function MealForm({ value, recipes, names, onSave, onCancel }: { value: MealInpu
     <div className="slbl">🍲 Jantar de {fmtDate(v.date)}</div>
     <datalist id="jt-rec">{recipes.map(r => <option key={r.id} value={r.name}/>)}</datalist>
     <label className="onb-f"><span>O que vai ter</span><input className="fi" list="jt-rec" value={v.title} maxLength={80} autoFocus placeholder={recipes.length ? 'Escolha uma receita ou escreva' : 'Ex.: Escondidinho de frango'} onChange={e => pick(e.target.value)}/></label>
-    {rec && <small className="row-s">📖 Receita da {first(names[rec.who])} · {v.ingredients.length} ingrediente(s) para as compras</small>}
+    {rec && <small className="row-s">📖 Receita da {first(names[rec.who])} · {v.ingredients.length} ingrediente(s)</small>}
+    {v.ingredients.length > 0 && shopsNow(v.date, today) && <label className="chk-row jt-shop">
+      <input type="checkbox" checked={!!v.toShop} onChange={e => setV(x => ({ ...x, toShop: e.target.checked }))}/>
+      <span>🛒 Mandar o que falta para a lista de compras
+        <small className="row-s">{split.buy.length ? `${split.buy.length} para comprar` : 'nada para comprar'}{split.have.length ? ` · já na despensa: ${split.have.map(h => h.title).join(', ')}` : ''}</small></span>
+    </label>}
     <div className="onb-q">Quem cozinha</div>
     <div className="onb-days wrap" role="radiogroup" aria-label="Quem cozinha">
       {([['g', first(names.g)], ['s', first(names.s)], ['both', 'As duas'], [null, 'A combinar']] as Array<[Cook, string]>).map(([k, l]) =>

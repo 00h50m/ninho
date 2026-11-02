@@ -45,6 +45,8 @@ export function groupToday(list: HItem[], nowHM: string, today?: string) {
     let k: string
     if (today && t.task?.frequency === 'once' && t.task.due_date && t.task.due_date < today && !t.completed_today) k = 'late'
     else if (t.frequency === 'daily') k = !t.scheduled_time ? 'any' : isLate(t, nowHM) ? 'late' : bucketOf(hhmm(t.scheduled_time))
+    // plano da semana: no dia planejado (ou depois), a tarefa sobe para "hoje, a qualquer hora"
+    else if (today && t.task?.planned_on && t.task.planned_on <= today) k = 'any'
     else k = GROUPS.some(x => x[0] === t.frequency) ? t.frequency : 'any'
     ;(g[k] = g[k] || []).push(t)
   })

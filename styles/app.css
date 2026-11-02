@@ -1947,3 +1947,19 @@ html.rp-open body{overflow:hidden}
 .heat-leg .l2{background:color-mix(in srgb,var(--sub) 52%,var(--sf2))}
 .heat-leg .l3{background:color-mix(in srgb,var(--sub) 76%,var(--sf2))}
 .heat-leg .l4{background:var(--sub)}
+
+/* ── jantar → compras ── */
+.jt-shop{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;margin:6px 0;border:1px solid var(--bd);border-radius:var(--rs);background:var(--sf2);cursor:pointer}
+.jt-shop input{width:20px;height:20px;margin-top:1px;flex-shrink:0;accent-color:var(--gdk)}
+.jt-shop span{display:flex;flex-direction:column;gap:2px;font-size:14px}
+
+/* ── plano da semana ── */
+.plan-l{list-style:none;margin:8px 0;padding:0;display:flex;flex-direction:column;gap:6px}
+.plan-l li{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--bd)}
+.plan-l li:last-child{border-bottom:0}
+.plan-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.plan-t b{font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.plan-t small{font-size:12px;color:var(--sub)}
+.plan-d{width:auto;min-width:118px;flex-shrink:0;padding:8px 10px}
+.plan-open{margin-bottom:12px}
+.tag-plan{background:var(--pbg);color:var(--pur)}

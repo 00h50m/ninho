@@ -24,6 +24,9 @@ export interface CompletionState {
   handoff?: HandoffInfo | null
   /** "Mais tarde" (044): horário só de hoje. scheduled_time já vem com ele; `orig` é o de sempre. */
   later?: LaterInfo | null
+  /** Plano da semana (045): dia planejado nesta semana e as linhas desta e da próxima semana. */
+  planned_on?: string | null
+  plans?: Array<{ id: string, week_start: string, date: string }>
 }
 
 export interface LaterInfo { id: string, date: string, at: string, orig: string | null, by: Who | null }

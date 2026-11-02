@@ -7,14 +7,14 @@ import { LEVELS } from '@/lib/xp'
 const first = (n: string) => (n || '').split(' ')[0]
 
 /** Muda quando há novidades para contar; cada aparelho vê uma vez. */
-export const NEWS_VERSION = '2026-11b'
+export const NEWS_VERSION = '2026-11c'
 const NEWS_KEY = 'ninho.novidades'
 const NEWS: ReactNode[] = [
-  <><b>Deslize na tarefa</b> (celular): para a direita conclui, para a esquerda abre as opções.</>,
-  <><b>Puxe a tela para baixo</b> no topo para atualizar tudo.</>,
-  <><b>🕰 Tarefas sem horário</b> agora lembram na hora em que você costuma fazer (o Ninho aprende sozinho). Dá para desligar em Ajustes › Notificações.</>,
-  <>Fechou tudo o que era seu no dia? Tem <b>comemoração</b> 🎉</>,
-  <><b>⤼ Não deu</b>: a tarefa ou a rotina dos cães atrasada sai da lista de hoje com um toque, sem XP.</>,
+  <><b>⏰ Mais tarde</b> no ⋯ da tarefa (e <b>⏰ +1 h</b> no Telegram): continua na lista, com outro horário só hoje.</>,
+  <><b>🎯 Foco</b> ao lado de “Para agora”: só o que é seu agora, em tela cheia.</>,
+  <><b>🗓 Plano da semana</b>: no domingo o Ninho distribui faxina, lavanderia e mercado pelos dias mais leves; vocês aprovam com um toque.</>,
+  <><b>🍲 Jantar → 🛒</b>: ao planejar o jantar, o que falta (e não está na despensa) vai sozinho para a lista.</>,
+  <>Em <b>Nós › Histórico</b>: o mapa do mês de cada uma e as sequências das tarefas.</>,
 ]
 
 export function NewsCard({ onGuide }: { onGuide: () => void }) {
@@ -63,6 +63,7 @@ export function GuideContent({ names }: { names: Names }) {
       <ul>
         <li><b>Frequência:</b> diária, semanal, quinzenal, mensal ou pontual. Dá para escolher <b>dias da semana</b>, um <b>período</b> (De… até…) e <b>pausar</b> por um tempo.</li>
         <li><b>⤼ Não deu:</b> tarefa diária ou rotina dos cães atrasada ganha o botão ao lado do check. Sai da lista de hoje <b>sem XP e sem quebrar a sequência</b>. Fica em “Não deu ou para amanhã”, com ↺ Voltar.</li>
+        <li><b>🗓 Plano da semana:</b> no domingo (no Início e no Telegram) o Ninho põe cada tarefa da semana num dia com menos agenda, sem juntar as pesadas da mesma pessoa. Ajuste o dia e aprove. No dia dela, a tarefa sobe para “Hoje” (📅 na linha). Também em Casa › Tarefas.</li>
         <li><b>Rotinas com passos</b> (Casa › Tarefas › Rotinas): checklist num horário, como “fechar a cozinha”, que pode ser das duas, de uma ou em rodízio.</li>
         <li><b>💡 Sugestões</b> (Casa › Mais): tarefas prontas por cômodo e checklists de estação.</li>
       </ul>
@@ -78,7 +79,7 @@ export function GuideContent({ names }: { names: Names }) {
     <details><summary>🛒 Compras, despensa e jantar</summary><div className="gb">
       <ul>
         <li>Lista <b>ao vivo</b> entre os celulares, na ordem dos corredores, com mercado e preço. <b>Finalizar compra</b> tira os riscados e oferece marcar a tarefa de mercado.</li>
-        <li><b>Despensa:</b> o que vence logo aparece no Início. <b>Jantar:</b> quem cozinha e ideias com o que tem em casa.</li>
+        <li><b>Despensa:</b> o que vence logo aparece no Início. <b>Jantar:</b> quem cozinha e ideias com o que tem em casa. Ao salvar o jantar da semana, os ingredientes que faltam (e não estão na despensa) vão para a lista, com Desfazer.</li>
       </ul>
     </div></details>
     <details><summary>📅 Agenda, manutenção e 🧹 Faxinão</summary><div className="gb">

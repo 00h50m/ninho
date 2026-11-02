@@ -75,3 +75,20 @@ export function firstFreeDay(meals: HouseMeal[], today: string): string {
   for (let i = 0; i < 7; i++) { const d = addDays(today, i); if (!meals.some(m => m.date === d && m.meal === 'jantar')) return d }
   return today
 }
+
+/**
+ * Ingredientes de um jantar: o que comprar e o que já tem na despensa (mesma comida, sem vencer
+ * antes do dia do jantar). Itens sem validade contam como tendo.
+ */
+export function splitByPantry(lines: Array<{ title: string, qty: string }>, pantry: PantryItem[], date: string): { buy: Array<{ title: string, qty: string }>, have: Array<{ title: string, qty: string, from: string }> } {
+  const buy: Array<{ title: string, qty: string }> = [], have: Array<{ title: string, qty: string, from: string }> = []
+  for (const l of lines) {
+    if (!l.title.trim()) continue
+    const p = pantry.find(x => sameFood(l.title, x.name) && (!x.expires_on || x.expires_on >= date))
+    if (p) have.push({ ...l, from: p.name }); else buy.push(l)
+  }
+  return { buy, have }
+}
+
+/** O jantar entra na lista de compras sozinho? Só de hoje até daqui a 7 dias. */
+export const shopsNow = (date: string, today: string) => date >= today && date <= addDays(today, 7)

@@ -10,6 +10,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Who } from '@/lib/types'
 import { homeClock } from '@/lib/dates'
 import { laterAt } from '@/lib/maisTarde'
+import { approveFromTelegram, weekPlanFor } from './planoSemana'
 import { planToday } from '@/lib/today'
 import { dogKey, isWho } from '@/lib/rotation'
 import { hhmm } from '@/lib/dates'
@@ -439,6 +440,15 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
     await send(deps, chatId, msg)
     return
   }
+  // Plano da semana (resumo de domingo): ✓ Aprovar
+  const wm = data.match(/^wp:(\d{4}-\d{2}-\d{2})$/)
+  if (wm) {
+    let msg: string
+    try { msg = await approveFromTelegram(deps.db, link, wm[1], date) } catch { msg = '⚠️ Não consegui aprovar agora. Tente de novo.' }
+    await deps.tg('answerCallbackQuery', { callback_query_id: cq.id, text: msg.slice(0, 190) })
+    await send(deps, chatId, msg)
+    return
+  }
   // Lembrete de tarefa: ✓ Feito, ⏰ +1 h ou ⤼ Não deu, e a mensagem mostra o que aconteceu (sem os botões)
   const rm = data.match(/^(rt|nd|lt):([0-9a-f-]{36})$/)
   if (rm) {
@@ -527,6 +537,8 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
       const house = kind === 'morning' ? await houseLines(deps.db, householdId, clock.date).catch(() => [] as string[]) : []
       const balance = kind === 'weekly' ? await balanceText(deps.db, householdId, clock.date).catch(() => null) : null
       const retro = kind === 'weekly' ? await retroText(deps.db, householdId, clock.date).catch(() => null) : null
+      // domingo: o plano da próxima semana, para aprovar com um toque
+      const wplan = kind === 'weekly' ? await weekPlanFor(deps.db, householdId, clock.date).catch(() => null) : null
       for (const l of list) {
         if (!isWho(l.who)) continue
         const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind, day: clock.date }).select('id').maybeSingle()
@@ -545,8 +557,10 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
           if (lines.length) more = `\n\n🌿 Seu Meu dia na semana\n${lines.join('\n')}`
           if (balance) more = `\n\n${balance}${more}`
           if (retro) more = `\n\n${retro}${more}`
+          if (wplan && wplan.items.length && !wplan.approved) more += `\n\n🗓 Plano da semana (sugestão)\n${wplan.lines.join('\n')}\nToque em ✓ para aprovar ou ajuste no app (Início).`
         }
-        const extra = kind === 'morning' ? { reply_markup: { inline_keyboard: [...(menu?.rows || []), [{ text: '📋 Ver e concluir', callback_data: 'hoje' }]] } } : {}
+        const extra = kind === 'morning' ? { reply_markup: { inline_keyboard: [...(menu?.rows || []), [{ text: '📋 Ver e concluir', callback_data: 'hoje' }]] } }
+          : wplan && wplan.items.length && !wplan.approved ? { reply_markup: { inline_keyboard: [[{ text: '✓ Aprovar plano', callback_data: `wp:${wplan.start}` }]] } } : {}
         const r = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${p.title}\n${p.body}${more}`.slice(0, 4000), ...extra })
         if (r.ok) { report.sent++; await deps.db.from('telegram_log').update({ status: 'sent' }).eq('id', (claim.data as any).id) }
         else {

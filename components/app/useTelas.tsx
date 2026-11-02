@@ -1,6 +1,7 @@
 'use client'
 // O que as telas mostram: ações rápidas, linhas de item, linha do tempo por pessoa e filtros das tarefas.
 // Parte do estado do app (ver components/app/useNinhoApp.tsx, que junta as partes na ordem).
+import { dowLabel } from '@/lib/planoSemana'
 import { EmptyNino } from '@/components/ui/Empty'
 import type { Dog, DogItem, DogRoutine, HItem, Task, Who } from '@/lib/types'
 import { SwipeRow } from '@/components/ui/Swipe'
@@ -84,7 +85,7 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
             <span title={CAT[t.category]}>{catIc(t.category)}</span>
             {o.next&&<span className="tag-next">▸ próxima</span>}
             {t.essential&&!t.completed_today&&<span className="tag-e" title="Essencial">●<span className="lg-only"> essencial</span></span>}
-            {t.scheduled_time&&<span className={`tag-t ${late?'late':''}`} title={t.later?`Mais tarde, só hoje${t.later.orig?` (de sempre: ${t.later.orig})`:''}`:undefined}>⏰ {hhmm(t.scheduled_time)}{t.later&&<> · mais tarde</>}</span>}
+            {t.planned_on&&t.frequency!=='daily'&&!t.completed_today&&<span className="tag-t tag-plan" title="Dia do plano da semana">📅 {t.planned_on===today?'hoje':dowLabel(t.planned_on)}</span>}{t.scheduled_time&&<span className={`tag-t ${late?'late':''}`} title={t.later?`Mais tarde, só hoje${t.later.orig?` (de sempre: ${t.later.orig})`:''}`:undefined}>⏰ {hhmm(t.scheduled_time)}{t.later&&<> · mais tarde</>}</span>}
             {t.frequency!=='daily'&&<span><span className="lg-only">{FPT[t.frequency]}{!t.completed_today&&t.frequency!=='once'&&' · '}</span>{!t.completed_today&&t.frequency!=='once'&&lastLabel(t.prev_done||null,today)}</span>}
             {!isFixed(t)&&<span className="tag-r" title="Rodízio: alterna entre vocês">↻<span className="lg-only"> rodízio</span></span>}
             {t.completed_today&&<span className="tag-by" title="Quem concluiu">✓ {completedByLabel(t.completed_by_today,names)}</span>}

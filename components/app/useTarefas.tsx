@@ -173,6 +173,12 @@ export function useTarefas(c:AppCore&Dia){
   async function fixTime(t:Task,at:string){
     if(await updateTaskFields(t.id,{scheduled_time:at}))showToast(`🕰 ${t.title} agora é às ${at}`,()=>{setToast(null);updateTaskFields(t.id,{scheduled_time:null})})
   }
+  // ── PLANO DA SEMANA (045) ─────────────────────────────
+  async function approveWeekPlan(weekStart:string,items:Array<{task_id:string,date:string}>):Promise<boolean>{
+    const by=requireMe();if(!by)return false
+    try{await api.saveWeekPlan(householdId,weekStart,items,by);await data.reloadTasks();showToast(`🗓 Plano da semana aprovado · ${items.length} tarefa${items.length>1?'s':''}`);return true}
+    catch(e){showError(toNinhoError(e,'aprovar plano da semana'),()=>approveWeekPlan(weekStart,items));return false}
+  }
   // ── PULAR / DEIXAR PARA AMANHÃ ────────────────────────
   const SKIP_LABEL:Record<string,string>={daily:'Não deu hoje (pular)',weekly:'Pular esta semana',biweekly:'Pular esta quinzena',monthly:'Pular este mês'}
   async function pauseTask(t:Task,kind:'snooze'|'skip'){
@@ -279,7 +285,7 @@ export function useTarefas(c:AppCore&Dia){
     skipDogs,unskipDogs,
     SKIP_LABEL,addPack,addSuggestion,archiveTasks,archived,askHelp,assignTask,completeDog,deleteTask,handoffToday,
     markDogs,pauseTask,pauseUntil,quickUpdate,restoreTask,save,saveTask,setArchived,swapTask,toggleDogItem,
-    toggleTask,undoHandoff,unpauseTask,updateTaskFields,laterToday,undoLater,fixTime,
+    toggleTask,undoHandoff,unpauseTask,updateTaskFields,laterToday,undoLater,fixTime,approveWeekPlan,
   }
 }
 

@@ -40,7 +40,7 @@ export async function pantryToShopping(householdId: string, by: Who | null, it: 
   return { created: !!(r?.created || r?.reopened) }
 }
 
-export interface MealInput { date: string, title: string, cook: Cook, recipe_id: string | null, ingredients: Array<{ title: string, qty: string }>, notes: string | null }
+export interface MealInput { date: string, title: string, cook: Cook, recipe_id: string | null, ingredients: Array<{ title: string, qty: string }>, notes: string | null, /** só no app: mandar o que falta para a lista */ toShop?: boolean }
 export async function saveMeal(householdId: string, by: Who | null, x: MealInput): Promise<void> {
   must(await supabase.from('house_meals').upsert({ household_id: householdId, date: x.date, meal: 'jantar', title: x.title.trim().slice(0, 80), cook: x.cook, recipe_id: x.recipe_id,
     ingredients: x.ingredients.slice(0, 40).map(i => ({ title: i.title.slice(0, 80), qty: (i.qty || '').slice(0, 30) })), notes: x.notes?.trim().slice(0, 300) || null, created_by: by, updated_at: new Date().toISOString() },
@@ -48,4 +48,22 @@ export async function saveMeal(householdId: string, by: Who | null, x: MealInput
 }
 export async function deleteMeal(id: string): Promise<void> {
   must(await supabase.from('house_meals').delete().eq('id', id).select('id'), 'tirar jantar')
+}
+
+/** Manda itens para a lista de compras e devolve os que foram criados (para o Desfazer). */
+export async function addToShopping(householdId: string, who: Who | null, lines: Array<{ title: string, qty: string }>): Promise<{ created: string[], had: number }> {
+  const created: string[] = []; let had = 0
+  for (const l of lines.slice(0, 40)) {
+    const r = await supabase.rpc('ninho_add_shopping_item', { p_household_id: householdId, p_title: l.title.trim().slice(0, 80), p_qty: (l.qty || '').slice(0, 30), p_category: guessCategory(l.title), p_by: who })
+    if (r.error) throw r.error
+    const d = r.data as any
+    if (d?.created && d.id) created.push(d.id); else had++
+  }
+  return { created, had }
+}
+/** Desfazer: tira da lista só o que foi criado agora e ainda não foi riscado. */
+export async function undoShopping(ids: string[]): Promise<void> {
+  if (!ids.length) return
+  const r = await supabase.from('shopping_items').delete().in('id', ids).is('checked_at', null).select('id')
+  if (r.error) throw r.error
 }

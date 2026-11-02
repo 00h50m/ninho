@@ -33,12 +33,14 @@ import { fmtClock, remainingMs } from '@/lib/sprint'
 import { firstName } from '@/components/AppModals'
 import { StuckCard } from '@/components/nos/Esquecidas'
 import { NewsCard } from '@/components/Guia'
+import { WeekPlanCard, showPlanToday } from '@/components/inicio/PlanoSemana'
+import { planWeek } from '@/lib/planoSemana'
 import { DayDone } from '@/components/ui/Festa'
 import { Deferred } from '@/components/ui/Deferred'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function InicioScreen({ a }: { a: App }) {
-  const { hItems, ownerOfItem, toggleTask, toggleDogItem, isPending, fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
+  const { tasks, approveWeekPlan, ownerOfTask, hItems, ownerOfItem, toggleTask, toggleDogItem, isPending, fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
   const [focus,setFocus]=useState(false)
   return (
     <div className="scr">
@@ -184,6 +186,7 @@ export function InicioScreen({ a }: { a: App }) {
           </div>}</Deferred>
         </aside>
       </div>
+      {showPlanToday(today,tasks.some(t=>(t.plans||[]).some(p=>p.week_start===planWeek(today).start)))&&<WeekPlanCard tasks={tasks} events={ag.events||[]} today={today} names={names} ownerOf={ownerOfTask} onApprove={approveWeekPlan}/>}
       <NewsCard onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('aj-ajuda')?.scrollIntoView({behavior:'smooth',block:'start'}),400)}}/>
       {showCard('ajuste')&&stuckTasks.length>0&&<StuckCard task={stuckTasks[0]} more={stuckTasks.length-1} names={names} onAdjust={adjustForgot} onLater={()=>ajusteNotNow(stuckTasks[0])}/>}
       {week.available&&showCard('semana')&&<WeekStrip days={weekInfo} names={names}/>}

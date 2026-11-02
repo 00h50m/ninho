@@ -2,6 +2,7 @@
 import type { CompletionRow, Dog, Task, Who } from './types'
 import { summarizeCompletions } from './completions'
 import { byTime } from './today'
+import { weekStartOf } from './dates'
 import { isWho } from './rotation'
 
 type Row = Record<string, any>
@@ -15,7 +16,11 @@ export interface HandoffRow { id: string, task_id: string, date: string, to_who:
 /** Linha de task_later (044): "mais tarde", horário só deste dia. */
 export interface LaterRow { id: string, task_id: string, date: string, at: string, by_who?: string | null }
 
-export function buildTasks(rows: Row[], comps: CompletionRow[], today: string, skips: SkipRow[] = [], handoffs: HandoffRow[] = [], laters: LaterRow[] = []): Task[] {
+/** Linha de week_plan (045). */
+export interface WeekPlanRow { id: string, task_id: string, week_start: string, date: string, by_who?: string | null }
+
+export function buildTasks(rows: Row[], comps: CompletionRow[], today: string, skips: SkipRow[] = [], handoffs: HandoffRow[] = [], laters: LaterRow[] = [], plans: WeekPlanRow[] = []): Task[] {
+  const ws = weekStartOf(today)
   const info = summarizeCompletions(comps, 'task_id', today)
   // Pausa mais recente até hoje de cada tarefa (pular vale o período; adiar, só o dia)
   const last = new Map<string, SkipRow>()
@@ -25,7 +30,9 @@ export function buildTasks(rows: Row[], comps: CompletionRow[], today: string, s
     const h = handoffs.find(x => x.task_id === t.id && x.date === today && isWho(x.to_who))
     const l = laters.find(x => x.task_id === t.id && x.date === today)
     const at = l ? String(l.at).slice(0, 5) : null
-    return { ...(t as Task), ...info(t.id), skip: s ? { id: s.id, date: s.date, kind: s.kind, by: isWho(s.skipped_by) ? s.skipped_by : null } : null,
+    const pl = plans.filter(p => p.task_id === t.id).map(p => ({ id: p.id, week_start: p.week_start, date: p.date }))
+    return {
+      plans: pl, planned_on: pl.find(p => p.week_start === ws)?.date ?? null, ...(t as Task), ...info(t.id), skip: s ? { id: s.id, date: s.date, kind: s.kind, by: isWho(s.skipped_by) ? s.skipped_by : null } : null,
       handoff: h ? { id: h.id, date: h.date, to: h.to_who as Who, by: isWho(h.by_who) ? h.by_who : null } : null,
       ...(l && at ? { scheduled_time: at, later: { id: l.id, date: l.date, at, orig: t.scheduled_time ? String(t.scheduled_time).slice(0, 5) : null, by: isWho(l.by_who) ? l.by_who : null } } : { later: null }) }
   })

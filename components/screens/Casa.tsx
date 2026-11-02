@@ -19,7 +19,8 @@ import { PantryView } from '@/components/casa/Despensa'
 import { DinnerView } from '@/components/casa/Jantar'
 import * as cxApi from '@/lib/services/despensaJantar'
 import { useSoon } from '@/lib/despensa'
-import { dinnersFromPantry } from '@/lib/jantar'
+import { dinnersFromPantry, shopsNow, splitByPantry } from '@/lib/jantar'
+import { WeekPlanCard } from '@/components/inicio/PlanoSemana'
 import * as mdApi from '@/lib/services/meudia'
 import { CASA_GROUP, casaGroups, type CasaGroup } from '@/lib/nav'
 import { FaxinaoView } from '@/components/casa/Faxinao'
@@ -30,7 +31,7 @@ import { routineOnDay } from '@/lib/rotinas'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function CasaScreen({ a }: { a: App }) {
-  const { routines, addPack, addSuggestion, ag, archiveTasks, archived, assignTask, billPaid, casa, casaLast, casaOk, casaView, cx, deleteTask, dogCareAgenda, dogTasks, dogs, eventDone, filtered, fx, fxLive, go, goCasa, householdId, maintActions, md, me, names, onShoppingFinished, openModal, ownerOfTask, pauseUntil, periodOk, query, quickUpdate, requireMe, restoreTask, saveSobrou, setCasaView, setQuery, setTaskFilter, setToast, showError, showToast, taskFilter, tasks, toastTimer, today, usedCats } = a
+  const { approveWeekPlan, routines, addPack, addSuggestion, ag, archiveTasks, archived, assignTask, billPaid, casa, casaLast, casaOk, casaView, cx, deleteTask, dogCareAgenda, dogTasks, dogs, eventDone, filtered, fx, fxLive, go, goCasa, householdId, maintActions, md, me, names, onShoppingFinished, openModal, ownerOfTask, pauseUntil, periodOk, query, quickUpdate, requireMe, restoreTask, saveSobrou, setCasaView, setQuery, setTaskFilter, setToast, showError, showToast, taskFilter, tasks, toastTimer, today, usedCats } = a
   return (
     <div className="scr">
       {(()=>{const groups=casaGroups([['tarefas','Tarefas',tasks.length],['rotinas','🔁 Rotinas',routines.filter(r=>routineOnDay(r,today)).length],['compras','🛒 Lista',shoppingCounts(casa.shop).toBuy],['manutencao','Manutenção',casa.maint.filter(i=>i.next_due<=today).length],...(ag.available?[['agenda','Agenda',agBills(ag.events,today).overdue+ag.events.filter(e=>e.kind!=='vencimento'&&!e.done_at&&e.date<=today).length] as [CasaView,string,number]]:[]),...(fx.available?[['faxinao',fxLive?'Faxinão ▶':'Faxinão',fx.list.filter(f=>f.status==='rascunho'||f.status==='andamento').length] as [CasaView,string,number]]:[]),...(cx.ready?[['despensa','🥫 Despensa',useSoon(cx.pantry,today).length],['jantar','🍲 Jantar']] as [CasaView,string,number?][]:[]),['sugestoes','💡 Sugestões']]);const cur=CASA_GROUP[casaView];const grp=groups.find(x=>x.g===cur);return <>
@@ -42,7 +43,14 @@ export function CasaScreen({ a }: { a: App }) {
           onRemove={it=>cxApi.removePantry(it.id).then(cx.reload).then(()=>showToast(`${it.name} saiu da despensa`)).catch(e=>{showError(toNinhoError(e,'tirar da despensa'));throw e})}
           onFinished={it=>cxApi.pantryToShopping(householdId,me,it).then(r=>{cx.reload();casa.reloadShopping();showToast(r.created?`🛒 ${it.name} na lista de compras`:`${it.name} já estava na lista`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}/>
       :casaView==='jantar'?<DinnerView ready={cx.ready} meals={cx.meals} recipes={md.recipes} pantry={cx.pantry} names={names} today={today}
-          onSave={x=>cxApi.saveMeal(householdId,me,x).then(cx.reload).then(()=>showToast(`🍲 ${x.title} · ${fmtDate(x.date)}`)).catch(e=>{showError(toNinhoError(e,'planejar jantar'));throw e})}
+          onSave={x=>cxApi.saveMeal(householdId,me,x).then(cx.reload).then(async()=>{
+            // jantar desta semana: o que falta (e não está na despensa) vai sozinho para a lista
+            const buy=x.toShop&&shopsNow(x.date,today)?splitByPantry(x.ingredients,cx.pantry,x.date).buy:[]
+            if(!buy.length){showToast(`🍲 ${x.title} · ${fmtDate(x.date)}`);return}
+            try{const r=await cxApi.addToShopping(householdId,me,buy);casa.reloadShopping()
+              showToast(`🍲 ${x.title} · 🛒 ${r.created.length} na lista${r.had?` · ${r.had} já estava(m)`:''}`,r.created.length?()=>{setToast(null);cxApi.undoShopping(r.created).then(()=>{casa.reloadShopping();showToast('Tirado da lista')}).catch(e=>showError(toNinhoError(e,'desfazer')))}:undefined)}
+            catch(e){showError(toNinhoError(e,'mandar para compras'))}
+          }).catch(e=>{showError(toNinhoError(e,'planejar jantar'));throw e})}
           onDelete={m=>cxApi.deleteMeal(m.id).then(cx.reload).then(()=>showToast('Jantar tirado')).catch(e=>{showError(toNinhoError(e,'tirar jantar'));throw e})}
           onShopping={lines=>mdApi.menuToShopping(householdId,me,lines).then(r=>{casa.reloadShopping();showToast(`🛒 ${r.added} na lista de compras${r.had?` · ${r.had} já estava(m)`:''}`)}).catch(e=>{showError(toNinhoError(e,'mandar para compras'));throw e})}/>
       :casaView==='sugestoes'?<SuggestionsView taskTitles={tasks.map(t=>t.title)} petTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} hasDogs={dogs.length>0} archived={archived} names={names} onRestore={restoreTask} today={today} periodOk={periodOk} onAddPack={addPack}
@@ -71,6 +79,7 @@ export function CasaScreen({ a }: { a: App }) {
           <button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button>
         </div>
       </div>
+      <WeekPlanCard compact tasks={tasks} events={ag.events||[]} today={today} names={names} ownerOf={ownerOfTask} onApprove={approveWeekPlan}/>
       <div className="search">
         <span className="search-ic"><Icon name="busca" size={18}/></span>
         <input value={query} onChange={e=>setQuery(e.target.value)} placeholder="Buscar tarefa..." aria-label="Buscar tarefa"/>
