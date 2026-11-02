@@ -2,6 +2,9 @@
 // Início: saudação, o que fazer agora, cartões do dia e a semana.
 // O estado e as ações vêm de useNinhoApp (components/app/useNinhoApp.tsx).
 import type { Who } from '@/lib/types'
+import { useState } from 'react'
+import { focusList } from '@/lib/foco'
+import { FocusSheet } from '@/components/inicio/Foco'
 import { setupSnoozed } from '@/lib/a11y'
 import { addDays, fmtDate, hhmm } from '@/lib/dates'
 import { dueToday } from '@/lib/frequency'
@@ -35,7 +38,8 @@ import { Deferred } from '@/components/ui/Deferred'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function InicioScreen({ a }: { a: App }) {
-  const { fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
+  const { hItems, ownerOfItem, toggleTask, toggleDogItem, isPending, fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
+  const [focus,setFocus]=useState(false)
   return (
     <div className="scr">
       {me&&<DayDone count={countFor(me)} today={today} name={firstName(names[me])}/>}
@@ -83,6 +87,7 @@ export function InicioScreen({ a }: { a: App }) {
 
       <div className="now-h">
         <h2>Para agora</h2>
+        <button className="fc foco-b" onClick={()=>setFocus(true)} aria-haspopup="dialog">🎯 Foco</button>
         <div className="seg-mini" role="radiogroup" aria-label="Como ver o dia">
           {([['lista','Lista'],['tempo','Linha do tempo']] as const).map(([k,l])=><button key={k} role="radio" aria-checked={homeView===k} className={homeView===k?'on':''} onClick={()=>pickHomeView(k)}>{l}</button>)}
         </div>
@@ -94,6 +99,9 @@ export function InicioScreen({ a }: { a: App }) {
           {!nowSum.late&&!nowSum.essentials&&!nowSum.next&&!helpReq.length&&<span className="chip green">✓ Nada urgente{me?' para você':''}</span>}
         </div>
       </div>
+      {focus&&(()=>{const f=focusList(hItems,me,ownerOfItem,nowHM);return <FocusSheet list={f.list} rest={f.rest} title={itemTitle}
+        busy={i=>i.task?isPending('task:'+i.task.id):i.dog!.parts.some(x=>isPending('dog:'+x.r.id))}
+        onDone={i=>i.task?toggleTask(i.task):toggleDogItem(i.dog!)} onMenu={i=>{setFocus(false);openModal('taskmenu',i.task)}} onClose={()=>setFocus(false)}/>})()}
       <div className="today">
         <div className="seg" style={{gridColumn:'1/-1'}}>
           {(['g','s'] as Who[]).map(w=>{const c=countFor(w);return(

@@ -55,6 +55,7 @@ export function GuideContent({ names }: { names: Names }) {
         <li>Toque na tarefa para concluir (+XP, com Desfazer). As concluídas ficam no fim da coluna com <b>quem concluiu</b>: quem marca fica registrada, mesmo que a tarefa fosse da outra.</li>
         <li>No <b>⋯</b> da tarefa: <b>⏰ Mais tarde</b> (+1 h, +2 h ou à noite: continua na lista, com outro horário só hoje), Não deu hoje (pular), deixar para amanhã, passar só hoje, passar de vez, pausar e pedir ajuda.</li>
         <li>Tarefa sem horário que você faz sempre na mesma hora: o <b>⋯</b> mostra “🕰 costuma às 08:10” e o botão <b>Fixar</b> para virar o horário dela.</li>
+        <li><b>🎯 Foco</b> (ao lado de “Para agora”): em tela cheia, só o que é seu agora (atrasadas, essenciais e a próxima), com um ✓ grande.</li>
         <li>Os cartões do Início podem ser escondidos em <b>Ajustes › Início</b>.</li>
       </ul>
     </div></details>
@@ -99,7 +100,7 @@ export function GuideContent({ names }: { names: Names }) {
     <details><summary>💛 Nós</summary><div className="gb">
       <ul>
         <li><b>Reunião semanal:</b> 15 minutos, sem cobranças. A pauta traz a semana e o que ficou para trás, com ajuste de um toque.</li>
-        <li><b>Juntas:</b> desafios em dupla, álbum e presentes. <b>Histórico:</b> retrospectiva com gráficos, linha do tempo, sequências e conquistas.</li>
+        <li><b>Juntas:</b> desafios em dupla, álbum e presentes. <b>Histórico:</b> mapa do mês de cada uma (dia a dia), retrospectiva com gráficos, sequências das tarefas (“Regar: 12 dias seguidos”), linha do tempo e conquistas.</li>
       </ul>
     </div></details>
     <details><summary>🌤 Como está a semana</summary><div className="gb">

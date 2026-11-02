@@ -8,6 +8,7 @@ import { LEVELS } from '@/lib/xp'
 import { toNinhoError } from '@/lib/errors'
 import { StreaksCard } from '@/components/gamification/StreaksCard'
 import { RetroCard } from '@/components/nos/Retro'
+import { HeatCard, TaskStreaksCard } from '@/components/nos/Calor'
 import { Achievements } from '@/components/gamification/Achievements'
 import { BalanceCard } from '@/components/nos/Balanco'
 import { AlbumView } from '@/components/nos/Album'
@@ -98,7 +99,9 @@ export function NosScreen({ a }: { a: App }) {
         </div>
         <div className="col">
           {nos.available&&<TimelineCard items={nosTl}/>}
+          <HeatCard tasks={tasks} dogs={dogs} today={today} names={names}/>
           <RetroCard tasks={tasks} dogs={dogs} today={today} names={names}/>
+          <TaskStreaksCard tasks={tasks} today={today}/>
           <StreaksCard streaks={game.streaks} names={names} me={me}/>
           <Achievements stats={game.stats} names={names} me={me}/>
         </div>

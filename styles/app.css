@@ -1893,3 +1893,57 @@ html.rp-open body{overflow:hidden}
 .later-opts .fc{flex:1 1 auto;min-height:var(--touch)}
 .why.usual{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
 .why.usual span{flex:1 1 220px}
+
+/* ── modo foco (Início) ── */
+.now-h .foco-b{display:inline-flex;align-items:center;gap:4px}
+.foco-sub{margin:0 0 10px}
+.foco-l{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.foco-i{display:flex;align-items:center;gap:14px;padding:12px 14px;border:1px solid var(--bd);border-radius:var(--r);background:var(--sf)}
+.foco-i.foco-late{border-color:var(--cbdr);background:var(--cbg)}
+.foco-chk{flex-shrink:0;width:52px;height:52px;border-radius:50%;border:2px solid var(--gdk);background:var(--sf);color:var(--gdk);font-size:24px;font-weight:600}
+.foco-chk:hover{background:var(--gbg)}
+.foco-chk:disabled{opacity:.5}
+.foco-t{flex:1;min-width:0;display:flex;flex-direction:column;gap:3px}
+.foco-t b{font-size:17px;font-weight:500;line-height:1.3}
+.foco-why{font-size:13px;color:var(--sub)}
+.foco-late .foco-why{color:var(--cor-tx)}
+
+/* ── mapa de calor e sequências (Nós › Histórico) ── */
+.heat-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,190px),1fr));gap:16px}
+.heat{margin:0}
+.heat figcaption{display:flex;align-items:center;gap:6px;font-size:13px;color:var(--tx);margin-bottom:6px}
+.heat-dot{width:8px;height:8px;border-radius:50%}.heat-dot-g{background:var(--green)}.heat-dot-s{background:var(--pur)}
+.heat-g{display:grid;grid-template-columns:repeat(7,1fr);gap:2px}
+.heat-dow{font-size:10.5px;color:var(--sub);text-align:center;padding-bottom:2px}
+.heat-c{aspect-ratio:1;border-radius:4px;border:0;padding:0;background:var(--sf2);cursor:pointer;display:inline-block}
+.heat-c.lf{background:transparent;border:1px dashed var(--bd);cursor:default}
+.heat-g .heat-c.today{outline:1px solid var(--sub);outline-offset:1px}
+.heat-g .heat-c.sel{outline:2px solid var(--tx);outline-offset:1px}
+.heat-g .heat-c.l1{background:color-mix(in srgb,var(--green) 28%,var(--sf2))}
+.heat-g .heat-c.l2{background:color-mix(in srgb,var(--green) 52%,var(--sf2))}
+.heat-g .heat-c.l3{background:color-mix(in srgb,var(--green) 76%,var(--sf2))}
+.heat-g .heat-c.l4{background:var(--green)}
+.heat-p-s .heat-g .heat-c.l1{background:color-mix(in srgb,var(--pur) 28%,var(--sf2))}
+.heat-p-s .heat-g .heat-c.l2{background:color-mix(in srgb,var(--pur) 52%,var(--sf2))}
+.heat-p-s .heat-g .heat-c.l3{background:color-mix(in srgb,var(--pur) 76%,var(--sf2))}
+.heat-p-s .heat-g .heat-c.l4{background:var(--pur)}
+.heat-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.heat-read{margin:0;font-size:13px;color:var(--tx)}
+.heat-leg{display:inline-flex;align-items:center;gap:2px;font-size:11px;color:var(--sub)}
+.heat-leg .heat-c{width:11px;height:11px;cursor:default}
+.heat-leg .l0{background:var(--sf2)}
+.heat-tab{margin-top:8px;font-size:13px}
+.heat-tab summary{cursor:pointer;color:var(--sub)}
+.heat-tab table{width:100%;border-collapse:collapse;margin-top:6px;font-size:12px}
+.heat-tab th,.heat-tab td{padding:3px 4px;text-align:center;border-bottom:1px solid var(--bd)}
+.heat-tab th[scope=row]{text-align:left;font-weight:500}
+.tstk{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.tstk li{display:flex;align-items:baseline;gap:8px;font-size:14px}
+.tstk-t{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tstk b{font-size:16px}
+.tstk-u{font-size:12px;color:var(--sub)}
+/* a legenda mostra só a intensidade (vale para as duas cores): cinza do claro ao escuro */
+.heat-leg .l1{background:color-mix(in srgb,var(--sub) 28%,var(--sf2))}
+.heat-leg .l2{background:color-mix(in srgb,var(--sub) 52%,var(--sf2))}
+.heat-leg .l3{background:color-mix(in srgb,var(--sub) 76%,var(--sf2))}
+.heat-leg .l4{background:var(--sub)}
