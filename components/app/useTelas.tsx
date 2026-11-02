@@ -2,6 +2,7 @@
 // O que as telas mostram: ações rápidas, linhas de item, linha do tempo por pessoa e filtros das tarefas.
 // Parte do estado do app (ver components/app/useNinhoApp.tsx, que junta as partes na ordem).
 import type { Dog, DogItem, DogRoutine, HItem, Task, Who } from '@/lib/types'
+import { SwipeRow } from '@/components/ui/Swipe'
 import { CAT, FPT, ROLE, WPT } from '@/lib/constants'
 import { type QuickAction } from '@/components/shell/Shell'
 import { dogKey } from '@/lib/rotation'
@@ -73,8 +74,8 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
     const actions=o.actions!==false
     const other:Who=ownerOfTask(t)==='g'?'s':'g'
     const late=isLate(t,nowHM)
-    return(
-      <div key={t.id} className={`tr ${t.completed_today?'done':''} ${o.next?'next':''}`}>
+    const row=(
+      <div className={`tr ${t.completed_today?'done':''} ${o.next?'next':''}`}>
         <button className={`chk ${t.essential?'ess':''} ${isPending('task:'+t.id)?'busy':''}`} onClick={()=>toggleTask(t)} disabled={isPending('task:'+t.id)} aria-busy={isPending('task:'+t.id)} aria-label={t.completed_today?`Desmarcar ${t.title}`:`Concluir ${t.title}`}>✓</button>
         <div className="trb" onClick={()=>toggleTask(t)}>
           <div className="trt">{t.title}</div>
@@ -103,14 +104,15 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
         {actions&&<button className="ib mob" onClick={()=>openModal('taskmenu',t)} aria-label={`Opções de ${t.title}`}>⋯</button>}
       </div>
     )
+    return actions?<SwipeRow key={t.id} onRight={()=>toggleTask(t)} onLeft={()=>openModal('taskmenu',t)} rightLabel={t.completed_today?'Desmarcar':'Concluir'} leftLabel="Opções" disabled={isPending('task:'+t.id)}>{row}</SwipeRow>:<div key={t.id}>{row}</div>
   }
   const dogItemRow=(it:DogItem,o:{next?:boolean}={})=>{
     const late=isLate(it,nowHM)
     const multi=it.parts.length>1
     const busy=it.parts.some(p=>isPending('dog:'+p.r.id))
     const by=Array.from(new Set(it.parts.filter(p=>p.r.completed_today).map(p=>completedByLabel(p.r.completed_by_today,names)))).join(' e ')
-    return(
-      <div key={'dog:'+it.key} className={`tr ${it.completed_today?'done':''} ${o.next?'next':''}`}>
+    const row=(
+      <div className={`tr ${it.completed_today?'done':''} ${o.next?'next':''}`}>
         <button className={`chk ${busy?'busy':''}`} disabled={busy} aria-busy={busy} onClick={()=>toggleDogItem(it)} aria-label={it.completed_today?`Desmarcar ${it.title}`:`Concluir ${it.title}`}>✓</button>
         <div className="trb" onClick={()=>toggleDogItem(it)}>
           <div className="trt">{it.title}</div>
@@ -130,6 +132,7 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
           :<span className="xp xp-l">+{it.parts.length}</span>}
       </div>
     )
+    return <SwipeRow key={'dog:'+it.key} onRight={()=>toggleDogItem(it)} onLeft={()=>{if(!it.completed_today)skipDogs(it.parts.map(p=>p.r),it.title)}} rightLabel={it.completed_today?'Desmarcar':'Concluir'} leftLabel="Não deu" disabled={busy}>{row}</SwipeRow>
   }
   const itemRow=(i:HItem,o:{actions?:boolean,next?:boolean}={})=>i.task?taskRow(i.task,o):dogItemRow(i.dog!,o)
   /** Linha do tempo de uma pessoa: tarefas e cães dela, agenda de hoje, rotinas com passos e (só para quem usa o aparelho) remédios. */

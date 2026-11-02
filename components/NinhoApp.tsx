@@ -20,7 +20,9 @@ import { areaLabel, fmtClock, remainingMs } from '@/lib/sprint'
 import { firstName, initials, TaskFormModal, PauseSheet, PetModal, DogModal, RoutineModal, EnergyModal, MeetingModal } from '@/components/AppModals'
 import { useNinhoApp, type Account } from '@/components/app/useNinhoApp'
 import { InicioScreen } from '@/components/screens/Inicio'
-import { useEffect } from 'react'
+import { HomeSkeleton } from '@/components/ui/Skeleton'
+import { usePullRefresh } from '@/hooks/usePullRefresh'
+import { useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
 
 // O Início vem junto com o app; as outras telas e as janelas grandes só quando abertas.
@@ -47,6 +49,9 @@ export type { Account }
 
 export default function NinhoApp({householdId,account}:{householdId:string,account?:Account}){
   const a=useNinhoApp({householdId,account})
+  // puxar para atualizar (celular): recarrega a casa, o Meu dia, a agenda, as compras e Nós
+  const refreshAll=useCallback(()=>Promise.all([a.data.loadAll(),a.md.reload?.(),a.ag.reload?.(),a.casa.reloadShopping?.(),a.nos.reload?.()].map(p=>Promise.resolve(p).catch(()=>{}))),[a.data,a.md,a.ag,a.casa,a.nos])
+  const pull=usePullRefresh(refreshAll,a.data.status==='ready')
   // baixa o resto em segundo plano, depois que a casa carregou
   const ready=a.data.status==='ready'
   useEffect(()=>{if(!ready)return;const t=setTimeout(()=>Object.values(load).forEach(f=>f().catch(()=>{})),300);return()=>clearTimeout(t)},[ready])
@@ -73,10 +78,11 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       </header>
 
       <main className="main">
+        {(pull.shown>0||pull.busy)&&<div className="ptr" style={{height:pull.shown}} role="status" aria-live="polite"><span className={`ptr-ic ${pull.busy?'spin':''}`} aria-hidden="true">{pull.busy?'':'↓'}</span>{pull.busy?'Atualizando…':pull.ready?'Solte para atualizar':'Puxe para atualizar'}</div>}
         {sp.active&&!sprintOpen&&<button className="sp-banner" onClick={()=>setSprintOpen(true)} aria-label="Voltar para o sprint em andamento">
           <span aria-hidden="true">⏱</span><span><b>Sprint · {sp.active.goal||areaLabel(sp.active.area)}</b> <span className="mono">{remainingMs(sp.active,sp.now)===0?'tempo esgotado':`${fmtClock(remainingMs(sp.active,sp.now))}${sp.active.paused_at?' · pausado':''}`}</span></span><span className="sp-banner-go">Voltar ›</span>
         </button>}
-        {data.status==='loading'&&<div className="loadscr" role="status" aria-live="polite"><span className="spin" aria-hidden="true"/>Carregando a casa…</div>}
+        {data.status==='loading'&&<HomeSkeleton/>}
         {data.status==='error'&&<div className="card loaderr" role="alert">
           <div style={{fontSize:16,fontWeight:500,marginBottom:6}}>Não foi possível carregar o Ninho</div>
           <div style={{fontSize:13,color:'var(--sub)',marginBottom:14}}>{data.loadError?.userMessage}</div>

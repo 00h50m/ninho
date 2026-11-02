@@ -30,12 +30,15 @@ import { fmtClock, remainingMs } from '@/lib/sprint'
 import { firstName } from '@/components/AppModals'
 import { StuckCard } from '@/components/nos/Esquecidas'
 import { NewsCard } from '@/components/Guia'
+import { DayDone } from '@/components/ui/Festa'
+import { Deferred } from '@/components/ui/Deferred'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function InicioScreen({ a }: { a: App }) {
   const { fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
   return (
     <div className="scr">
+      {me&&<DayDone count={countFor(me)} today={today} name={firstName(names[me])}/>}
       <div className="sh">
         <div><h1>{hello}{me?`, ${firstName(names[me])}`:''} 👋</h1><p>{dateLabel}</p>
           <div className="hd-chips">
@@ -147,14 +150,14 @@ export function InicioScreen({ a }: { a: App }) {
               {din&&<div className="jt-home-d"><span>🍲 <b>Jantar de hoje:</b> {din.title}</span><button className="lnk" onClick={()=>goCasa('jantar')}>🍳 {cookLabel(din.cook,names)}</button></div>}
               {soon.length>0&&<div className="jt-home-d"><span>⏰ <b>Usar logo:</b> {soon.slice(0,3).map(i=>`${i.name} (${urgencyLabel(i,today)})`).join(', ')}{soon.length>3?` e mais ${soon.length-3}`:''}</span><button className="lnk" onClick={()=>goCasa('despensa')}>Despensa →</button></div>}
             </div>)})()}
-          {ag.available&&showCard('agenda')&&(()=>{const soon=agendaEntries(ag.events,[],today,1).filter(e=>!e.late);const due=agBills(ag.events,today).pending.filter(b=>b.date<=addDays(today,3));return (soon.length>0||due.length>0)&&(
+          <Deferred>{ag.available&&showCard('agenda')&&(()=>{const soon=agendaEntries(ag.events,[],today,1).filter(e=>!e.late);const due=agBills(ag.events,today).pending.filter(b=>b.date<=addDays(today,3));return (soon.length>0||due.length>0)&&(
             <div className="card ag-home">
               <div className="slbl">📅 Agenda<button className="lnk" onClick={()=>goCasa('agenda')}>Ver →</button></div>
               {soon.map(e=><div key={e.key} className="ag-home-i"><span>{e.icon} {e.title}</span><span className="mono">{e.date===today?'hoje':'amanhã'}{e.time?` ${e.time}`:''}</span></div>)}
               {due.map(b=><div key={b.id} className={`ag-home-i ${b.date<today?'late':''}`}><span>{kindIcon('vencimento')} {b.title}</span><span className="mono">{b.date<today?'atrasado':b.date===today?'vence hoje':`vence ${fmtDate(b.date)}`}</span></div>)}
-            </div>)})()}
-          {showCard('sobrou')&&<SobrouCard householdId={householdId} today={today} link={ag.sobrouUrl} onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('sobrou-guia')?.scrollIntoView({behavior:'smooth',block:'start'}),300)}}/>}
-          {showCard('manutencao')&&<MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>}
+            </div>)})()}</Deferred>
+          <Deferred>{showCard('sobrou')&&<SobrouCard householdId={householdId} today={today} link={ag.sobrouUrl} onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('sobrou-guia')?.scrollIntoView({behavior:'smooth',block:'start'}),300)}}/>}</Deferred>
+          <Deferred>{showCard('manutencao')&&<MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>}</Deferred>
           {showCard('compras')&&(()=>{const sc=shoppingCounts(casa.shop);return casa.shopState==='ready'&&sc.toBuy>0&&(
             <button className="card dsum shop-sum" onClick={()=>setTab('shop')}>
               <span className="dav" style={{width:36,height:36,fontSize:18}}>🛒</span>
@@ -162,7 +165,7 @@ export function InicioScreen({ a }: { a: App }) {
                 <span className="dsum-s">{casa.shop.filter(i=>!i.checked_at).slice(0,4).map(i=>i.title).join(', ')}{sc.toBuy>4?'…':''}</span></span>
               <span className="chev">›</span>
             </button>)})()}
-          {showCard('atalhos')&&<div className="card">
+          <Deferred>{showCard('atalhos')&&<div className="card">
             <div className="slbl">Atalhos</div>
             <div className="fchips qa-chips">
               <button className="fc" onClick={autoDistribute}>✦ Distribuir tarefas</button>
@@ -170,7 +173,7 @@ export function InicioScreen({ a }: { a: App }) {
               <button className="fc" onClick={()=>openModal('meeting')}>📋 Reunião semanal</button>
               {sp.available&&<button className="fc" onClick={()=>setSprintOpen(true)}>⏱ {sp.active?`Sprint · ${fmtClock(remainingMs(sp.active,sp.now))}`:'Sprint do Ninho'}</button>}
             </div>
-          </div>}
+          </div>}</Deferred>
         </aside>
       </div>
       <NewsCard onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('aj-ajuda')?.scrollIntoView({behavior:'smooth',block:'start'}),400)}}/>
