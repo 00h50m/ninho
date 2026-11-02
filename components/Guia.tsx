@@ -7,15 +7,14 @@ import { LEVELS } from '@/lib/xp'
 const first = (n: string) => (n || '').split(' ')[0]
 
 /** Muda quando há novidades para contar; cada aparelho vê uma vez. */
-export const NEWS_VERSION = '2026-11'
+export const NEWS_VERSION = '2026-11b'
 const NEWS_KEY = 'ninho.novidades'
 const NEWS: ReactNode[] = [
-  <><b>5 abas</b> na barra: Início, Meu dia, Casa, Cães e Nós.</>,
-  <><b>Rotinas com passos</b> ficam em Casa › Tarefas › Rotinas, e os <b>hábitos</b> no Meu dia.</>,
-  <>A <b>Agenda</b> ganhou lugar próprio na Casa.</>,
+  <><b>Deslize na tarefa</b> (celular): para a direita conclui, para a esquerda abre as opções.</>,
+  <><b>Puxe a tela para baixo</b> no topo para atualizar tudo.</>,
+  <><b>🕰 Tarefas sem horário</b> agora lembram na hora em que você costuma fazer (o Ninho aprende sozinho). Dá para desligar em Ajustes › Notificações.</>,
+  <>Fechou tudo o que era seu no dia? Tem <b>comemoração</b> 🎉</>,
   <><b>⤼ Não deu</b>: a tarefa ou a rotina dos cães atrasada sai da lista de hoje com um toque, sem XP.</>,
-  <><b>Como está a semana</b>: energia e modo sobrevivência num chip só.</>,
-  <>O <b>+</b> está em seções, e a <b>🔍 busca</b> também abre funções ("faxinão", "telegram"…).</>,
 ]
 
 export function NewsCard({ onGuide }: { onGuide: () => void }) {
@@ -52,6 +51,7 @@ export function GuideContent({ names }: { names: Names }) {
     <details><summary>☀️ Início</summary><div className="gb">
       <ul>
         <li><b>Para agora</b> mostra o que está atrasado, as essenciais e a próxima com horário. Logo abaixo, a coluna de cada uma (no celular, troque pelo seletor).</li>
+        <li>No celular, <b>deslize</b> a tarefa para a direita para concluir ou para a esquerda para as opções. No topo da tela, <b>puxe para baixo</b> para atualizar.</li>
         <li>Toque na tarefa para concluir (+XP, com Desfazer). As concluídas ficam no fim da coluna com <b>quem concluiu</b>: quem marca fica registrada, mesmo que a tarefa fosse da outra.</li>
         <li>No <b>⋯</b> da tarefa: Não deu hoje (pular), deixar para amanhã, passar só hoje, passar de vez, pausar e pedir ajuda.</li>
         <li>Os cartões do Início podem ser escondidos em <b>Ajustes › Início</b>.</li>
@@ -107,6 +107,7 @@ export function GuideContent({ names }: { names: Names }) {
     <details><summary>🔔 Notificações e 💬 Telegram</summary><div className="gb">
       <ul>
         <li>Cada aparelho liga as próprias notificações em <b>Ajustes › Notificações</b>, com horário de silêncio. No iPhone, só com o app instalado na tela de início.</li>
+        <li><b>🕰 Tarefas sem horário:</b> depois de 3 vezes feitas num horário parecido (últimas 4 semanas), o Ninho lembra nesse horário, só para quem é a vez e se ainda não foi feita.</li>
         <li><b>Telegram</b> (Ajustes › Telegram): bom dia, resumo da noite, resumo de domingo e lembretes. No lembrete de tarefa dá para tocar em <b>✓ Feito</b> ou <b>⤼ Não deu</b> ali mesmo.</li>
         <li>No Telegram: <b>/hoje</b>, <b>/semana</b>, <b>/compras</b>, “comprei leite”, “faxinão: …” (ou “faxinão só eu: …”), perguntas (“como tiro mancha de…?”) e áudio.</li>
       </ul>

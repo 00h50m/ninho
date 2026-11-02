@@ -69,9 +69,10 @@ export async function runTelegramReminders(deps: BotDeps): Promise<TgReport & { 
   for (const l of links) byHouse.set(l.household_id, [...(byHouse.get(l.household_id) || []), l])
   for (const [hh, list] of Array.from(byHouse.entries())) {
     try {
-      const due = dueReminders(await loadRemState(deps.db, hh, now)).filter(r => r.kind === 'noite' || r.kind === 'tarefa' || r.kind === 'atraso')
+      const due = dueReminders(await loadRemState(deps.db, hh, now)).filter(r => r.kind === 'noite' || r.kind === 'tarefa' || r.kind === 'costume' || r.kind === 'atraso')
       for (const l of list) for (const r of due.filter(x => x.who === l.who && (x.kind === 'noite' ? l.evening : l.tasks))) {
-        const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind: r.kind, day: clock.date, ref: r.ref.slice(0, 40) }).select('id').maybeSingle()
+        // o registro do Telegram (041) só conhece noite/tarefa/atraso: o de costume entra como tarefa (a ref diferencia)
+        const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind: r.kind === 'costume' ? 'tarefa' : r.kind, day: clock.date, ref: r.ref.slice(0, 40) }).select('id').maybeSingle()
         if (claim.error) { if (claim.error.code === '23505') { report.skipped++; continue } throw new Error(claim.error.message) }
         // tarefa no horário ou atrasada: resolve ali mesmo (✓ Feito / ⤼ Não deu)
         const tid = r.kind === 'noite' ? null : r.ref.split(':')[1]

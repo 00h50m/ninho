@@ -8,7 +8,7 @@ import { WATER_TIMES, waterBehind, waterLine } from './water'
 import { bedReminder, bedtime } from './sono'
 import { giftReminders, type GiftDate, type GiftIdea } from './presentes'
 
-export type RKind = 'tarefa' | 'atraso' | 'noite' | 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao' | 'dormir' | 'presente'
+export type RKind = 'tarefa' | 'costume' | 'atraso' | 'noite' | 'remedio' | 'agua' | 'rotina' | 'sprint' | 'caes' | 'agenda' | 'desafio' | 'checkin' | 'refeicao' | 'dormir' | 'presente'
 export const RKINDS: Array<[RKind, string, string, string]> = [
   ['remedio', '💊', 'Remédios e vitaminas', 'No horário de cada dose, se ainda não marcou'],
   ['refeicao', '🍽️', 'Refeições do plano', 'No horário de cada refeição do plano alimentar (se ligou no plano), se ainda não marcou'],
@@ -21,12 +21,13 @@ export const RKINDS: Array<[RKind, string, string, string]> = [
   ['checkin', '💬', 'Check-in da noite', 'Às 21h30, se ainda não fez o check-in'],
   ['presente', '🎁', 'Datas especiais', 'Das suas datas em Nós › Presentes: 14 e 3 dias antes e no dia, às 9h. Só no seu aparelho'],
   ['tarefa', '✅', 'Tarefas no horário', 'Na hora marcada da tarefa ou rotina dos cães, só para quem é a vez, se ainda não foi feita'],
+  ['costume', '🕰', 'Tarefas sem horário', 'Na hora em que você costuma fazer (o Ninho aprende com as últimas 4 semanas), se ainda não foi feita'],
   ['atraso', '⏰', 'Essencial atrasada', '1 hora depois do horário de uma essencial ainda não feita, para as duas'],
   ['noite', '🌆', 'Resumo da noite', 'Às 21h: quanto do dia foi feito, o que fica para amanhã e o que vence nos próximos dias'],
   ['dormir', '🌙', 'Hora de dormir', '30 min antes da hora de deitar para a sua meta de sono (pelo horário em que costuma acordar). Vale mesmo no horário de silêncio'],
 ]
 export type RPrefs = Record<RKind, boolean>
-export const DEFAULT_RPREFS: RPrefs = { tarefa: true, atraso: true, noite: true, remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false, dormir: false, presente: true }
+export const DEFAULT_RPREFS: RPrefs = { tarefa: true, costume: true, atraso: true, noite: true, remedio: true, refeicao: true, rotina: true, sprint: true, caes: true, agenda: true, desafio: true, agua: false, checkin: false, dormir: false, presente: true }
 export const prefsOf = (x: unknown): RPrefs => ({ ...DEFAULT_RPREFS, ...(x && typeof x === 'object' ? x as Partial<RPrefs> : {}) })
 
 export interface RemState {
@@ -51,7 +52,8 @@ export interface RemState {
   planMeals?: Array<{ who: Who, id: string, name: string, time: string }>
   planDone?: Array<{ who: Who, meal_id: string }>
   /** itens de Hoje com horário (tarefas e rotinas dos cães), com a dona de hoje */
-  items?: Array<{ id: string, title: string, time: string | null, owner: Who, essential: boolean, done: boolean }>
+  /** usual: horário de costume da dona (tarefas sem horário; ver lib/horario.ts) */
+  items?: Array<{ id: string, title: string, time: string | null, owner: Who, essential: boolean, done: boolean, usual?: string | null }>
   /** resumo da noite: o dia de cada uma e o que vence nos próximos dias */
   evening?: { day: Record<Who, { done: number, total: number, left: string[] }>, soon: string[] }
 }
@@ -115,6 +117,8 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
   }
   // Tarefas no horário (para quem é a vez) e essencial atrasada 1 h depois (para as duas)
   for (const t of s.items || []) {
+    // sem horário: lembra na hora em que a dona costuma fazer
+    if (!t.time && t.usual && !t.done && due(t.usual, s.hm, win)) push([t.owner], 'costume', `costume:${t.id}`, `🕰 ${t.title}`, `Você costuma fazer por volta das ${t.usual}.`, '/?ir=hoje')
     if (!t.time || t.done) continue
     const at = t.time.slice(0, 5)
     if (due(at, s.hm, win)) push([t.owner], 'tarefa', `tarefa:${t.id}`, `✅ ${t.title}`, `Está na hora (${at}).`, '/?ir=hoje')

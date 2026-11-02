@@ -12,6 +12,7 @@ import { foodDaysLeft } from '@/lib/caes'
 import { signWater, waterSecret } from './waterToken'
 import { deliver, loadHousehold, must, type NotifyDeps, type Report, type Subscription } from './notify'
 import { planToday } from '@/lib/today'
+import { usualTime, type Stamp } from '@/lib/horario'
 
 export interface ReminderSub extends Subscription { reminders: unknown, quiet_start: string, quiet_end: string }
 /** No máximo por aparelho a cada rodada (o resto vai na próxima, se ainda valer). */
@@ -51,6 +52,14 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
     const h = await loadHousehold(db, householdId, date)
     const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy, dogPlan: h.dogPlan })
     items = plan.items.map(i => ({ id: i.id, title: i.task ? i.task.title : i.dog!.title, time: i.scheduled_time ? i.scheduled_time.slice(0, 5) : null, owner: plan.ownerOfItem(i), essential: !!i.essential, done: !!i.completed_today }))
+    // tarefas sem horário: o horário em que a dona de hoje costuma fazer (últimas 4 semanas)
+    const loose = plan.items.filter(i => i.task && !i.scheduled_time && !i.completed_today).map(i => i.id)
+    if (loose.length) {
+      const st = await soft<any>(hh('task_completions', 'task_id,completed_by,created_at').in('task_id', loose).gte('date', addDays(date, -28)).lt('date', date))
+      const by = new Map<string, Stamp[]>()
+      for (const c of st) by.set(c.task_id, [...(by.get(c.task_id) || []), { at: c.created_at, by: c.completed_by === 'g' || c.completed_by === 's' ? c.completed_by : null }])
+      items = items.map(i => loose.includes(i.id) ? { ...i, usual: usualTime(by.get(i.id) || [], i.owner) } : i)
+    }
     // o que ficou: essenciais primeiro, depois as com horário (o resumo mostra só as 3 primeiras)
     const rank = (i: NonNullable<RemState['items']>[number]) => (i.essential ? 0 : 2) + (i.time ? 0 : 1)
     const day = (w: Who) => { const mine = items!.filter(i => i.owner === w); return { done: mine.filter(i => i.done).length, total: mine.length, left: mine.filter(i => !i.done).sort((a, b) => rank(a) - rank(b) || String(a.time).localeCompare(String(b.time))).map(i => i.title) } }
