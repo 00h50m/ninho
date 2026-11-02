@@ -1,6 +1,7 @@
 'use client'
 // O que as telas mostram: ações rápidas, linhas de item, linha do tempo por pessoa e filtros das tarefas.
 // Parte do estado do app (ver components/app/useNinhoApp.tsx, que junta as partes na ordem).
+import { EmptyNino } from '@/components/ui/Empty'
 import type { Dog, DogItem, DogRoutine, HItem, Task, Who } from '@/lib/types'
 import { SwipeRow } from '@/components/ui/Swipe'
 import { CAT, FPT, ROLE, WPT } from '@/lib/constants'
@@ -162,7 +163,7 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
         {all.length===0?(homeTasks.some(t=>ownerOfTask(t)===who)||dogs.length>0?(
           <div className="alldone">🎉 Nada pendente para hoje<small>As tarefas do período já estão em dia</small></div>
         ):(
-          <div className="empty"><span className="empty-icon">📋</span>{who==='g'?'Nenhuma tarefa ainda':'Nenhuma tarefa atribuída'}
+          <div className="empty"><EmptyNino icon="📋"/>{who==='g'?'Nenhuma tarefa ainda':'Nenhuma tarefa atribuída'}
             <div><button className="btn btn-s" onClick={()=>goCasa('sugestoes')}>✦ Ver sugestões</button></div>
           </div>
         )):<>

@@ -1,6 +1,7 @@
 'use client'
 // Casa: tarefas, compras, comida (despensa e jantar) e mais (manutenção, agenda, faxinão, sugestões).
 // O estado e as ações vêm de useNinhoApp (components/app/useNinhoApp.tsx).
+import { EmptyNino } from '@/components/ui/Empty'
 import { CAT, FPT, WPT } from '@/lib/constants'
 import { Icon, SubTabs, type CasaView } from '@/components/shell/Shell'
 import { fmtDate, hhmm } from '@/lib/dates'
@@ -93,9 +94,9 @@ export function CasaScreen({ a }: { a: App }) {
         </div>}
       </div>
       {tasks.length===0?(
-        <div className="card empty"><span className="empty-icon">📋</span>Nenhuma tarefa cadastrada ainda<div><button className="btn btn-p" onClick={()=>goCasa('sugestoes')}>✦ Começar com sugestões</button></div></div>
+        <div className="card empty"><EmptyNino icon="📋"/>Nenhuma tarefa cadastrada ainda<div><button className="btn btn-p" onClick={()=>goCasa('sugestoes')}>✦ Começar com sugestões</button></div></div>
       ):filtered.length===0?(
-        <div className="empty"><span className="empty-icon">🔍</span>Nada encontrado com esse filtro<div><button className="btn btn-g" onClick={()=>{setTaskFilter('all');setQuery('')}}>Limpar filtros</button></div></div>
+        <div className="empty"><EmptyNino icon="🔍"/>Nada encontrado com esse filtro<div><button className="btn btn-g" onClick={()=>{setTaskFilter('all');setQuery('')}}>Limpar filtros</button></div></div>
       ):byCat(filtered).map(([cat,list])=>(
         <div key={cat} className="tgrp">
           <div className="cdiv">{CAT[cat]||cat}<span className="n">{list.length}</span></div>

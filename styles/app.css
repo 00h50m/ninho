@@ -399,7 +399,7 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
 @media(max-width:860px){
   .tnav{display:none}
   .top-in{padding:10px 16px;min-height:54px}
-  .bnav{display:grid;grid-template-columns:repeat(6,1fr);position:fixed;bottom:0;left:0;right:0;z-index:30;background:var(--nav-bg);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--bd);padding:6px 6px calc(6px + var(--safe-b))}
+  .bnav{display:grid;grid-template-columns:repeat(5,1fr);position:fixed;bottom:0;left:0;right:0;z-index:30;background:var(--nav-bg);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border-top:1px solid var(--bd);padding:6px 6px calc(6px + var(--safe-b))}
   .bnb{border:none;background:transparent;color:var(--sub);display:flex;flex-direction:column;align-items:center;gap:3px;padding:6px 0 4px;font-size:11px;font-weight:500;border-radius:12px;transition:color .15s}
   .bnb .ic{font-size:20px;line-height:1;filter:grayscale(1);opacity:.55;transition:all .15s}
   .bnb.on{color:var(--tx)}.bnb.on .ic{filter:none;opacity:1;transform:translateY(-1px)}
@@ -537,7 +537,7 @@ button.sb{transition:border-color .15s}button.sb:hover{border-color:var(--bd2)}
   .snav{display:none}
   .mob-only{display:flex}
   .top-prof.mob-only{display:inline-flex;align-items:center;justify-content:center}
-  .bnav{grid-template-columns:repeat(6,1fr)!important;padding-left:2px;padding-right:2px}
+  .bnav{grid-template-columns:repeat(5,1fr)!important;padding-left:2px;padding-right:2px}
   .bnb{font-size:10px;letter-spacing:-.01em;white-space:nowrap}
   .bnb{min-height:52px}
   .bnb .ic{filter:none!important;opacity:.62}
@@ -1876,3 +1876,14 @@ html.rp-open body{overflow:hidden}
 [data-motion=reduce] .sk,[data-motion=reduce] .festa-c,[data-motion=reduce] .festa-card,[data-motion=reduce] .sw-in{animation:none;transition:none}
 [data-motion=reduce] .festa-c{display:none}
 @media(prefers-reduced-motion:reduce){.sk,.festa-card,.sw-in{animation:none;transition:none}.festa-c{display:none}}
+
+/* ── telas vazias com o Nino ── */
+.empty-nino{position:relative;display:table;margin:0 auto 8px;line-height:0}
+.empty-nino .ms-hop{animation:none}
+.empty-badge{position:absolute;right:-12px;top:2px;font-size:18px;line-height:1;background:var(--sf);border:1px solid var(--bd);border-radius:50%;width:30px;height:30px;display:flex;align-items:center;justify-content:center}
+
+/* ── computador e tablet ── */
+/* com o menu lateral, o logo de cima repetia o do menu */
+@media(min-width:861px){.top .logo.mob-only,.logo.mob-only{display:none}}
+/* Cães: a escala encostava no cartão do filhote */
+.card.ec{margin-bottom:16px}

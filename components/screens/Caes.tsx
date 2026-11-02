@@ -1,6 +1,7 @@
 'use client'
 // Cães: rotinas, escala, saúde, alimentação e filhote.
 // O estado e as ações vêm de useNinhoApp (components/app/useNinhoApp.tsx).
+import { EmptyNino } from '@/components/ui/Empty'
 import { toNinhoError } from '@/lib/errors'
 import { Ring } from '@/components/ui/Ring'
 import { DogScheduleCard } from '@/components/caes/Escala'
@@ -28,7 +29,7 @@ export function CaesScreen({ a }: { a: App }) {
           catch(e){cz.setDogPlan(prev);showError(toNinhoError(e,'salvar escala'));throw e}}}/>}
       {puppies.map(pup=><PuppyPanel key={pup.id} dog={pup} accidents={cz.accidents} today={today} busy={isPending('acc:'+pup.id)} onAdd={loc=>addAccident(pup.id,loc)} onSave={fixAccident} onDelete={removeAccident}/>)}
       {dogs.length===0?(
-        <div className="card empty"><span className="empty-icon">🐾</span>Nenhum pet cadastrado<div><button className="btn btn-p" onClick={()=>openModal('pet')}>Cadastrar pet</button></div></div>
+        <div className="card empty"><EmptyNino icon="🐾"/>Nenhum pet cadastrado<div><button className="btn btn-p" onClick={()=>openModal('pet')}>Cadastrar pet</button></div></div>
       ):(
         <div className="dgrid">
           {dogs.map(dog=>{

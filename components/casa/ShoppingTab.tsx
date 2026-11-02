@@ -1,5 +1,6 @@
 'use client'
 // Aba Compras: lista compartilhada ao vivo. Uma adiciona ou risca, a outra vê na hora.
+import { EmptyNino } from '@/components/ui/Empty'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import type { NinhoError } from '@/lib/errors'
@@ -199,7 +200,7 @@ export function ShoppingTab({ householdId, me, names, items: allItems, history, 
         </div>}
 
         {state === 'loading' && items.length === 0 ? <div className="loadscr" role="status"><span className="spin" aria-hidden="true"/>Carregando a lista…</div>
-        : groups.length === 0 ? <div className="card empty"><span className="empty-icon">🛒</span>{filtering && cf.open === 0 && c.open > 0 ? <>Nada para comprar aqui.</> : <>Nada na lista.<br/>Adicione acima ou toque em “Comprar de novo”.</>}</div>
+        : groups.length === 0 ? <div className="card empty"><EmptyNino icon="🛒"/>{filtering && cf.open === 0 && c.open > 0 ? <>Nada para comprar aqui.</> : <>Nada na lista.<br/>Adicione acima ou toque em “Comprar de novo”.</>}</div>
         : <div className="card">
           {groups.map(g => (
             <div key={g.cat}>
@@ -251,7 +252,7 @@ function MarketMode({ mv, busy, names, cartOpen, setCartOpen, onToggle, onFinish
       <div className="mk-n"><b className="mono">{mv.done}</b> de <b className="mono">{mv.total}</b> no carrinho</div>
       <div className="bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Progresso da compra"><div className="barf" style={{ width: `${pct}%`, background: 'var(--pri)' }}/></div>
     </div>
-    {mv.groups.length === 0 ? <div className="card empty"><span className="empty-icon">🎉</span>Tudo no carrinho!</div>
+    {mv.groups.length === 0 ? <div className="card empty"><EmptyNino icon="🎉" mood="festa"/>Tudo no carrinho!</div>
       : <div className="card">{mv.groups.map(g => <div key={g.cat}>
         <div className="cdiv">{g.label}<span className="n">{g.items.length}</span></div>
         {g.items.map(it => <button key={it.id} className="mk-row" disabled={busy.has(it.id) || it.id.startsWith('tmp:')} onClick={() => onToggle(it)} aria-label={`Pôr ${it.title} no carrinho`}>

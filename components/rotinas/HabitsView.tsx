@@ -1,5 +1,6 @@
 'use client'
 // Hábitos: constância, não cobrança. Dia sem registro fica só sem registro (nunca vira atraso).
+import { EmptyNino } from '@/components/ui/Empty'
 import type { Names, Who } from '@/lib/types'
 import { fmtDate } from '@/lib/dates'
 import { WEEKDAYS } from '@/lib/onboarding'
@@ -27,7 +28,7 @@ export function HabitsView({ habits, logs, available, today, me, names, onToggle
         <span className="row-s">Sugestões:</span>
         {HABIT_SUGGESTIONS.filter(s => !existing.has(s.title.toLowerCase())).map(s => <button key={s.title} className="fc" onClick={() => onSuggest(s)}>+ {s.title}</button>)}
       </div>}
-      {habits.length === 0 && <div className="card empty"><span className="empty-icon">🌱</span>Nenhum hábito ainda.</div>}
+      {habits.length === 0 && <div className="card empty"><EmptyNino icon="🌱"/>Nenhum hábito ainda.</div>}
       <div className="rt-grid">
         {habits.map(h => {
           const st = habitState(h, logs, today)

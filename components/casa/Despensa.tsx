@@ -1,6 +1,7 @@
 'use client'
 // Casa › 🥫 Despensa: o que tem em casa, onde fica e quando vence. "Usar logo" no topo;
 // "acabou" manda para a lista de compras; o que veio da última compra entra com um toque.
+import { EmptyNino } from '@/components/ui/Empty'
 import { useState } from 'react'
 import { PLACES, byPlace, guessPlace, fromShopping, urgency, urgencyLabel, useSoon, type PantryItem, type Place } from '@/lib/despensa'
 import type { PantryInput } from '@/lib/services/despensaJantar'
@@ -35,7 +36,7 @@ export function PantryView({ ready, items, history, today, ideas = 0, onIdeas, o
         <ul className="dp-list">{soon.map(it => <li key={it.id} className="dp-i"><span className="dp-t"><b>{it.name}</b><small className={`dp-u dp-${urgency(it, today).u}`}>{urgencyLabel(it, today)}{it.qty ? ` · ${it.qty}` : ''}</small></span></li>)}</ul>
         {ideas > 0 && onIdeas && <button className="btn btn-s" onClick={onIdeas}>🍲 {ideas} ideia{ideas === 1 ? '' : 's'} de jantar com isso</button>}
       </section>}
-      {groups.length === 0 && !form && <div className="card empty"><span className="empty-icon">🥫</span>Nada anotado ainda. Comece pelo que vence: iogurte, carne, frios.</div>}
+      {groups.length === 0 && !form && <div className="card empty"><EmptyNino icon="🥫"/>Nada anotado ainda. Comece pelo que vence: iogurte, carne, frios.</div>}
       {groups.map(g => <section key={g.place} className="card" aria-labelledby={`dp-${g.place}`}>
         <div className="slbl" id={`dp-${g.place}`}>{g.label} <span className="mono" style={{ color: 'var(--faint)' }}>{g.items.length}</span></div>
         <ul className="dp-list">{g.items.map(it => { const u = urgency(it, today).u; return <li key={it.id} className="dp-i">

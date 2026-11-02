@@ -1,6 +1,7 @@
 'use client'
 // Nós › 📸 Álbum do Ninho: fotos da casa, dos cães e de vocês, com os marcos do casal
 // (reuniões, sprints, desafios) numa linha do tempo por mês. As duas veem, põem e apagam.
+import { EmptyNino } from '@/components/ui/Empty'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import type { TimelineItem } from '@/lib/nos'
@@ -70,7 +71,7 @@ export function AlbumView({ householdId, me, names, today, marks, onToast, onErr
         {ALBUM_TAGS.map(([k, l]) => { const n = state.photos.filter(p => p.tag === k).length; return n > 0 && <button key={k} role="tab" aria-selected={tag === k} className={`fc ${tag === k ? 'on' : ''}`} onClick={() => setTag(k)}>{l} · {n}</button> })}
       </div>
 
-      {months.length === 0 ? <div className="card empty"><span className="empty-icon">🖼</span>Ainda sem fotos. Comece pela de hoje!</div>
+      {months.length === 0 ? <div className="card empty"><EmptyNino icon="🖼"/>Ainda sem fotos. Comece pela de hoje!</div>
         : months.map(m => <section key={m.month} className="card al-m" aria-labelledby={`al-${m.month}`}>
           <div className="slbl" id={`al-${m.month}`}>{m.label}</div>
           {(() => {

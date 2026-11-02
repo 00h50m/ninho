@@ -1,6 +1,7 @@
 'use client'
 // Manutenção recorrente: lista (aba Tarefas › Manutenção), cartão em Hoje,
 // formulário e modelos prontos.
+import { EmptyNino } from '@/components/ui/Empty'
 import { useState } from 'react'
 import { Sheet } from '@/components/ui/Sheet'
 import type { Names, Who } from '@/lib/types'
@@ -121,7 +122,7 @@ export function MaintenanceSection({ items, log, today, names, state, error, act
         <button className="btn btn-p" onClick={onNew}>+ Nova manutenção</button>
       </div>
       {state === 'loading' && !items.length ? <div className="loadscr" role="status"><span className="spin" aria-hidden="true"/>Carregando…</div>
-      : !items.length ? <div className="card empty"><span className="empty-icon">🔧</span>Nenhuma manutenção ainda.<br/>Filtro do ar, vacina dos cães, revisão do carro…
+      : !items.length ? <div className="card empty"><EmptyNino icon="🔧"/>Nenhuma manutenção ainda.<br/>Filtro do ar, vacina dos cães, revisão do carro…
           <div><button className="btn btn-p" onClick={onTemplates}>✦ Começar com modelos</button></div></div>
       : <div className="card">
           {group('⚠ Atrasadas', late, 'late')}

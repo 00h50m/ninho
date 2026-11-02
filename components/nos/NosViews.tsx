@@ -1,6 +1,7 @@
 'use client'
 // Nós: desafios em dupla, registro do dia, histórico de check-ins, linha do tempo
 // e "juntas nesta semana". Nada aqui coloca uma contra a outra.
+import { EmptyNino } from '@/components/ui/Empty'
 import { useEffect, useState } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
@@ -89,7 +90,7 @@ export function ChallengesView({ challenges, facts, today, names, routines, habi
         <div className="row-s">Uma meta curta para a casa. Ninguém ganha da outra: ou conseguimos juntas, ou tentamos de novo.</div>
       </div>
       <div className="rt-actions"><button className="btn btn-p" onClick={() => setSheet('novo')}>+ Novo desafio</button></div>
-      {active.length === 0 && <div className="card empty"><span className="empty-icon">🤝</span>Nenhum desafio agora. Escolha uma sugestão abaixo ou crie o de vocês.</div>}
+      {active.length === 0 && <div className="card empty"><EmptyNino icon="🤝"/>Nenhum desafio agora. Escolha uma sugestão abaixo ou crie o de vocês.</div>}
       <div className="chl-grid">{active.map(c => <ChallengeCard key={c.id} c={c} facts={facts} today={today} names={names} refName={refName(c)} onMark={onMark} onStatus={onStatus} onDelete={onDelete}/>)}</div>
       {ideas.length > 0 && <>
         <div className="slbl rt-sec">Sugestões</div>

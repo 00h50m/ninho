@@ -1,5 +1,6 @@
 'use client'
 // Minhas rotinas: o checklist de hoje (com quem marcou cada passo), as outras rotinas e o histórico curto.
+import { EmptyNino } from '@/components/ui/Empty'
 import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { Names, Who } from '@/lib/types'
@@ -30,7 +31,7 @@ export function RoutinesView({ routines, runs, checklistOk, today, me, names, su
       {survival && todays.length > 0 && <div className="banner surv">🛡 <span>Modo sobrevivência: cada rotina mostra só os passos essenciais (🛡).</span></div>}
 
       <div className="slbl rt-sec">Hoje <span className="mono" style={{ color: 'var(--faint)' }}>{todays.length}</span></div>
-      {todays.length === 0 && <div className="card empty"><span className="empty-icon">🔁</span>Nenhuma rotina para hoje.</div>}
+      {todays.length === 0 && <div className="card empty"><EmptyNino icon="🔁"/>Nenhuma rotina para hoje.</div>}
       <div className="rt-grid">
         {todays.map(r => {
           const run = runs.find(x => x.routine_id === r.id && x.date === today)

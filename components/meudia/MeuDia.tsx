@@ -1,4 +1,5 @@
 'use client'
+import { EmptyNino } from '@/components/ui/Empty'
 import type { ReactNode } from 'react'
 // Meu dia: a parte individual de cada uma. Água, sono, autocuidado, remédios,
 // treinos (com cargas) e evolução física. Cada uma escolhe o que a outra vê.
@@ -360,7 +361,7 @@ function Workouts(p: MeuDiaProps) {
         <LineChart title={`Carga · ${sel}`} unit="kg" data={series}/>
       </section>}
       <div className="slbl rt-sec">Treinos <span className="mono" style={{ color: 'var(--faint)' }}>{list.length}</span></div>
-      {list.length === 0 && <div className="card empty"><span className="empty-icon">🏋️</span>Nenhum treino registrado ainda.</div>}
+      {list.length === 0 && <div className="card empty"><EmptyNino icon="🏋️"/>Nenhum treino registrado ainda.</div>}
       <div className="card">{list.slice(0, 40).map(l => (
         <div key={l.id} className="md-row">
           <span className="mono md-d">{fmtDate(l.date)}</span>

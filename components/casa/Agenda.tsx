@@ -1,6 +1,7 @@
 'use client'
 // Agenda da casa: compromissos domésticos e manutenções que vencem, mais os
 // vencimentos simples (pago/pendente) com atalho para o Sobrou!. Sem módulo financeiro.
+import { EmptyNino } from '@/components/ui/Empty'
 import { useState, type ReactNode } from 'react'
 import type { Names, Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
@@ -31,7 +32,7 @@ export function AgendaView({ available, events, maint, dogCare = [], today, name
         <div className="sh-a"><button className="btn btn-p" onClick={() => onNew('compromisso')}>+ Evento</button></div></div>
 
       <div className="slbl">Próximos 60 dias</div>
-      {groups.length === 0 && <div className="card empty"><span className="empty-icon">📅</span>Nada marcado. Toque em “+ Evento”.</div>}
+      {groups.length === 0 && <div className="card empty"><EmptyNino icon="📅"/>Nada marcado. Toque em “+ Evento”.</div>}
       {groups.map(g => (
         <div key={g.label} className="card ag-day">
           <div className={`ag-dl ${g.label === 'Atrasados' ? 'late' : g.label === 'Hoje' ? 'today' : ''}`}>{g.label}</div>
