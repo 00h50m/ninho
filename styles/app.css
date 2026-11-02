@@ -1887,3 +1887,9 @@ html.rp-open body{overflow:hidden}
 @media(min-width:861px){.top .logo.mob-only,.logo.mob-only{display:none}}
 /* Cães: a escala encostava no cartão do filhote */
 .card.ec{margin-bottom:16px}
+
+/* ── mais tarde e horário de costume (menu ⋯) ── */
+.later-opts{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0}
+.later-opts .fc{flex:1 1 auto;min-height:var(--touch)}
+.why.usual{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px}
+.why.usual span{flex:1 1 220px}

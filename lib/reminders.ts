@@ -53,7 +53,7 @@ export interface RemState {
   planDone?: Array<{ who: Who, meal_id: string }>
   /** itens de Hoje com horário (tarefas e rotinas dos cães), com a dona de hoje */
   /** usual: horário de costume da dona (tarefas sem horário; ver lib/horario.ts) */
-  items?: Array<{ id: string, title: string, time: string | null, owner: Who, essential: boolean, done: boolean, usual?: string | null }>
+  items?: Array<{ id: string, title: string, time: string | null, owner: Who, essential: boolean, done: boolean, usual?: string | null, /** "mais tarde" (044): time já é o novo horário */ later?: boolean }>
   /** resumo da noite: o dia de cada uma e o que vence nos próximos dias */
   evening?: { day: Record<Who, { done: number, total: number, left: string[] }>, soon: string[] }
 }
@@ -121,9 +121,11 @@ export function dueReminders(s: RemState, win = 20): Reminder[] {
     if (!t.time && t.usual && !t.done && due(t.usual, s.hm, win)) push([t.owner], 'costume', `costume:${t.id}`, `🕰 ${t.title}`, `Você costuma fazer por volta das ${t.usual}.`, '/?ir=hoje')
     if (!t.time || t.done) continue
     const at = t.time.slice(0, 5)
-    if (due(at, s.hm, win)) push([t.owner], 'tarefa', `tarefa:${t.id}`, `✅ ${t.title}`, `Está na hora (${at}).`, '/?ir=hoje')
+    // "mais tarde": a referência leva o horário novo, para avisar de novo no mesmo dia
+    const sfx = t.later ? `:${at.replace(':', '')}` : ''
+    if (due(at, s.hm, win)) push([t.owner], 'tarefa', `tarefa:${t.id}${sfx}`, `✅ ${t.title}`, t.later ? `Você pediu para lembrar agora (${at}).` : `Está na hora (${at}).`, '/?ir=hoje')
     const late = toMin(at) + 60
-    if (t.essential && late < 24 * 60 && due(fromMin(late), s.hm, win)) push(both, 'atraso', `atraso:${t.id}`, `⏰ Atrasada: ${t.title}`, `Era às ${at}, com ${first(s.names[t.owner])}. É essencial.`, '/?ir=hoje')
+    if (t.essential && late < 24 * 60 && due(fromMin(late), s.hm, win)) push(both, 'atraso', `atraso:${t.id}${sfx}`, `⏰ Atrasada: ${t.title}`, `Era às ${at}, com ${first(s.names[t.owner])}. É essencial.`, '/?ir=hoje')
   }
   // Resumo da noite, às 21h
   if (s.evening && due('21:00', s.hm, win)) for (const w of both) {

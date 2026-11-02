@@ -21,6 +21,7 @@ import { firstName, initials, TaskFormModal, PauseSheet, PetModal, DogModal, Rou
 import { useNinhoApp, type Account } from '@/components/app/useNinhoApp'
 import { InicioScreen } from '@/components/screens/Inicio'
 import { HomeSkeleton } from '@/components/ui/Skeleton'
+import { LaterButtons, UsualHint } from '@/components/MaisTarde'
 import { usePullRefresh } from '@/hooks/usePullRefresh'
 import { useCallback, useEffect } from 'react'
 import dynamic from 'next/dynamic'
@@ -55,7 +56,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // baixa o resto em segundo plano, depois que a casa carregou
   const ready=a.data.status==='ready'
   useEffect(()=>{if(!ready)return;const t=setTimeout(()=>Object.values(load).forEach(f=>f().catch(()=>{})),300);return()=>clearTimeout(t)},[ready])
-  const {SKIP_LABEL,adjustForgot,retroForgot,addHouseTemplate,addMaintTemplates,addRoutineTemplate,ag,agenda,aguaPop,archiveHabit,archiveRoutine,askHelp,askOpen,busca,casa,casaOk,casaView,closeModal,createDay,data,dayOpen,deleteEvent,deleteHealth,deleteHouseTemplate,deleteTask,device,dogs,en,eventDone,fabAway,finishSprint,go,goMd,handoffToday,loadSetup,lv,md,mdAdd,mdTab,me,modal,modalData,names,nos,nowHM,onb,openModal,outbox,ownerOfTask,pauseOk,pauseSprint,pauseTask,pauseUntil,periodOk,pickSearch,pickTheme,plan,quickActions,removeDog,removeMaint,removeRoutine,rot,routines,saveEvent,saveHabitDraft,saveHealth,saveMaint,saveMeeting,savePet,saveRoutine,saveRoutineDraft,saveRoutineTemplate,saveTask,saving,screen,sendOutbox,setAskOpen,setBusca,setDayOpen,setEnergy,setOnb,setSprintOpen,setSprintTasks,setToast,settings,setup,showError,showToast,sp,spBusy,sprintOpen,startSprint,streak,swapTask,tasks,theme,thisMeeting,toast,today,toggleSurvival,toggleTask,tplBusy,undoHandoff,updateDog,weekStart,xp}=a
+  const {SKIP_LABEL,laterToday,undoLater,fixTime,adjustForgot,retroForgot,addHouseTemplate,addMaintTemplates,addRoutineTemplate,ag,agenda,aguaPop,archiveHabit,archiveRoutine,askHelp,askOpen,busca,casa,casaOk,casaView,closeModal,createDay,data,dayOpen,deleteEvent,deleteHealth,deleteHouseTemplate,deleteTask,device,dogs,en,eventDone,fabAway,finishSprint,go,goMd,handoffToday,loadSetup,lv,md,mdAdd,mdTab,me,modal,modalData,names,nos,nowHM,onb,openModal,outbox,ownerOfTask,pauseOk,pauseSprint,pauseTask,pauseUntil,periodOk,pickSearch,pickTheme,plan,quickActions,removeDog,removeMaint,removeRoutine,rot,routines,saveEvent,saveHabitDraft,saveHealth,saveMaint,saveMeeting,savePet,saveRoutine,saveRoutineDraft,saveRoutineTemplate,saveTask,saving,screen,sendOutbox,setAskOpen,setBusca,setDayOpen,setEnergy,setOnb,setSprintOpen,setSprintTasks,setToast,settings,setup,showError,showToast,sp,spBusy,sprintOpen,startSprint,streak,swapTask,tasks,theme,thisMeeting,toast,today,toggleSurvival,toggleTask,tplBusy,undoHandoff,updateDog,weekStart,xp}=a
   return(
     <>
 
@@ -144,15 +145,17 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         {toast.retry&&<button onClick={()=>{const r=toast.retry!;setToast(null);r()}}>Tentar novamente</button>}
         {toast.kind==='err'&&<button className="tx" onClick={()=>setToast(null)} aria-label="Fechar aviso">✕</button>}
       </div>}
-      {modal==='task'&&<TaskFormModal task={modalData} names={names} saving={saving} casaOk={casaOk} periodOk={periodOk} pauseOk={pauseOk} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
+      {modal==='task'&&<TaskFormModal task={modalData?.later?{...modalData,scheduled_time:modalData.later.orig}:modalData} names={names} saving={saving} casaOk={casaOk} periodOk={periodOk} pauseOk={pauseOk} onClose={closeModal} onSave={saveTask} onDelete={deleteTask}/>}
       {modal==='pause'&&<PauseSheet task={modalData} today={today} onClose={closeModal} onPause={d=>{const t=modalData;closeModal();pauseUntil(t,d)}}/>}
       {modal==='pet'&&<PetModal saving={saving} onClose={closeModal} onSave={savePet}/>}
       {modal==='taskmenu'&&(()=>{const t:Task=modalData;const other:Who=ownerOfTask(t)==='g'?'s':'g';const why=whyLabel(plan.whyOf(t.id),names,today);return(
         <Sheet size="sm" title={t.title} onClose={closeModal}>
           {why&&<div className="why">↻ {why}</div>}
+          {!t.completed_today&&<UsualHint t={t} householdId={householdId} today={today} who={ownerOfTask(t)} onFix={at=>{closeModal();fixTime(t,at)}}/>}
           {(()=>{const cf=plan.conflictOf(t.id);return cf&&!t.completed_today&&<div className="why cf" role="note">⚠ No horário de {cf.title} ({cf.start}–{cf.end}) da {firstName(names[cf.who])}. Passe só hoje, deixe para amanhã ou mude o horário.</div>})()}
           <div className="menu">
             <button className="btn btn-s" onClick={()=>{closeModal();toggleTask(t)}}>{t.completed_today?'↺ Desmarcar':'✓ Concluir'}</button>
+            <LaterButtons t={t} nowHM={nowHM} onLater={at=>{closeModal();laterToday(t,at)}} onUndo={()=>{closeModal();undoLater(t)}}/>
             {!t.completed_today&&t.frequency!=='daily'&&<button className="btn btn-g" onClick={()=>{closeModal();pauseTask(t,'snooze')}}>⏭ Deixar para amanhã</button>}
             {!t.completed_today&&SKIP_LABEL[t.frequency]&&<button className="btn btn-g" onClick={()=>{closeModal();pauseTask(t,'skip')}}>⤼ {SKIP_LABEL[t.frequency]}<small className="menu-s">sem XP · não quebra a sequência</small></button>}
             {!t.completed_today&&(t.handoff&&t.handoff.date===today

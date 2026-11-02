@@ -2,7 +2,7 @@
 // Nunca importe este arquivo em componentes do navegador.
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { HItem, Names, Who } from '@/lib/types'
-import { buildDogs, buildTasks, type DogSkipRow, type HandoffRow, type SkipRow } from '@/lib/build'
+import { buildDogs, buildTasks, type DogSkipRow, type HandoffRow, type LaterRow, type SkipRow } from '@/lib/build'
 import { busyWindows } from '@/lib/busy'
 import { cellsFromDb, type DogPlan } from '@/lib/escala'
 import { addDays, homeClock, weekStartOf } from '@/lib/dates'
@@ -45,6 +45,8 @@ export async function loadHousehold(db: SupabaseClient, householdId: string, tod
   // 036: "passar só hoje" e compromissos do dia (sem a migration, segue sem eles)
   const ho = await db.from('task_handoffs').select('id,task_id,date,to_who,by_who').eq('household_id', householdId).eq('date', today)
   const handoffs = (ho.error ? [] : ho.data || []) as HandoffRow[]
+  const lt = await db.from('task_later').select('id,task_id,date,at,by_who').eq('household_id', householdId).eq('date', today)
+  const laters = (lt.error ? [] : lt.data || []) as LaterRow[]
   // 042: rotinas dos cães puladas hoje (sem a migration, segue sem elas)
   const dsk = await db.from('dog_skips').select('id,routine_id,date,skipped_by').eq('household_id', householdId).eq('date', today)
   const dogSkips = (dsk.error ? [] : dsk.data || []) as DogSkipRow[]
@@ -67,7 +69,7 @@ export async function loadHousehold(db: SupabaseClient, householdId: string, tod
   const names: Names = { g: g?.display_name || DEFAULT_NAMES.g, s: s?.display_name || DEFAULT_NAMES.s }
   const st = settings as any
   return {
-    tasks: buildTasks(tasks as any[], [...(tcomps as any[]), ...(old as any[])], today, skips, handoffs),
+    tasks: buildTasks(tasks as any[], [...(tcomps as any[]), ...(old as any[])], today, skips, handoffs, laters),
     dogs: buildDogs(dogs as any[], dcomps as any[], today, dogSkips),
     focus: !!st?.survival || st?.energy === 'low',
     bet: (st?.bet as string | null) ?? null,

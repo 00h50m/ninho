@@ -9,6 +9,7 @@ import { MAX_AUDIO_SEC } from './transcribe'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Who } from '@/lib/types'
 import { homeClock } from '@/lib/dates'
+import { laterAt } from '@/lib/maisTarde'
 import { planToday } from '@/lib/today'
 import { dogKey, isWho } from '@/lib/rotation'
 import { hhmm } from '@/lib/dates'
@@ -438,14 +439,14 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
     await send(deps, chatId, msg)
     return
   }
-  // Lembrete de tarefa: ✓ Feito ou ⤼ Não deu, e a mensagem mostra o que aconteceu (sem os botões)
-  const rm = data.match(/^(rt|nd):([0-9a-f-]{36})$/)
+  // Lembrete de tarefa: ✓ Feito, ⏰ +1 h ou ⤼ Não deu, e a mensagem mostra o que aconteceu (sem os botões)
+  const rm = data.match(/^(rt|nd|lt):([0-9a-f-]{36})$/)
   if (rm) {
     const key = `${chatId}:${data}`
     if (inflight.has(key)) { await deps.tg('answerCallbackQuery', { callback_query_id: cq.id }); return }
     inflight.add(key)
     let msg: string
-    try { msg = rm[1] === 'rt' ? await completeItem(deps.db, link, 't', rm[2], date) : await skipFromTelegram(deps.db, link, rm[2], date) }
+    try { msg = rm[1] === 'rt' ? await completeItem(deps.db, link, 't', rm[2], date) : rm[1] === 'lt' ? await laterFromTelegram(deps.db, link, rm[2], date, homeClock(deps.now).hm) : await skipFromTelegram(deps.db, link, rm[2], date) }
     catch { msg = '⚠️ Não consegui registrar agora. Tente de novo.' }
     finally { inflight.delete(key) }
     await deps.tg('answerCallbackQuery', { callback_query_id: cq.id, text: msg.slice(0, 190) })
@@ -480,6 +481,19 @@ async function onCallback(deps: BotDeps, cq: any, date: string) {
 }
 
 const inflight = new Set<string>()
+
+/** ⏰ +1 h (lembrete do Telegram): a tarefa continua na lista, com o horário de daqui a 1 hora só hoje. */
+async function laterFromTelegram(db: SupabaseClient, link: { household_id: string, who: Who }, taskId: string, date: string, hm: string): Promise<string> {
+  const t = await db.from('tasks').select('id,title,household_id').eq('id', taskId).maybeSingle()
+  if (t.error || !t.data || (t.data as any).household_id !== link.household_id) return '⚠️ Não achei essa tarefa.'
+  const c = await db.from('task_completions').select('id').eq('task_id', taskId).eq('date', date).maybeSingle()
+  if (c.data) return `Já estava feita · ${(t.data as any).title}`
+  const at = laterAt(hm, 60)
+  if (!at) return `Já é tarde para hoje · ${(t.data as any).title}. Use ⤼ Não deu ou deixe para amanhã no app.`
+  const r = await db.from('task_later').upsert({ household_id: link.household_id, task_id: taskId, date, at, by_who: link.who }, { onConflict: 'task_id,date' })
+  if (r.error) return r.error.code === '42P01' || /task_later/.test(r.error.message) ? '⚠️ "Mais tarde" precisa da atualização do banco (044).' : '⚠️ Não consegui adiar agora. Tente de novo.'
+  return `⏰ Mais tarde · ${(t.data as any).title}: lembro de novo às ${at}.`
+}
 
 /** ⤼ Não deu (lembrete do Telegram): pula a tarefa hoje, sem XP e sem quebrar a sequência. */
 async function skipFromTelegram(db: SupabaseClient, link: { household_id: string, who: Who }, taskId: string, date: string): Promise<string> {

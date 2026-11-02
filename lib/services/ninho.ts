@@ -5,7 +5,7 @@ import { NinhoError, isMissingTable, logError } from '@/lib/errors'
 import { addDays } from '@/lib/dates'
 import type { Accident, CompletionRow, Dog, Energy, HistoryWeek, Meeting, Names, Task, Who } from '@/lib/types'
 import { DEFAULT_NAMES } from '@/lib/constants'
-import type { DogSkipRow, HandoffRow, SkipRow } from '@/lib/build'
+import type { DogSkipRow, HandoffRow, LaterRow, SkipRow } from '@/lib/build'
 import { EMPTY_SCORES, EMPTY_STREAKS, type AchievementStats, type Streaks, type WeeklyScores } from '@/lib/gamification'
 
 type Res<T> = { data: T | null, error: unknown }
@@ -50,7 +50,7 @@ export async function loadTasks(householdId: string, today: string) {
   const old = onceIds.length
     ? await run('carregar conclusões antigas', supabase.from('task_completions').select('id,task_id,date,completed_by').eq('household_id', householdId).in('task_id', onceIds).lt('date', since))
     : []
-  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])], skips: await loadSkips(householdId, today), handoffs: await loadHandoffs(householdId, today) }
+  return { tasks: tasks as any[], completions: [...(comps as CompletionRow[]), ...(old as CompletionRow[])], skips: await loadSkips(householdId, today), handoffs: await loadHandoffs(householdId, today), laters: await loadLaters(householdId, today) }
 }
 
 /** Pular/adiar do último mês (o período mais longo). Sem a migration 008, segue sem pausas. */
@@ -66,6 +66,27 @@ export async function loadHandoffs(householdId: string, today: string): Promise<
   if (r.error) { if (!isMissingTable(r.error)) logError('carregar tarefas passadas', r.error); return [] }
   return (r.data || []) as HandoffRow[]
 }
+/** "Mais tarde" (044). Sem a migration, segue sem. */
+export async function loadLaters(householdId: string, today: string): Promise<LaterRow[]> {
+  const r = await supabase.from('task_later').select('id,task_id,date,at,by_who').eq('household_id', householdId).eq('date', today)
+  if (r.error) { if (!isMissingTable(r.error)) logError('carregar "mais tarde"', r.error); return [] }
+  return (r.data || []) as LaterRow[]
+}
+/** A tarefa fica para `at` só neste dia (continua na lista). */
+export async function laterTask(householdId: string, taskId: string, date: string, at: string, by: Who | null): Promise<LaterRow> {
+  return await run('deixar para mais tarde', supabase.from('task_later')
+    .upsert({ household_id: householdId, task_id: taskId, date, at, by_who: by }, { onConflict: 'task_id,date' }).select('id,task_id,date,at,by_who').single()) as LaterRow
+}
+export async function unlaterTask(id: string) {
+  await run('voltar ao horário de sempre', supabase.from('task_later').delete().eq('id', id).select('id'))
+}
+/** Horas em que a tarefa foi marcada nas últimas 4 semanas (para o horário de costume). */
+export async function completionStamps(householdId: string, taskId: string, today: string): Promise<Array<{ at: string, by: Who | null }>> {
+  const r = await supabase.from('task_completions').select('created_at,completed_by').eq('household_id', householdId).eq('task_id', taskId).gte('date', addDays(today, -28)).lt('date', today)
+  if (r.error) { logError('carregar horários da tarefa', r.error); return [] }
+  return (r.data || []).map((x: any) => ({ at: x.created_at, by: x.completed_by === 'g' || x.completed_by === 's' ? x.completed_by : null }))
+}
+
 /** A tarefa vai para `to` só neste dia (a responsável de sempre não muda). */
 export async function handoffTask(householdId: string, taskId: string, date: string, to: Who, by: Who | null): Promise<HandoffRow> {
   return await run('passar só hoje', supabase.from('task_handoffs')

@@ -53,7 +53,8 @@ export function GuideContent({ names }: { names: Names }) {
         <li><b>Para agora</b> mostra o que está atrasado, as essenciais e a próxima com horário. Logo abaixo, a coluna de cada uma (no celular, troque pelo seletor).</li>
         <li>No celular, <b>deslize</b> a tarefa para a direita para concluir ou para a esquerda para as opções. No topo da tela, <b>puxe para baixo</b> para atualizar.</li>
         <li>Toque na tarefa para concluir (+XP, com Desfazer). As concluídas ficam no fim da coluna com <b>quem concluiu</b>: quem marca fica registrada, mesmo que a tarefa fosse da outra.</li>
-        <li>No <b>⋯</b> da tarefa: Não deu hoje (pular), deixar para amanhã, passar só hoje, passar de vez, pausar e pedir ajuda.</li>
+        <li>No <b>⋯</b> da tarefa: <b>⏰ Mais tarde</b> (+1 h, +2 h ou à noite: continua na lista, com outro horário só hoje), Não deu hoje (pular), deixar para amanhã, passar só hoje, passar de vez, pausar e pedir ajuda.</li>
+        <li>Tarefa sem horário que você faz sempre na mesma hora: o <b>⋯</b> mostra “🕰 costuma às 08:10” e o botão <b>Fixar</b> para virar o horário dela.</li>
         <li>Os cartões do Início podem ser escondidos em <b>Ajustes › Início</b>.</li>
       </ul>
     </div></details>
@@ -108,7 +109,7 @@ export function GuideContent({ names }: { names: Names }) {
       <ul>
         <li>Cada aparelho liga as próprias notificações em <b>Ajustes › Notificações</b>, com horário de silêncio. No iPhone, só com o app instalado na tela de início.</li>
         <li><b>🕰 Tarefas sem horário:</b> depois de 3 vezes feitas num horário parecido (últimas 4 semanas), o Ninho lembra nesse horário, só para quem é a vez e se ainda não foi feita.</li>
-        <li><b>Telegram</b> (Ajustes › Telegram): bom dia, resumo da noite, resumo de domingo e lembretes. No lembrete de tarefa dá para tocar em <b>✓ Feito</b> ou <b>⤼ Não deu</b> ali mesmo.</li>
+        <li><b>Telegram</b> (Ajustes › Telegram): bom dia, resumo da noite, resumo de domingo e lembretes. No lembrete de tarefa dá para tocar em <b>✓ Feito</b>, <b>⏰ +1 h</b> ou <b>⤼ Não deu</b> ali mesmo.</li>
         <li>No Telegram: <b>/hoje</b>, <b>/semana</b>, <b>/compras</b>, “comprei leite”, “faxinão: …” (ou “faxinão só eu: …”), perguntas (“como tiro mancha de…?”) e áudio.</li>
       </ul>
     </div></details>

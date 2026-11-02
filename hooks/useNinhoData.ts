@@ -54,7 +54,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
   const reloadTasks = useCallback(async () => {
     const r = await api.loadTasks(householdId, ctx.current.today)
     indexCompletions('task', r.completions)
-    const t = buildTasks(r.tasks, r.completions, ctx.current.today, r.skips, r.handoffs)
+    const t = buildTasks(r.tasks, r.completions, ctx.current.today, r.skips, r.handoffs, r.laters)
     setTasks(t)
     return t
   }, [householdId])
@@ -227,6 +227,7 @@ export function useNinhoData(householdId: string, today: string, weekStart: stri
     // "passar só hoje" e compromissos (036) em canal separado: sem a tabela, o canal principal não cai
     const ch2 = supabase.channel(`ninho-dia:${householdId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'task_handoffs', filter: f }, () => later('task', reloadTasks))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'task_later', filter: f }, () => later('task', reloadTasks))
       .subscribe()
     const t = timers.current
     return () => {

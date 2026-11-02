@@ -146,6 +146,33 @@ export function useTarefas(c:AppCore&Dia){
       catch(e){patchTask(t.id,{handoff:h});showError(toNinhoError(e,'desfazer'),()=>undoHandoff({...t,handoff:h}))}
     })
   }
+  // ── MAIS TARDE (044): outro horário só hoje ───────────
+  async function laterToday(t:Task,at:string){
+    const by=requireMe();if(!by)return
+    const before={scheduled_time:t.scheduled_time,later:t.later??null}
+    const orig=t.later?t.later.orig:(t.scheduled_time?t.scheduled_time.slice(0,5):null)
+    await withPending(['task:'+t.id],async()=>{
+      patchTask(t.id,{scheduled_time:at,later:{id:'tmp',date:today,at,orig,by}})
+      try{
+        const r=await api.laterTask(householdId,t.id,today,at,by)
+        const later={id:r.id,date:r.date,at,orig,by}
+        patchTask(t.id,{later})
+        showToast(`⏰ Mais tarde · ${t.title} às ${at}`,()=>{setToast(null);undoLater({...t,scheduled_time:at,later})})
+      }catch(e){patchTask(t.id,before);showError(toNinhoError(e,'deixar para mais tarde'),()=>laterToday(t,at))}
+    })
+  }
+  async function undoLater(t:Task){
+    const l=t.later;if(!l||l.id==='tmp')return
+    await withPending(['task:'+t.id],async()=>{
+      patchTask(t.id,{scheduled_time:l.orig,later:null})
+      try{await api.unlaterTask(l.id);showToast(l.orig?`De volta às ${l.orig} · ${t.title}`:`De volta, sem horário · ${t.title}`)}
+      catch(e){patchTask(t.id,{scheduled_time:l.at,later:l});showError(toNinhoError(e,'voltar ao horário'),()=>undoLater({...t,later:l}))}
+    })
+  }
+  /** Horário aprendido vira o horário fixo da tarefa (vale todo dia, para lembrete e ⚡). */
+  async function fixTime(t:Task,at:string){
+    if(await updateTaskFields(t.id,{scheduled_time:at}))showToast(`🕰 ${t.title} agora é às ${at}`,()=>{setToast(null);updateTaskFields(t.id,{scheduled_time:null})})
+  }
   // ── PULAR / DEIXAR PARA AMANHÃ ────────────────────────
   const SKIP_LABEL:Record<string,string>={daily:'Não deu hoje (pular)',weekly:'Pular esta semana',biweekly:'Pular esta quinzena',monthly:'Pular este mês'}
   async function pauseTask(t:Task,kind:'snooze'|'skip'){
@@ -252,7 +279,7 @@ export function useTarefas(c:AppCore&Dia){
     skipDogs,unskipDogs,
     SKIP_LABEL,addPack,addSuggestion,archiveTasks,archived,askHelp,assignTask,completeDog,deleteTask,handoffToday,
     markDogs,pauseTask,pauseUntil,quickUpdate,restoreTask,save,saveTask,setArchived,swapTask,toggleDogItem,
-    toggleTask,undoHandoff,unpauseTask,updateTaskFields,
+    toggleTask,undoHandoff,unpauseTask,updateTaskFields,laterToday,undoLater,fixTime,
   }
 }
 

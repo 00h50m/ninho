@@ -59,6 +59,17 @@ export async function waterTap(db: SupabaseClient, link: Link, ml: number, date:
  * Lembretes pelo Telegram (041): resumo da noite (evening) e tarefa no horário / essencial
  * atrasada (tasks), cada um ligado na conversa. Cada lembrete uma vez (registro em telegram_log).
  */
+/**
+ * Referência do registro do Telegram (até 40 caracteres). As de sempre ficam iguais (cortadas em 40);
+ * as de "mais tarde" (com o horário no fim) viram t:/a: + id sem hífens + horário.
+ */
+export function tgRef(ref: string): string {
+  const [k, id, ...rest] = ref.split(':')
+  // as de sempre continuam como antes (cortadas em 40), para não repetir lembrete já enviado
+  if (!rest.length || !id) return ref.slice(0, 40)
+  return [k[0], id.replace(/-/g, ''), ...rest].join(':').slice(0, 40)
+}
+
 export async function runTelegramReminders(deps: BotDeps): Promise<TgReport & { pending?: string }> {
   const now = deps.now ?? new Date(), clock = homeClock(now)
   const report: TgReport & { pending?: string } = { kind: 'lembretes', day: clock.date, sent: 0, skipped: 0, failed: 0, deactivated: 0, errors: [] }
@@ -72,11 +83,11 @@ export async function runTelegramReminders(deps: BotDeps): Promise<TgReport & { 
       const due = dueReminders(await loadRemState(deps.db, hh, now)).filter(r => r.kind === 'noite' || r.kind === 'tarefa' || r.kind === 'costume' || r.kind === 'atraso')
       for (const l of list) for (const r of due.filter(x => x.who === l.who && (x.kind === 'noite' ? l.evening : l.tasks))) {
         // o registro do Telegram (041) só conhece noite/tarefa/atraso: o de costume entra como tarefa (a ref diferencia)
-        const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind: r.kind === 'costume' ? 'tarefa' : r.kind, day: clock.date, ref: r.ref.slice(0, 40) }).select('id').maybeSingle()
+        const claim = await deps.db.from('telegram_log').insert({ link_id: l.id, kind: r.kind === 'costume' ? 'tarefa' : r.kind, day: clock.date, ref: tgRef(r.ref) }).select('id').maybeSingle()
         if (claim.error) { if (claim.error.code === '23505') { report.skipped++; continue } throw new Error(claim.error.message) }
         // tarefa no horário ou atrasada: resolve ali mesmo (✓ Feito / ⤼ Não deu)
         const tid = r.kind === 'noite' ? null : r.ref.split(':')[1]
-        const res = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${r.title}\n${r.body}`, ...(tid ? { reply_markup: { inline_keyboard: [[{ text: '✓ Feito', callback_data: `rt:${tid}` }, { text: '⤼ Não deu', callback_data: `nd:${tid}` }], [{ text: '📋 Ver hoje', callback_data: 'hoje' }]] } } : {}) })
+        const res = await deps.tg('sendMessage', { chat_id: l.chat_id, text: `${r.title}\n${r.body}`, ...(tid ? { reply_markup: { inline_keyboard: [[{ text: '✓ Feito', callback_data: `rt:${tid}` }, { text: '⏰ +1 h', callback_data: `lt:${tid}` }, { text: '⤼ Não deu', callback_data: `nd:${tid}` }], [{ text: '📋 Ver hoje', callback_data: 'hoje' }]] } } : {}) })
         if (res.ok) { report.sent++; await deps.db.from('telegram_log').update({ status: 'sent' }).eq('id', (claim.data as any).id) }
         else { report.failed++; report.errors.push(`${res.error_code}: ${String(res.description).slice(0, 120)}`); await deps.db.from('telegram_log').update({ status: 'failed', detail: String(res.description).slice(0, 300) }).eq('id', (claim.data as any).id) }
       }
