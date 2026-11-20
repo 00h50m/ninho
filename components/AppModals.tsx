@@ -1,5 +1,7 @@
 'use client'
 // Peças de UI e janelas do app (separadas do NinhoApp: ficam fora do componente principal para não remontar a cada render).
+import { peopleOf } from '@/lib/modulos'
+import { useModulos } from '@/hooks/useModulos'
 import { useEffect, useState } from 'react'
 import type { Dog, DogRoutine, Meeting, Names, Task, Who } from '@/lib/types'
 import { CAT, DR_DEF, DR_PUP, ENERGY, FPT, RFREQ, WPT } from '@/lib/constants'
@@ -43,7 +45,8 @@ export function TaskFormModal({task,names,saving,casaOk,periodOk,pauseOk,onClose
   const[cat,setCat]=useState(t?.category||'general')
   const[weight,setWeight]=useState<'light'|'medium'|'heavy'>(t?.weight||'medium')
   const[freq,setFreq]=useState(t?.frequency||'weekly')
-  const[assign,setAssign]=useState(t?.assigned_to||'')
+  const solo=useModulos().solo
+  const[assign,setAssign]=useState(t?.assigned_to||(solo?'g':''))
   const[time,setTime]=useState(hhmm(t?.scheduled_time||null))
   const[ess,setEss]=useState(t?.essential||false)
   const[days,setDays]=useState<number[]>(t?.weekdays||[])
@@ -82,12 +85,12 @@ export function TaskFormModal({task,names,saving,casaOk,periodOk,pauseOk,onClose
     </>}>
       <label className="fl">Nome</label>
       <input className="fi" value={title} onChange={e=>setTitle(e.target.value)} onKeyDown={e=>{if(e.key==='Enter')handle()}} placeholder="Ex: Limpar bancada" autoFocus/>
-      <label className="fl">Responsável</label>
+      {!solo&&<><label className="fl">Responsável</label>
       <div className="btng c3">
         <button className={`sbtn ${assign==='g'?'on':''}`} onClick={()=>setAssign('g')}>{firstName(names.g)}</button>
         <button className={`sbtn ${assign==='s'?'on':''}`} onClick={()=>setAssign('s')}>{firstName(names.s)}</button>
         <button className={`sbtn ${!assign?'on':''}`} onClick={()=>setAssign('')}>Rodízio</button>
-      </div>
+      </div></>}
       <label className="fl">Categoria</label>
       <div className="btng c2">{Object.entries(CAT).map(([k,v])=><button key={k} className={`sbtn ${cat===k?'on':''}`} onClick={()=>setCat(k)}>{v}</button>)}</div>
       <label className="fl">Esforço</label>
@@ -244,6 +247,7 @@ export function EnergyModal({energy,survival,onClose,onPick,onSurvival}:{energy:
 }
 
 export function MeetingModal({householdId,names,weekStart,saving,initial,agenda,forgot,onAdjust,agreementsOk,onClose,onSave}:{householdId:string,names:Names,weekStart:string,saving:boolean,initial?:Partial<Meeting>&{agreements?:Agreement[]}|null,agenda?:AgendaSection[],forgot?:ForgotItem[],onAdjust?:Adjust,agreementsOk?:boolean,onClose:()=>void,onSave:(m:Meeting,agreements:Array<Agreement&{makeTask?:boolean}>|null,sendTg:boolean)=>void}){
+  const soloHouse=useModulos().solo
   const blank:Meeting={what_worked:'',what_overloaded:'',adjustments:'',priorities:'',mood_g:'ok',mood_s:'ok',wins:'',next_mode:'normal',reward:''}
   const[form,setForm]=useState<Meeting>(()=>{const i:any=initial||{};return Object.fromEntries(Object.entries(blank).map(([k,v])=>[k,i[k]??v])) as Meeting})
   const[agr,setAgr]=useState<Array<Agreement&{makeTask?:boolean}>>(initial?.agreements||[])
@@ -305,7 +309,7 @@ export function MeetingModal({householdId,names,weekStart,saving,initial,agenda,
       {area('04','priorities','Prioridades da semana','3 coisas mais importantes...')}
       <div className="meet">
         <label className="fl">05 — Como cada uma chega?</label>
-        {(['g','s'] as Who[]).map(w=>(
+        {peopleOf(soloHouse).map(w=>(
           <div key={w} style={{marginBottom:w==='g'?12:0}}>
             <div style={{fontSize:12.5,color:'var(--sub)',marginBottom:6}}>{names[w]}</div>
             <div className="btng c3">{moods.map(([l,v])=><button key={v} className={`sbtn ${form[w==='g'?'mood_g':'mood_s']===v?'on':''}`} onClick={()=>set(w==='g'?'mood_g':'mood_s',v)}>{l}</button>)}</div>

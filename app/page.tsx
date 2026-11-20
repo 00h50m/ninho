@@ -8,6 +8,7 @@ import { LoginScreen, NoHouseScreen } from '@/components/LoginScreen'
 import { isOfflineError, rememberHousehold } from '@/lib/offline'
 import { forgetMember, readMember, rememberMember, type Member } from '@/lib/member'
 import { writeDeviceWho } from '@/lib/device'
+import { inviteCode, savePendingInvite } from '@/lib/convite'
 
 type Phase =
   | { k: 'loading' }
@@ -58,6 +59,9 @@ export default function Home() {
   }, [resolve])
 
   useEffect(() => {
+    // link de convite (047): guarda o código até a pessoa criar a conta e entrar; tira da barra de endereço
+    const code = inviteCode(window.location.search)
+    if (code) { savePendingInvite(code); window.history.replaceState(null, '', window.location.pathname) }
     const { data: sub } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY') setPhase({ k: 'recovery' })
       if (event === 'SIGNED_OUT') { forgetMember(); setPhase({ k: 'login' }) }

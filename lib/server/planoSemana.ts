@@ -11,7 +11,7 @@ export interface ServerPlan { start: string, items: PlanItem[], approved: boolea
 export async function weekPlanFor(db: SupabaseClient, householdId: string, today: string): Promise<ServerPlan> {
   const h = await loadHousehold(db, householdId, today)
   const w = planWeek(today)
-  const plan = planToday(h.tasks, h.dogs, today, { split: h.split, busy: h.busy, dogPlan: h.dogPlan })
+  const plan = planToday(h.tasks, h.dogs, today, { split: h.split, busy: h.busy, dogPlan: h.dogPlan, solo: h.solo })
   const ev = await db.from('house_events').select('date,done_at').eq('household_id', householdId).gte('date', w.from).lte('date', w.end)
   const events = ((ev.error ? [] : ev.data || []) as Array<{ date: string, done_at: string | null }>).filter(e => !e.done_at)
   const items = proposePlan(h.tasks, events, today, t => plan.ownerOfTask(t))

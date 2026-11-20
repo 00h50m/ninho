@@ -22,7 +22,7 @@ import { firstName } from '@/components/AppModals'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function NosScreen({ a }: { a: App }) {
-  const { act, activeChs, ag, agenda, allRoutines, autoDistribute, balanced, casa, challenge, challengeStatus, createChallenge, cx, deleteChallenge, dogs, en, gP, gS, game, go, goCasa, historyData, historyError, householdId, isPending, lastMeeting, loadHistory, lv, markChallenge, maxHist, me, names, nos, nosTl, nosView, onAlbumError, openModal, rot, rotCount, routines, sS, saveSplit, setEnergy, setNosView, setToast, settings, showError, showToast, tasks, thisMeeting, thisMeetingRow, toastTimer, today, together, toggleAgreement, toggleSurvival, weekStart, xp, xpPct } = a
+  const { modulos, act, activeChs, ag, agenda, allRoutines, autoDistribute, balanced, casa, challenge, challengeStatus, createChallenge, cx, deleteChallenge, dogs, en, gP, gS, game, go, goCasa, historyData, historyError, householdId, isPending, lastMeeting, loadHistory, lv, markChallenge, maxHist, me, names, nos, nosTl, nosView, onAlbumError, openModal, rot, rotCount, routines, sS, saveSplit, setEnergy, setNosView, setToast, settings, showError, showToast, tasks, thisMeeting, thisMeetingRow, toastTimer, today, together, toggleAgreement, toggleSurvival, weekStart, xp, xpPct } = a
   return (
     <div className="scr">
       <div className="sh">
@@ -32,9 +32,9 @@ export function NosScreen({ a }: { a: App }) {
       {(()=>{
         // três abas: Semana (resumo e equilíbrio) · Juntas (desafios, álbum, presentes) · Histórico
         const top=nosView==='semana'||nosView==='equilibrio'?'semana':nosView==='historico'?'historico':'juntas'
-        const subs:Array<[typeof nosView,string,number?]>=top==='semana'?[['semana','Resumo'],['equilibrio','⚖️ Equilíbrio']]:top==='juntas'?[['desafios','🤝 Desafios',activeChs.length],['album','📸 Álbum'],['presentes','🎁 Presentes']]:[]
+        const subs:Array<[typeof nosView,string,number?]>=top==='semana'?(modulos.solo?[]:[['semana','Resumo'],['equilibrio','⚖️ Equilíbrio']]):top==='juntas'?[['desafios','🤝 Desafios',activeChs.length],['album','📸 Álbum'],['presentes','🎁 Presentes']]:[]
         return <>
-          <SubTabs label="Nós" value={top} onChange={v=>setNosView(v==='semana'?'semana':v==='juntas'?'desafios':'historico')} options={[['semana','Semana'],['juntas','Juntas',activeChs.length],['historico','Histórico']]}/>
+          <SubTabs label="Nós" value={top} onChange={v=>setNosView(v==='semana'?'semana':v==='juntas'?'desafios':'historico')} options={modulos.solo?[['semana','Semana'],['historico','Histórico']]:[['semana','Semana'],['juntas','Juntas',activeChs.length],['historico','Histórico']]}/>
           {subs.length>0&&<div className="fchips casa-sub" role="tablist" aria-label={top==='semana'?'Semana':'Juntas'}>{subs.map(([v,l,n])=><button key={v} role="tab" aria-selected={nosView===v} className={`fc ${nosView===v?'on':''}`} onClick={()=>setNosView(v)}>{l}{!!n&&<span className="subtab-n">{n}</span>}</button>)}</div>}
         </>
       })()}

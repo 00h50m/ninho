@@ -1,6 +1,7 @@
 'use client'
 // Ajustes › Telegram: ligar o Telegram da pessoa deste aparelho ao bot do Ninho.
 // O app gera um código (30 min); o link t.me/<bot>?start=<código> abre o bot e liga a conversa.
+import { useModulos } from '@/hooks/useModulos'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import type { Names, Who } from '@/lib/types'
@@ -88,7 +89,8 @@ export function TelegramCard({ householdId, me, names, onToast, onError, onNeedI
     </div>
   )
 
-  const order: Who[] = me === 's' ? ['s', 'g'] : ['g', 's']
+  const solo = useModulos().solo
+  const order: Who[] = solo ? ['g'] : me === 's' ? ['s', 'g'] : ['g', 's']
   return (
     <div className="card" style={{ marginBottom: 14 }}>
       <div className="slbl">Telegram <span style={{ textTransform: 'none', letterSpacing: 0, color: 'var(--faint)' }}>@{BOT}</span></div>

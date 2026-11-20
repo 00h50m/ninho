@@ -50,7 +50,7 @@ export async function loadRemState(db: SupabaseClient, householdId: string, now:
   let items: RemState['items'] = [], evening: RemState['evening']
   try {
     const h = await loadHousehold(db, householdId, date)
-    const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy, dogPlan: h.dogPlan })
+    const plan = planToday(h.tasks, h.dogs, date, { focus: h.focus, split: h.split, busy: h.busy, dogPlan: h.dogPlan, solo: h.solo })
     items = plan.items.map(i => ({ id: i.id, title: i.task ? i.task.title : i.dog!.title, time: i.scheduled_time ? i.scheduled_time.slice(0, 5) : null, owner: plan.ownerOfItem(i), essential: !!i.essential, done: !!i.completed_today, later: !!i.task?.later }))
     // tarefas sem horário: o horário em que a dona de hoje costuma fazer (últimas 4 semanas)
     const loose = plan.items.filter(i => i.task && !i.scheduled_time && !i.completed_today).map(i => i.id)

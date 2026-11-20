@@ -10,6 +10,8 @@ import { NotificationsCard } from '@/components/NotificationsCard'
 import { TelegramCard } from '@/components/TelegramCard'
 import { SobrouGuide } from '@/components/SobrouGuide'
 import { ModulosCard } from '@/components/ModulosCard'
+import { ConviteCard } from '@/components/ConviteCard'
+import { peopleOf } from '@/lib/modulos'
 import { toNinhoError } from '@/lib/errors'
 import { firstName, initials } from '@/components/AppModals'
 import { GuideContent } from '@/components/Guia'
@@ -108,13 +110,14 @@ export function AjustesScreen({ a }: { a: App }) {
       </div>
       <div className="card" style={{marginBottom:14}}>
         <div className="slbl">Integrantes</div>
-        {(['g','s'] as Who[]).map(w=>(
+        {peopleOf(modulos.solo).map(w=>(
           <div key={w} className="field-row">
             <div className={`av av-${w}`}>{initials(names[w])}</div>
             <div><div className="row-t">{firstName(names[w])}</div><div className="row-s">{ROLE[w]}</div></div>
             <input className="fi" key={names[w]} defaultValue={names[w]} onBlur={e=>updateName(w,e.target.value)} onKeyDown={e=>{if(e.key==='Enter')(e.target as HTMLInputElement).blur()}} aria-label={`Nome de ${ROLE[w]}`}/>
           </div>
         ))}
+        {modulos.solo&&<ConviteCard householdId={householdId} onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}/>}
       </div>
       <div className="card" style={{marginBottom:14}}>
         <div className="slbl">Resumo</div>

@@ -8,8 +8,10 @@ const mem = () => { const m = new Map<string, string>(); return { getItem: (k: s
 describe('login', () => {
   it('traduz os erros do Supabase', () => {
     expect(friendlyAuthError('Invalid login credentials')).toBe('E-mail ou senha incorretos.')
-    expect(friendlyAuthError('Email not confirmed')).toContain('Auto Confirm')
-    expect(friendlyAuthError('Password should be at least 6 characters')).toContain('6 caracteres')
+    expect(friendlyAuthError('Email not confirmed')).toContain('confirmar o e-mail')
+    expect(friendlyAuthError('Password should be at least 6 characters')).toContain('8 caracteres')
+    expect(friendlyAuthError('User already registered')).toContain('já tem conta')
+    expect(friendlyAuthError('Signups not allowed for this instance')).toContain('fechado')
     expect(friendlyAuthError('Failed to fetch')).toContain('Sem conexão')
     expect(friendlyAuthError(undefined)).toContain('Tente de novo')
   })

@@ -6,21 +6,21 @@ import { buildPayload, defaultAnswers, mergeAnswers, stepError } from '@/lib/onb
 // Dados fictícios.
 describe('módulos da casa', () => {
   it('casa nova: sem IA e sem Sobrou; pets ainda sem resposta', () => {
-    expect(featuresOf({})).toEqual({ pets: null, ia: false, sobrou: false })
-    expect(featuresOf(null)).toEqual({ pets: null, ia: false, sobrou: false })
+    expect(featuresOf({})).toEqual({ pets: null, ia: false, sobrou: false, solo: false })
+    expect(featuresOf(null)).toEqual({ pets: null, ia: false, sobrou: false, solo: false })
   })
   it('só liga com true de verdade', () => {
-    expect(featuresOf({ ia: 'true', sobrou: 1, pets: 'sim' })).toEqual({ pets: null, ia: false, sobrou: false })
-    expect(featuresOf({ ia: true, sobrou: true, pets: false })).toEqual({ pets: false, ia: true, sobrou: true })
+    expect(featuresOf({ ia: 'true', sobrou: 1, pets: 'sim' })).toEqual({ pets: null, ia: false, sobrou: false, solo: false })
+    expect(featuresOf({ ia: true, sobrou: true, pets: false })).toEqual({ pets: false, ia: true, sobrou: true, solo: false })
   })
   it('antes da migration: tudo como sempre foi', () => {
-    expect(LEGACY).toEqual({ pets: null, ia: true, sobrou: true })
+    expect(LEGACY).toEqual({ pets: null, ia: true, sobrou: true, solo: false })
   })
   it('aba Cães: com pets, ou sem resposta e já com cão', () => {
-    expect(showPets({ pets: true, ia: false, sobrou: false }, false)).toBe(true)
-    expect(showPets({ pets: false, ia: false, sobrou: false }, true)).toBe(false)
-    expect(showPets({ pets: null, ia: false, sobrou: false }, true)).toBe(true)
-    expect(showPets({ pets: null, ia: false, sobrou: false }, false)).toBe(false)
+    expect(showPets({ pets: true, ia: false, sobrou: false, solo: false }, false)).toBe(true)
+    expect(showPets({ pets: false, ia: false, sobrou: false, solo: false }, true)).toBe(false)
+    expect(showPets({ pets: null, ia: false, sobrou: false, solo: false }, true)).toBe(true)
+    expect(showPets({ pets: null, ia: false, sobrou: false, solo: false }, false)).toBe(false)
   })
 })
 

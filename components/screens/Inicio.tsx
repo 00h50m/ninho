@@ -107,15 +107,15 @@ export function InicioScreen({ a }: { a: App }) {
         busy={i=>i.task?isPending('task:'+i.task.id):i.dog!.parts.some(x=>isPending('dog:'+x.r.id))}
         onDone={i=>i.task?toggleTask(i.task):toggleDogItem(i.dog!)} onMenu={i=>{setFocus(false);openModal('taskmenu',i.task)}} onClose={()=>setFocus(false)}/>})()}
       <div className="today">
-        <div className="seg" style={{gridColumn:'1/-1'}}>
+        {!modulos.solo&&<div className="seg" style={{gridColumn:'1/-1'}}>
           {(['g','s'] as Who[]).map(w=>{const c=countFor(w);return(
             <button key={w} className={`segb ${person===w?'on':''}`} onClick={()=>pickPerson(w)}>
               <span className="d" style={{background:w==='g'?'var(--green)':'var(--pur)'}}/>{firstName(names[w])}<span className="cnt">{c.done}/{c.all}</span>
             </button>
           )})}
-        </div>
+        </div>}
         {personCard('g')}
-        {personCard('s')}
+        {!modulos.solo&&personCard('s')}
         <aside className="side">
           {show('mascote')&&<MascoteCard say={mascot} today={today}/>}
           {week.available&&me&&show('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}

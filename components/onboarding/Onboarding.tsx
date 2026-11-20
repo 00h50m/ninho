@@ -1,4 +1,6 @@
 'use client'
+import { useModulos } from '@/hooks/useModulos'
+import { peopleOf } from '@/lib/modulos'
 import { useBackClose } from '@/hooks/useBack'
 // Configuração inicial do Ninho em 9 etapas. Guarda o rascunho a cada mudança
 // (dá para fechar e continuar depois, inclusive em outro aparelho da mesma pessoa).
@@ -36,6 +38,8 @@ export interface OnboardingProps {
 const toggle = <T,>(list: T[], v: T) => list.includes(v) ? list.filter(x => x !== v) : [...list, v]
 
 export function Onboarding(p: OnboardingProps) {
+  // casa de 1 pessoa (047): só a primeira pessoa aparece
+  const solo = useModulos().solo
   const base = useMemo(() => defaultAnswers(p.names, p.dogs, p.theme), []) // eslint-disable-line react-hooks/exhaustive-deps
   const [a, setA] = useState<Answers>(() => {
     const saved = p.redo ? p.setup.answers : (p.setup.progress?.answers ?? p.setup.answers)
@@ -84,7 +88,7 @@ export function Onboarding(p: OnboardingProps) {
     return () => window.removeEventListener('keydown', h)
   }) // eslint-disable-line react-hooks/exhaustive-deps
 
-  const next = () => { const e = stepError(step, a); if (e) { setErr(e); return } setErr(null); setStep(s => Math.min(s + 1, LAST_STEP)) }
+  const next = () => { const e = stepError(step, a, solo); if (e) { setErr(e); return } setErr(null); setStep(s => Math.min(s + 1, LAST_STEP)) }
   const back = () => { setErr(null); setStep(s => Math.max(s - 1, 1)) }
 
   const essentialTasks = useMemo(() => matchEssentialTasks(p.tasks, a.essentials), [p.tasks, a.essentials])
@@ -164,7 +168,7 @@ export function Onboarding(p: OnboardingProps) {
             <p className="onb-lead">Confirme ou corrija os nomes. Isso não cria nenhuma conta.</p>
             <div className="onb-card">
               <div className="onb-lbl">Pessoas</div>
-              {(['g', 's'] as Who[]).map(w => (
+              {peopleOf(solo).map(w => (
                 <label key={w} className="onb-field"><span className={`av ${w === 'g' ? 'av-g' : 'av-s'}`} aria-hidden="true">{(a.names[w] || '?').slice(0, 2).toUpperCase()}</span>
                   <input className="fi" value={a.names[w]} maxLength={40} aria-label={w === 'g' ? 'Nome da primeira pessoa' : 'Nome da segunda pessoa'} onChange={e => set({ names: { ...a.names, [w]: e.target.value } })}/>
                 </label>
@@ -193,7 +197,7 @@ export function Onboarding(p: OnboardingProps) {
             <h1 id="onb-h" ref={head} tabIndex={-1}>Quem está usando este aparelho?</h1>
             <p className="onb-lead">Este aparelho já está na conta de {first(a.names[p.me])}. Para usar como a outra pessoa, é só sair e entrar com a outra conta em Ajustes.</p>
             <div className="onb-who" role="radiogroup" aria-label="Pessoa deste aparelho">
-              {(['g', 's'] as Who[]).map(w => (
+              {peopleOf(solo).map(w => (
                 <div key={w} role="radio" aria-checked={w === p.me} aria-disabled={w !== p.me} className={`onb-whob ${w === p.me ? 'on' : ''}`}>
                   <span className={`av ${w === 'g' ? 'av-g' : 'av-s'}`}>{(a.names[w] || '?').slice(0, 2).toUpperCase()}</span>
                   <b>{first(a.names[w])}</b><small>{w === p.me ? 'Este aparelho' : 'Outra conta'}</small>
@@ -225,7 +229,7 @@ export function Onboarding(p: OnboardingProps) {
           {step === 5 && <>
             <h1 id="onb-h" ref={head} tabIndex={-1}>Como é a semana de vocês?</h1>
             <p className="onb-lead">Só o necessário para a divisão ficar justa. Nada de agenda detalhada.</p>
-            {(['g', 's'] as Who[]).map(w => (
+            {peopleOf(solo).map(w => (
               <div key={w} className="onb-card">
                 <div className="onb-lbl">{first(a.names[w])}</div>
                 <div className="onb-q">Dias mais pesados</div>
@@ -353,7 +357,7 @@ export function Onboarding(p: OnboardingProps) {
                 {a.essentials.length ? <p>{a.essentials.map(e => e === 'outros' ? a.otherEssential.trim() : ESSENTIALS.find(x => x.id === e)?.label).filter(Boolean).join(' · ')}</p> : <p className="onb-mu">Nenhum escolhido.</p>}
                 {essentialTasks.length > 0 && <p className="onb-mu">Viram essenciais: {essentialTasks.map(t => t.title).join(', ')}</p>}</div>
               <div className="onb-card"><div className="onb-lbl">Disponibilidade <button className="lnk-inline" onClick={() => setStep(5)}>editar</button></div>
-                <ul className="onb-ul">{(['g', 's'] as Who[]).map(w => <li key={w}><b>{first(a.names[w])}</b>: {a.week[w].heavy.length ? `dias pesados ${[...a.week[w].heavy].sort((x, y) => x - y).map(i => WEEKDAYS[i]).join(', ')}` : 'sem dia pesado'} · tempo de {a.week[w].periods.length ? a.week[w].periods.map(x => PERIODS.find(q => q.id === x)?.label.toLowerCase()).join(', ') : '—'}</li>)}
+                <ul className="onb-ul">{peopleOf(solo).map(w => <li key={w}><b>{first(a.names[w])}</b>: {a.week[w].heavy.length ? `dias pesados ${[...a.week[w].heavy].sort((x, y) => x - y).map(i => WEEKDAYS[i]).join(', ')}` : 'sem dia pesado'} · tempo de {a.week[w].periods.length ? a.week[w].periods.map(x => PERIODS.find(q => q.id === x)?.label.toLowerCase()).join(', ') : '—'}</li>)}
                   <li>Planejar no(a) {WEEKDAYS_LONG[a.week.planningDay]} · energia típica {ENERGY[a.week.energy].short.toLowerCase()}</li></ul></div>
               <div className="onb-card"><div className="onb-lbl">Tema <button className="lnk-inline" onClick={() => setStep(8)}>editar</button></div>
                 <p>{THEMES.find(t => t.id === a.theme)?.name}</p></div>

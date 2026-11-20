@@ -63,7 +63,8 @@ export function groupToday(list: HItem[], nowHM: string, today?: string) {
  * · com foco (modo sobrevivência ou energia baixa), só essenciais — rotinas dos cães sempre aparecem;
  * · cada item tem dona: fixa, ou pela divisão da casa ('smart' = inteligente, 'rotation' = rodízio fixo).
  */
-export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { focus?: boolean, split?: SplitMode, busy?: BusyWindow[], dogPlan?: DogPlan | null } = {}) {
+export function planToday(tasks: Task[], dogs: Dog[], today: string, opts: { focus?: boolean, split?: SplitMode, busy?: BusyWindow[], dogPlan?: DogPlan | null, solo?: boolean } = {}) {
+  if (opts.solo) return soloPlan(planToday(tasks, dogs, today, { ...opts, solo: false }))
   const dogTasks = dogs.length ? tasks.filter(t => t.category === 'dogs') : []
   const homeTasks = dogs.length ? tasks.filter(t => t.category !== 'dogs') : tasks
   const slots = buildSlots(homeTasks, dogs)
@@ -145,4 +146,19 @@ function mergeHist(a: HistEntry[], b: HistEntry[]): HistEntry[] {
   const m = new Map<string, Who | null>()
   for (const h of [...a, ...b]) if (!m.has(h.d) || (!m.get(h.d) && h.by)) m.set(h.d, h.by)
   return Array.from(m, ([d, by]) => ({ d, by })).sort((x, y) => y.d.localeCompare(x.d))
+}
+
+/**
+ * Casa de 1 pessoa (047): tudo é dela (a primeira pessoa, "g"). Sem rodízio, divisão nem
+ * compromisso da outra. Quando a segunda pessoa chega pelo convite, a casa deixa de ser solo.
+ */
+function soloPlan<P extends { dogItems: Array<{ owner: Who }> }>(p: P): P {
+  const me = 'g' as Who
+  return {
+    ...p,
+    dogItems: p.dogItems.map(d => ({ ...d, owner: me })),
+    ownerOfItem: () => me, ownerOfTask: () => me, ownerOfRoutine: () => me,
+    whyOf: () => ({ who: me, why: { kind: 'fixed' } }) as any,
+    conflictOf: () => null,
+  } as P
 }

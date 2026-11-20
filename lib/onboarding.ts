@@ -205,9 +205,9 @@ export function mergeAnswers(base: Answers, saved: unknown): Answers {
 }
 
 /** O que impede avançar em cada etapa (null = pode seguir). */
-export function stepError(step: number, a: Answers): string | null {
+export function stepError(step: number, a: Answers, solo = false): string | null {
   if (step === 2) {
-    if (!a.names.g.trim() || !a.names.s.trim()) return 'Preencha o nome das duas.'
+    if (solo ? !a.names.g.trim() : !a.names.g.trim() || !a.names.s.trim()) return solo ? 'Preencha o seu nome.' : 'Preencha o nome das duas.'
     if (a.pets === null) return 'Conte se vocês têm pet (sim ou não).'
     if (a.pets && a.dogs.some(d => d.id && !d.name.trim())) return 'Os cães cadastrados precisam de um nome.'
   }

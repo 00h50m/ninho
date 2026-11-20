@@ -13,7 +13,7 @@ export function useModulosLoader(householdId: string) {
   return { features, ready, reload, setPets }
 }
 
-export interface Modulos { ai: boolean, sobrou: boolean, pets: boolean, features: Features }
-export const ModulosContext = createContext<Modulos>({ ai: true, sobrou: true, pets: true, features: LEGACY })
+export interface Modulos { ai: boolean, sobrou: boolean, pets: boolean, solo: boolean, features: Features }
+export const ModulosContext = createContext<Modulos>({ ai: true, sobrou: true, pets: true, solo: false, features: LEGACY })
 export const useModulos = () => useContext(ModulosContext)
-export const modulosOf = (f: Features, hasDogs: boolean): Modulos => ({ ai: f.ia, sobrou: f.sobrou, pets: showPets(f, hasDogs), features: f })
+export const modulosOf = (f: Features, hasDogs: boolean): Modulos => ({ ai: f.ia, sobrou: f.sobrou, pets: showPets(f, hasDogs), solo: f.solo, features: f })

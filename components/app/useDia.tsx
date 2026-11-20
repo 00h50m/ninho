@@ -18,12 +18,12 @@ import { firstName } from '@/components/AppModals'
 import type { AppCore } from './useAppCore'
 
 export function useDia(c:AppCore){
-  const {ag,casa,cz,dogs,hour,me,names,now,nowHM,rot,routines,settings,setup,showAllToday,showError,streak,tasks,today,week,weekStart,xp}=c
+  const {modulos,ag,casa,cz,dogs,hour,me,names,now,nowHM,rot,routines,settings,setup,showAllToday,showError,streak,tasks,today,week,weekStart,xp}=c
   // ── DERIVED ───────────────────────────────────────────
   const focusMode=settings.survival||settings.energy==='low'
   // Mesma conta usada pela notificação da manhã (lib/today.ts)
   const busy=busyWindows(ag.events,today)
-  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday,split:casa.split,busy,dogPlan:cz.dogPlan})
+  const plan=planToday(tasks,dogs,today,{focus:focusMode&&!showAllToday,split:casa.split,busy,dogPlan:cz.dogPlan,solo:modulos.solo})
   const {dogTasks,homeTasks,dueList,todayTasks,dogItems,ownerOfItem,ownerOfTask,ownerOfRoutine}=plan
   const hItems:HItem[]=plan.items
   const hiddenCount=dueList.length-todayTasks.length

@@ -233,7 +233,7 @@ export async function weekText(db: SupabaseClient, householdId: string, date: st
   for (const w of ['g', 's'] as Who[]) lines.push(`• ${first(w)}: ${b[w].done} feita${b[w].done === 1 ? '' : 's'} · ${b[w].points} ponto${b[w].points === 1 ? '' : 's'}${b[w].cooked ? ` · cozinhou ${String(b[w].cooked).replace('.', ',')}` : ''}`)
   if (b.verdict !== 'vazio') lines.push(`⚖️ ${balanceLine(b, h.names, true)}`)
   // o que ainda falta do período (semana, quinzena, mês), com a dona
-  const plan = planToday(h.tasks, h.dogs, date, { split: h.split, busy: h.busy, dogPlan: h.dogPlan })
+  const plan = planToday(h.tasks, h.dogs, date, { split: h.split, busy: h.busy, dogPlan: h.dogPlan, solo: h.solo })
   const left = plan.homeTasks.filter(t => t.frequency !== 'daily' && t.frequency !== 'once' && !doneInPeriod(t, date))
   if (left.length) lines.push('', `Falta no período (${left.length}):`, ...left.slice(0, 6).map(t => `• ${t.title} · ${first(plan.ownerOfTask(t))}`), ...(left.length > 6 ? [`… e mais ${left.length - 6}`] : []))
   const pr = weekPriorities((mt.error ? [] : mt.data || []) as any[], ws)
