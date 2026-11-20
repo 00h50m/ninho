@@ -5,6 +5,7 @@
 // · /feito louça conclui pelo nome · /dicas pede sugestões à IA · /sair desliga
 // · Bom dia e resumo de domingo também chegam aqui (mesmo texto do celular)
 import { isQuestion } from './askAi'
+import { houseFeatures } from './member'
 import { MAX_AUDIO_SEC } from './transcribe'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Who } from '@/lib/types'
@@ -275,12 +276,17 @@ export async function handleUpdate(deps: BotDeps, update: any): Promise<void> {
   await onText(deps, msg, date)
 }
 
+// IA por casa (046): casa sem IA usa os comandos, sem texto livre, áudio nem perguntas
+const AI_OFF = 'Isso usa a IA, que não está ligada para esta casa. Use os comandos: /ajuda.'
+const aiOn = async (deps: BotDeps, householdId: string) => (await houseFeatures(deps.db, householdId)).ia
+
 /** Mensagem de voz: vira texto (Groq) e segue como se tivesse sido digitada. */
 async function voice(deps: BotDeps, msg: any, date: string) {
   const chatId = Number(msg.chat.id)
   const link = await linkOf(deps.db, chatId)
   if (!link) { await send(deps, chatId, 'Esta conversa ainda não está ligada ao Ninho. No app: Ajustes › Telegram › Conectar.'); return }
   const a = msg.voice || msg.audio
+  if (!(await aiOn(deps, link.household_id))) { await send(deps, chatId, '🎙️ O áudio usa a IA, que não está ligada para esta casa. Escreva a mensagem, por favor (veja /ajuda).'); return }
   if (!deps.transcribe) { await send(deps, chatId, '🎙️ O áudio ainda não está ligado no Ninho. Escreva a mensagem, por favor.'); return }
   if ((a.duration || 0) > MAX_AUDIO_SEC) { await send(deps, chatId, `🎙️ Esse áudio é longo demais para mim (até ${MAX_AUDIO_SEC / 60} minutos). Tente um mais curto ou escreva.`); return }
   await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
@@ -318,6 +324,7 @@ async function onText(deps: BotDeps, msg: any, date: string) {
   else if (cmd === '/presentes') await send(deps, chatId, await giftList(deps.db, link, date).catch(() => '⚠️ Não consegui abrir a lista agora.'))
   else if (cmd === '/dicas') {
     if (!deps.tips) { await send(deps, chatId, 'A IA ainda não foi configurada no servidor.'); return }
+    if (!(await aiOn(deps, link.household_id))) { await send(deps, chatId, AI_OFF); return }
     await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
     const r = await deps.tips(link.household_id)
     await send(deps, chatId, r.ok === true ? `✦ Sugestões da semana\n\n${r.text}` : (r as { message: string }).message)
@@ -327,12 +334,14 @@ async function onText(deps: BotDeps, msg: any, date: string) {
   } else if (cmd === '/ajuda' || cmd === '/help') await send(deps, chatId, HELP, { reply_markup: MENU })
   else if (text.startsWith('+')) await shoppingAdd(deps, link, text.slice(1))
   else if (/^organiz\w*\s+(o\s+)?meu\s+dia\b/i.test(text) && deps.organizeDay) {
+    if (!(await aiOn(deps, link.household_id))) { await send(deps, chatId, AI_OFF); return }
     await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
     let u: Understood
     try { u = await deps.organizeDay(link, text) } catch { u = { ok: false, message: 'Não consegui organizar agora. Tente de novo em instantes.' } }
     await propose(deps, link, u)
   }
   else if (/^(faxin[aã]o|mutir[aã]o)\b/i.test(text) && deps.faxinao) {
+    if (!(await aiOn(deps, link.household_id))) { await send(deps, chatId, AI_OFF); return }
     await deps.tg('sendChatAction', { chat_id: chatId, action: 'typing' })
     await send(deps, chatId, await deps.faxinao(link, text).catch(() => 'Não consegui organizar agora. Tente pelo app: Casa › Faxinão.'))
   }
@@ -345,6 +354,7 @@ async function onText(deps: BotDeps, msg: any, date: string) {
 const PENDING_MIN = 30
 
 async function freeText(deps: BotDeps, link: Link, text: string) {
+  if (!(await aiOn(deps, link.household_id))) { await send(deps, link.chat_id, `Não entendi. ${HELP}`, { reply_markup: MENU }); return }
   await deps.tg('sendChatAction', { chat_id: link.chat_id, action: 'typing' })
   // Pergunta da casa ("como tiro mancha…?", "quanto de ração…"): responde em vez de registrar
   if (deps.ask && isQuestion(text)) {
@@ -530,6 +540,8 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
   const byHouse = new Map<string, Link[]>()
   links.forEach(l => byHouse.set(l.household_id, [...(byHouse.get(l.household_id) || []), l]))
   for (const [householdId, list] of Array.from(byHouse.entries())) {
+      // Sobrou: só para a casa que tem o Sobrou ligado (as chaves do Sobrou são de uma casa só)
+      const houseMoney = money.length && (await houseFeatures(deps.db, householdId).catch(() => null))?.sobrou ? money : []
     try {
       const morning = kind === 'morning' ? await morningPayloads(deps.db, householdId, clock.date, clock.hm) : null
       const weekly = kind === 'weekly' ? await weeklyPayload(deps.db, householdId, clock.date) : null
@@ -551,7 +563,7 @@ export async function runTelegramDigest(deps: BotDeps, kind: 'morning' | 'weekly
         if (kind === 'morning' && menu) more += `\n\n${menu.text}`
         if (kind === 'morning' && house.length) more += `\n\n${house.join('\n')}`
         if (kind === 'morning' && racao.length) more += `\n\n${racao.join('\n')}`
-        if (kind === 'morning' && money.length) more += `\n\n${money.join('\n')}`
+        if (kind === 'morning' && houseMoney.length) more += `\n\n${houseMoney.join('\n')}`
         if (kind === 'weekly') {
           const lines = await (deps.meuDiaWeek ?? ((h, w, d) => meuDiaWeekLines(deps.db, h, w, d)))(householdId, l.who, clock.date).catch(() => [] as string[])
           if (lines.length) more = `\n\n🌿 Seu Meu dia na semana\n${lines.join('\n')}`

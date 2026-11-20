@@ -34,9 +34,11 @@ import type { NosAcoes } from './useNosAcoes'
 import type { CasaAcoes } from './useCasaAcoes'
 
 export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&CasaAcoes){
-  const {SKIP_LABEL,pauseTask,skipDogs,unskipDogs,ag,busy,completeDog,dogs,en,fx,fxLive,go,goCasa,goMd,hItems,homeTasks,homeView,isPending,md,mdAdd,me,names,nowHM,openModal,ownerOfItem,ownerOfRoutine,ownerOfTask,person,plan,query,rn,rnRun,routineTurn,routines,setAskOpen,setDayOpen,setShowDone,setSprintOpen,settings,showDone,showError,showToast,sp,swapTask,taskFilter,tasks,today,toggleDogItem,toggleSurvival,toggleTask,unpauseTask,xpOfItem}=c
+  const {modulos,SKIP_LABEL,pauseTask,skipDogs,unskipDogs,ag,busy,completeDog,dogs,en,fx,fxLive,go,goCasa,goMd,hItems,homeTasks,homeView,isPending,md,mdAdd,me,names,nowHM,openModal,ownerOfItem,ownerOfRoutine,ownerOfTask,person,plan,query,rn,rnRun,routineTurn,routines,setAskOpen,setDayOpen,setShowDone,setSprintOpen,settings,showDone,showError,showToast,sp,swapTask,taskFilter,tasks,today,toggleDogItem,toggleSurvival,toggleTask,unpauseTask,xpOfItem}=c
   // ── AÇÕES RÁPIDAS (botão + no celular, "Ação rápida" no menu lateral) ──
-  const quickActions:QuickAction[]=[
+  // módulos da casa (046): sem IA, sem os atalhos de IA; sem pets, sem o dos cães
+  const AI_QA=new Set(['dia','pergunta','faxinao'])
+  const quickActions:QuickAction[]=([
     {id:'task',group:'registrar' as const,icon:'tarefa',label:'Nova tarefa',sub:'Algo com começo e fim',run:()=>openModal('task',null)},
     ...(me?[{id:'dia',group:'organizar' as const,icon:'reuniao',label:'Planejar o dia com IA',sub:'Fale tudo; a IA põe em ordem',run:()=>setDayOpen(true)},{id:'pergunta',group:'organizar' as const,icon:'nos',label:'Perguntar ao Ninho',sub:'Mancha, limpeza, cachorras…',run:()=>setAskOpen(true)}]:[]),
     ...(fx.available?[{id:'faxinao',group:'organizar' as const,icon:'casa',label:fxLive?'Faxinão em andamento':'Faxinão com IA',sub:fxLive?'Ver o que é seu agora':'Fale tudo; a IA organiza a ordem',run:()=>goCasa('faxinao')}]:[]),
@@ -57,7 +59,7 @@ export function useTelas(c:AppCore&Dia&Tarefas&RotinasSprint&CaesAcoes&NosAcoes&
     {id:'meeting',group:'semana' as const,icon:'reuniao',label:'Reunião semanal',sub:'15 minutos, sem cobranças',run:()=>openModal('meeting')},
     {id:'energy',group:'semana' as const,icon:'energia',label:'Energia da semana',sub:en.l,run:()=>openModal('energy')},
     {id:'survival',group:'semana' as const,icon:'escudo',label:settings.survival?'Sair do modo sobrevivência':'Modo sobrevivência',sub:settings.survival?'Ativo · só essenciais':'Só o essencial por um tempo',run:toggleSurvival},
-  ]
+  ] as QuickAction[]).filter(a=>(modulos.ai||!AI_QA.has(a.id))&&(modulos.pets||a.id!=='dogs'))
   // Rotinas que já existem (rotinas dos cães, agrupadas como em Início)
   const routineGroups=(()=>{
     const m=new Map<string,{title:string,time:string|null,frequency:string,dogs:string[],r:DogRoutine}>()

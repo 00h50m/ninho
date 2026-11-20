@@ -37,8 +37,10 @@ export function Icon({ name, size = 22 }: { name: string, size?: number }) {
   )
 }
 
-export function SideNav({ current, onGo, onQuick, profile, sub }: {
+export function SideNav({ current, onGo, onQuick, profile, sub, modules = MODULES }: {
   current: ScreenId, onGo: (s: ScreenId) => void, onQuick: () => void
+  /** as abas da casa (sem pets, sem Cães) */
+  modules?: typeof MODULES
   /** Partes do Meu dia, mostradas embaixo dele quando está aberto */
   sub?: { current: string, onGo: (t: string) => void }
   profile: { initials: string, name: string, sub: string, cls: string }
@@ -49,7 +51,7 @@ export function SideNav({ current, onGo, onQuick, profile, sub }: {
       <button className="snav-logo" onClick={() => onGo('inicio')} aria-label="Ninho, ir para o Início">Ni<span>nho</span></button>
       <button className="snav-quick" onClick={onQuick}><Icon name="plus" size={18}/>Ação rápida</button>
       <nav className="snav-list">
-        {MODULES.map(m => (
+        {modules.map(m => (
           <div key={m.id} className="snav-g">
             <button className={`snav-i ${active === m.id ? 'on' : ''}`} onClick={() => onGo(m.id)} aria-current={active === m.id ? 'page' : undefined}>
               <Icon name={m.id}/><span><b>{m.label}</b><small>{m.hint}</small></span>
@@ -69,11 +71,11 @@ export function SideNav({ current, onGo, onQuick, profile, sub }: {
   )
 }
 
-export function BottomNav({ current, onGo }: { current: ScreenId, onGo: (s: ScreenId) => void }) {
+export function BottomNav({ current, onGo, modules = MODULES }: { current: ScreenId, onGo: (s: ScreenId) => void, modules?: typeof MODULES }) {
   const active = moduleOf(current)
   return (
-    <nav className="bnav" aria-label="Navegação principal">
-      {MODULES.map(m => (
+    <nav className="bnav" aria-label="Navegação principal" style={{ gridTemplateColumns: `repeat(${modules.length},1fr)` }}>
+      {modules.map(m => (
         <button key={m.id} className={`bnb ${active === m.id ? 'on' : ''}`} onClick={() => onGo(m.id)} aria-current={active === m.id ? 'page' : undefined}>
           <span className="ic"><Icon name={m.id}/></span>{m.label}
         </button>

@@ -21,6 +21,8 @@ import { firstName, initials, TaskFormModal, PauseSheet, PetModal, DogModal, Rou
 import { useNinhoApp, type Account } from '@/components/app/useNinhoApp'
 import { InicioScreen } from '@/components/screens/Inicio'
 import { HomeSkeleton } from '@/components/ui/Skeleton'
+import { ModulosContext } from '@/hooks/useModulos'
+import { navModules } from '@/lib/nav'
 import { LaterButtons, UsualHint } from '@/components/MaisTarde'
 import { usePullRefresh } from '@/hooks/usePullRefresh'
 import { useCallback, useEffect } from 'react'
@@ -56,11 +58,12 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
   // baixa o resto em segundo plano, depois que a casa carregou
   const ready=a.data.status==='ready'
   useEffect(()=>{if(!ready)return;const t=setTimeout(()=>Object.values(load).forEach(f=>f().catch(()=>{})),300);return()=>clearTimeout(t)},[ready])
-  const {SKIP_LABEL,laterToday,undoLater,fixTime,adjustForgot,retroForgot,addHouseTemplate,addMaintTemplates,addRoutineTemplate,ag,agenda,aguaPop,archiveHabit,archiveRoutine,askHelp,askOpen,busca,casa,casaOk,casaView,closeModal,createDay,data,dayOpen,deleteEvent,deleteHealth,deleteHouseTemplate,deleteTask,device,dogs,en,eventDone,fabAway,finishSprint,go,goMd,handoffToday,loadSetup,lv,md,mdAdd,mdTab,me,modal,modalData,names,nos,nowHM,onb,openModal,outbox,ownerOfTask,pauseOk,pauseSprint,pauseTask,pauseUntil,periodOk,pickSearch,pickTheme,plan,quickActions,removeDog,removeMaint,removeRoutine,rot,routines,saveEvent,saveHabitDraft,saveHealth,saveMaint,saveMeeting,savePet,saveRoutine,saveRoutineDraft,saveRoutineTemplate,saveTask,saving,screen,sendOutbox,setAskOpen,setBusca,setDayOpen,setEnergy,setOnb,setSprintOpen,setSprintTasks,setToast,settings,setup,showError,showToast,sp,spBusy,sprintOpen,startSprint,streak,swapTask,tasks,theme,thisMeeting,toast,today,toggleSurvival,toggleTask,tplBusy,undoHandoff,updateDog,weekStart,xp}=a
+  const {SKIP_LABEL,mods,modulos,laterToday,undoLater,fixTime,adjustForgot,retroForgot,addHouseTemplate,addMaintTemplates,addRoutineTemplate,ag,agenda,aguaPop,archiveHabit,archiveRoutine,askHelp,askOpen,busca,casa,casaOk,casaView,closeModal,createDay,data,dayOpen,deleteEvent,deleteHealth,deleteHouseTemplate,deleteTask,device,dogs,en,eventDone,fabAway,finishSprint,go,goMd,handoffToday,loadSetup,lv,md,mdAdd,mdTab,me,modal,modalData,names,nos,nowHM,onb,openModal,outbox,ownerOfTask,pauseOk,pauseSprint,pauseTask,pauseUntil,periodOk,pickSearch,pickTheme,plan,quickActions,removeDog,removeMaint,removeRoutine,rot,routines,saveEvent,saveHabitDraft,saveHealth,saveMaint,saveMeeting,savePet,saveRoutine,saveRoutineDraft,saveRoutineTemplate,saveTask,saving,screen,sendOutbox,setAskOpen,setBusca,setDayOpen,setEnergy,setOnb,setSprintOpen,setSprintTasks,setToast,settings,setup,showError,showToast,sp,spBusy,sprintOpen,startSprint,streak,swapTask,tasks,theme,thisMeeting,toast,today,toggleSurvival,toggleTask,tplBusy,undoHandoff,updateDog,weekStart,xp}=a
+  const navList=navModules({pets:modulos.pets,dogNames:dogs.map(d=>d.name)})
   return(
-    <>
+    <ModulosContext.Provider value={modulos}>
 
-      <SideNav current={screen} onGo={go} onQuick={()=>openModal('quick')} sub={md.available&&me?{current:mdTab,onGo:(t:string)=>goMd(t as MdTab)}:undefined}
+      <SideNav modules={navList} current={screen} onGo={go} onQuick={()=>openModal('quick')} sub={md.available&&me?{current:mdTab,onGo:(t:string)=>goMd(t as MdTab)}:undefined}
         profile={{initials:initials(names[me||'g']),name:me?firstName(names[me]):'Ninho',sub:account?.email||'Perfil e ajustes',cls:`av-${me||'g'}`}}/>
       <div className="app-main">
       {/* CABEÇALHO */}
@@ -119,7 +122,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
 
       {/* NAV MOBILE */}
       </div>
-      <BottomNav current={screen} onGo={go}/>
+      <BottomNav modules={navList} current={screen} onGo={go}/>
 
       {data.status==='ready'&&screen!=='ajustes'&&!(screen==='casa'&&casaView==='compras')&&<button className={`fab mob-fab ${fabAway?'fab-away':''}`} onClick={()=>openModal('quick')} aria-label="Ação rápida" tabIndex={fabAway?-1:undefined}><Icon name="plus" size={24}/></button>}
       {modal==='quick'&&<QuickActionsSheet onClose={closeModal} actions={quickActions}/>}
@@ -130,7 +133,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
         onAdd={ml=>mdAdd(me,'agua',ml).then(()=>showToast(`💧 +${ml} ml`)).catch(e=>{showError(toNinhoError(e,'registrar água'));throw e})}
         onUndo={l=>md.remove(l).catch(e=>{showError(toNinhoError(e,'desfazer'));throw e})} onClose={()=>{}}/>}
       {busca&&<Busca onClose={()=>setBusca(false)} onPick={pickSearch} items={([] as SearchItem[]).concat(
-        FEATURES,
+        FEATURES.filter(x=>(modulos.ai||!['faxinao','planejar','perguntar'].includes(x.id))&&(modulos.pets||!['caes','escala'].includes(x.id))),
         tasks.filter((t:any)=>t.active!==false).map((t:any)=>({kind:'tarefa' as const,id:t.id,title:t.title,sub:t.assigned_to?firstName(names[t.assigned_to as Who]):undefined})),
         (casa.shop||[]).map((i:any)=>({kind:'compra' as const,id:i.id,title:i.title,sub:[i.qty,i.checked_at?'no carrinho':null].filter(Boolean).join(' · ')||undefined})),
         (ag.events||[]).map((e:any)=>({kind:'agenda' as const,id:e.id,title:e.title,sub:`${e.date.slice(8,10)}/${e.date.slice(5,7)}${e.time?` às ${String(e.time).slice(0,5)}`:''}`})),
@@ -175,7 +178,7 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {modal==='dog'&&<DogModal dog={modalData} saving={saving} onClose={closeModal} onSave={updateDog} onDelete={removeDog}/>}
       {modal==='routine'&&<RoutineModal routine={modalData.routine} dogName={modalData.dog.name} saving={saving} onClose={closeModal} onSave={(d,id)=>saveRoutine(modalData.dog.id,d,id)} onDelete={removeRoutine}/>}
       {modal==='energy'&&<EnergyModal energy={settings.energy} survival={settings.survival} onClose={closeModal} onPick={setEnergy} onSurvival={toggleSurvival}/>}
-      {onb&&me&&setup&&<Onboarding householdId={householdId} me={me} names={names} dogs={dogs.map(d=>({id:d.id,name:d.name}))}
+      {onb&&me&&setup&&<Onboarding onPets={mods.setPets} householdId={householdId} me={me} names={names} dogs={dogs.map(d=>({id:d.id,name:d.name}))}
         dogRoutineTitles={dogs.flatMap(d=>d.routines.map(r=>r.title))} tasks={tasks} existingKeys={routines.map(r=>r.template_key).filter((k):k is string=>!!k)}
         setup={setup} redo={onb==='redo'} theme={theme} onTheme={pickTheme}
         onClose={()=>{setOnb(null);loadSetup(false)}}
@@ -195,6 +198,6 @@ export default function NinhoApp({householdId,account}:{householdId:string,accou
       {modal==='hbedit'&&<HabitEditor habit={modalData?.habit??null} preset={modalData?.preset} names={names} saving={saving} onSave={saveHabitDraft} onArchive={archiveHabit} onClose={closeModal}/>}
       {modal==='mainttpl'&&<MaintTemplatesSheet existing={casa.maint} today={today} saving={saving} onClose={closeModal} onAdd={addMaintTemplates}/>}
       {modal==='meeting'&&<MeetingModal householdId={householdId} names={names} weekStart={weekStart} saving={saving} initial={thisMeeting} agenda={nos.available?agenda:undefined} forgot={retroForgot} onAdjust={adjustForgot} agreementsOk={nos.available} onClose={closeModal} onSave={saveMeeting}/>}
-    </>
+    </ModulosContext.Provider>
   )
 }

@@ -1,6 +1,8 @@
 'use client'
 // Cardápio da semana (033): a IA monta 7 dias com o plano e os alimentos da pessoa;
 // daqui dá para lançar a refeição de hoje e mandar os ingredientes para a lista de compras.
+import { useModulos } from '@/hooks/useModulos'
+const useAi = () => useModulos().ai
 import { useState } from 'react'
 import { buildMenu } from '@/lib/services/aiFiles'
 import { dayTotals, shoppingList, type Menu, type MenuRow, type ShopLine } from '@/lib/cardapio'
@@ -22,6 +24,7 @@ export function MenuCard(p: {
   onUpdateMenu: (m: MenuRow, menu: Menu) => Promise<void>
   onAdd: (kind: PKind, value: number | null, data?: Record<string, any>) => Promise<void>
 }) {
+  const ai = useAi()
   const row = p.menus.find(m => m.who === p.me) || null
   const [prefs, setPrefs] = useState(row?.prefs || '')
   const [st, setSt] = useState<{ s: 'busy' } | { s: 'err', msg: string } | null>(null)
@@ -60,7 +63,7 @@ export function MenuCard(p: {
     <label className="onb-f"><span>Preferências para a semana (opcional)</span>
       <input className="fi" value={prefs} maxLength={300} onChange={e => setPrefs(e.target.value)} placeholder="ex.: marmita no almoço, sem peixe, jantar rápido"/></label>
     <div className="md-acts">
-      <button className="btn btn-p" disabled={st?.s === 'busy'} onClick={build}>{st?.s === 'busy' ? 'Montando… (pode levar 1 minuto)' : row ? '↻ Montar de novo' : '🗓️ Montar cardápio da semana'}</button>
+      {ai ? <button className="btn btn-p" disabled={st?.s === 'busy'} onClick={build}>{st?.s === 'busy' ? 'Montando… (pode levar 1 minuto)' : row ? '↻ Montar de novo' : '🗓️ Montar cardápio da semana'}</button> : <small className="row-s ai-off">✨ Ler por foto usa a IA, que não está ligada nesta casa.</small>}
       {row && redo && <button className="btn btn-g" onClick={() => setRedo(false)}>Cancelar</button>}
     </div>
     {st?.s === 'err' && <p className="al-warn" role="alert">{st.msg}</p>}

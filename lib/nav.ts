@@ -10,9 +10,16 @@ export const MODULES: Array<{ id: ModuleId, label: string, hint: string }> = [
   { id: 'inicio', label: 'Início', hint: 'O dia de hoje' },
   { id: 'eu', label: 'Meu dia', hint: 'Água, sono, comida e corpo' },
   { id: 'casa', label: 'Casa', hint: 'Tarefas, rotinas, compras e agenda' },
-  { id: 'caes', label: 'Cães', hint: 'Penélope e Zelda' },
+  { id: 'caes', label: 'Cães', hint: 'Os pets da casa' },
   { id: 'nos', label: 'Nós', hint: 'Semana, reunião e conquistas' },
 ]
+
+const joinNames = (n: string[]) => n.length <= 1 ? (n[0] || '') : n.length === 2 ? `${n[0]} e ${n[1]}` : `${n.slice(0, -1).join(', ')} e ${n[n.length - 1]}`
+/** As abas da casa: sem pets, sem a aba Cães; o subtítulo dos Cães é o nome dos pets da casa. */
+export function navModules(o: { pets: boolean, dogNames: string[] }): Array<{ id: ModuleId, label: string, hint: string }> {
+  return MODULES.filter(m => m.id !== 'caes' || o.pets)
+    .map(m => m.id === 'caes' ? { ...m, hint: o.dogNames.length ? joinNames(o.dogNames.slice(0, 3)) + (o.dogNames.length > 3 ? '…' : '') : 'Os pets da casa' } : m)
+}
 
 /** A área do menu que fica destacada em cada tela (Ajustes fica à parte: nenhuma aba acesa). */
 export function moduleOf(screen: ScreenId): ModuleId | null {

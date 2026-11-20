@@ -11,11 +11,13 @@ import type { EventInput } from '@/lib/services/agenda'
 
 const first = (n: string) => (n || '').split(' ')[0]
 
-export function AgendaView({ available, events, maint, dogCare = [], today, names, sobrouUrl, onNew, onEdit, onDone, onPaid, onOpenMaint, onOpenDogs, onSaveSobrou, footer }: {
+export function AgendaView({ available, events, maint, dogCare = [], today, names, sobrouUrl, sobrouOn = true, onNew, onEdit, onDone, onPaid, onOpenMaint, onOpenDogs, onSaveSobrou, footer }: {
   footer?: ReactNode
   available: boolean, events: HouseEvent[], maint: Array<{ id: string, title: string, next_due: string, category: string }>
   dogCare?: Array<{ id: string, title: string, date: string, icon: string }>, onOpenDogs?: () => void
   today: string, names: Names, sobrouUrl: string | null
+  /** a casa tem o Sobrou (046)? sem ele, nada de atalho para o Sobrou */
+  sobrouOn?: boolean
   onNew: (kind: EventKind) => void, onEdit: (e: HouseEvent) => void, onDone: (e: HouseEvent, done: boolean) => void
   onPaid: (e: HouseEvent, paid: boolean) => void, onOpenMaint: () => void, onSaveSobrou: (url: string | null) => void
 }) {
@@ -59,25 +61,25 @@ export function AgendaView({ available, events, maint, dogCare = [], today, name
       <div className="slbl" style={{ marginTop: 18 }}>🧾 Vencimentos {b.overdue > 0 && <span className="chip coral">{b.overdue} atrasado{b.overdue > 1 ? 's' : ''}</span>}
         <button className="lnk" onClick={() => onNew('vencimento')}>+ Vencimento</button></div>
       <div className="card">
-        <p className="row-s" style={{ marginBottom: 10 }}>Só para lembrar: nome, data, quem cuida e se já foi pago. Valores e contas ficam no Sobrou!.</p>
+        <p className="row-s" style={{ marginBottom: 10 }}>Só para lembrar: nome, data, quem cuida e se já foi pago. {sobrouOn ? 'Valores e contas ficam no Sobrou!.' : 'Os valores ficam fora do Ninho.'}</p>
         {b.pending.length === 0 && <div className="row-s">Nenhum vencimento pendente.</div>}
         {b.pending.map(e => { const l = billLink(e, sobrouUrl); return (
           <div key={e.id} className={`ag-bill ${e.date < today ? 'late' : ''}`} data-bill={e.title}>
             <button className="ag-b" onClick={() => onEdit(e)}><span className="ag-t">{e.title}</span>
               <span className="ag-m">{e.date < today ? `venceu ${fmtDate(e.date)}` : e.date === today ? 'vence hoje' : `vence ${fmtDate(e.date)}`}{who(e.who) ? ` · ${who(e.who)}` : ''}</span></button>
-            {l && <a className="btn btn-g" href={l} target="_blank" rel="noopener noreferrer">Abrir no Sobrou!</a>}
+            {l && sobrouOn && <a className="btn btn-g" href={l} target="_blank" rel="noopener noreferrer">Abrir no Sobrou!</a>}
             <button className="btn btn-s" onClick={() => onPaid(e, true)}>✓ Pago</button>
           </div>) })}
         {b.paid.length > 0 && <details className="ag-paid"><summary>Pagos recentes ({b.paid.length})</summary>
           {b.paid.map(e => <div key={e.id} className="ag-bill paid"><span className="ag-b"><span className="ag-t">{e.title}</span><span className="ag-m">{fmtDate(e.date)} · pago</span></span>
             <button className="lnk-inline" onClick={() => onPaid(e, false)}>Voltar para pendente</button></div>)}
         </details>}
-        <div className="ag-sobrou">
+        {sobrouOn && <div className="ag-sobrou">
           {editUrl ? <>
             <input className="fi" type="url" value={url} placeholder="https://… (link do Sobrou!)" onChange={e => setUrl(e.target.value)} aria-label="Link do Sobrou!" aria-invalid={!urlOk}/>
             <button className="btn btn-p" disabled={!urlOk} onClick={() => { onSaveSobrou(url.trim() || null); setEditUrl(false) }}>Salvar</button>
           </> : <button className="lnk-inline" onClick={() => setEditUrl(true)}>{sobrouUrl ? 'Trocar o link do Sobrou!' : 'Configurar o link do Sobrou!'}</button>}
-        </div>
+        </div>}
       </div>
       {footer}
     </div>

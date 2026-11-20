@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   let body: any = null
   try { body = await req.json() } catch { /* vazio */ }
   const db = createDb()
-  const m = await memberOf(db, req, String(body?.householdId || ''))
+  const m = await memberOf(db, req, String(body?.householdId || ''), 'ia')
   if (m.ok === false) return NextResponse.json({ error: m.error }, { status: m.status })
   const me = m.who || (body?.who === 's' ? 's' : 'g')
   const text = typeof body?.text === 'string' ? body.text.trim().slice(0, 2000) : ''

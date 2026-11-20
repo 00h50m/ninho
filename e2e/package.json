@@ -1,0 +1,6 @@
+{
+  "name": "ninho-e2e",
+  "private": true,
+  "description": "Testes de ponta a ponta do Ninho (só locais): ver e2e/README.md",
+  "dependencies": { "axe-core": "4.10.2" }
+}

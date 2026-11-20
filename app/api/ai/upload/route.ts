@@ -14,7 +14,7 @@ export async function POST(req: Request) {
   let body: any = null
   try { body = await req.json() } catch { /* vazio */ }
   const db = createDb()
-  const m = await memberOf(db, req, String(body?.householdId || ''))
+  const m = await memberOf(db, req, String(body?.householdId || ''), 'ia')
   if (m.ok === false) return NextResponse.json({ error: m.error }, { status: m.status })
   const err = await savePart(db, body.householdId, m.userId, body)
   return err ? NextResponse.json({ error: err }, { status: 400 }) : NextResponse.json({ ok: true })

@@ -2,6 +2,8 @@
 // Alimentação no Meu dia: perfil e meta, saldo do dia (comido × meta + treino),
 // refeição escrita em texto e conferida item a item, semana e peso com previsão.
 // Tudo é estimativa e fica só com a dona, a não ser que ela compartilhe.
+import { useModulos } from '@/hooks/useModulos'
+const useAi = () => useModulos().ai
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { Who } from '@/lib/types'
 import { fmtDate } from '@/lib/dates'
@@ -218,6 +220,7 @@ function ProfileForm(p: FoodTabProps & { prof?: FoodProfile, weight: number | nu
 }
 
 function MealForm(p: FoodTabProps & { hide: boolean }) {
+  const ai = useAi()
   const [meal, setMeal] = useState<Meal>(() => mealForTime(p.nowHM))
   const [text, setText] = useState(''), [items, setItems] = useState<MealItem[] | null>(null), [busy, setBusy] = useState(false)
   const [photo, setPhoto] = useState<'idle' | 'busy'>('idle'), [note, setNote] = useState<string | null>(null), [err, setErr] = useState<string | null>(null)
@@ -275,7 +278,7 @@ function MealForm(p: FoodTabProps & { hide: boolean }) {
       {!items && <div className="md-acts" style={{ marginTop: 0 }}>
         <button className="btn btn-s" disabled={!text.trim()} onClick={() => setItems(parseMeal(text, custom))}>Conferir</button>
         <input ref={photoRef} type="file" accept="image/*" capture="environment" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={e => fromPhoto(e.target.files?.[0])}/>
-        <button className="btn btn-g" disabled={photo === 'busy'} onClick={() => photoRef.current?.click()}>{photo === 'busy' ? 'Olhando a foto…' : '📷 Foto do prato'}</button>
+        {ai ? <button className="btn btn-g" disabled={photo === 'busy'} onClick={() => photoRef.current?.click()}>{photo === 'busy' ? 'Olhando a foto…' : '📷 Foto do prato'}</button> : <small className="row-s ai-off">✨ Ler por foto usa a IA, que não está ligada nesta casa.</small>}
         {custom.length > 0 && <button className="btn btn-g" aria-expanded={combo} onClick={() => setCombo(v => !v)}>🧩 Montar com meus alimentos</button>}
       </div>}
       {!items && combo && <Combine foods={custom} hide={p.hide} onSaveMeal={p.onSaveMeal} onDone={async (its, label) => {
@@ -417,6 +420,7 @@ function WeightCard(p: FoodTabProps & { prof: FoodProfile, series: Array<{ date:
 }
 
 function MyFoods(p: FoodTabProps & { inner?: boolean }) {
+  const ai = useAi()
   const [q, setQ] = useState('')
   const [only, setOnly] = useState(false)
   const [more, setMore] = useState(false)
@@ -478,7 +482,7 @@ function MyFoods(p: FoodTabProps & { inner?: boolean }) {
       <div className="slbl" id="al-meus">Meus alimentos</div>
       <p className="row-s" style={{ marginBottom: 8 }}>Para o que não está na tabela: copie do rótulo (por porção), tire foto da tabela nutricional ou importe uma planilha. Depois é só escrever o nome na refeição.</p>
       <div className="md-acts fc-acts">
-        <button className="btn btn-g" disabled={lbl?.s === 'busy'} onClick={() => askPhoto(null)}>{lbl?.s === 'busy' ? 'Lendo o rótulo…' : '📷 Foto do rótulo'}</button>
+        {ai ? <button className="btn btn-g" disabled={lbl?.s === 'busy'} onClick={() => askPhoto(null)}>{lbl?.s === 'busy' ? 'Lendo o rótulo…' : '📷 Foto do rótulo'}</button> : <small className="row-s ai-off">✨ Ler por foto usa a IA, que não está ligada nesta casa.</small>}
         <button className="btn btn-g" aria-expanded={bc} onClick={() => setBc(v => !v)}>🔢 Código de barras</button>
         <button className="btn btn-g" onClick={() => csvRef.current?.click()}>📄 Importar planilha</button>
         <input ref={photoRef} type="file" accept="image/*" capture="environment" hidden aria-label="Foto da tabela nutricional" onChange={e => fromLabel(e.target.files?.[0])}/>

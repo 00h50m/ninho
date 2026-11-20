@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   let body: any = null
   try { body = await req.json() } catch { /* vazio */ }
   const db = createDb()
-  const m = await memberOf(db, req, String(body?.householdId || ''))
+  const m = await memberOf(db, req, String(body?.householdId || ''), 'ia')
   if (m.ok === false) return NextResponse.json({ error: m.error }, { status: m.status })
   const file = await fileFrom(db, body.householdId, m.userId, body, true)
   if (!file) return NextResponse.json({ error: 'Arquivo inválido. Mande um PDF (até 15 MB) ou uma foto.' }, { status: 400 })

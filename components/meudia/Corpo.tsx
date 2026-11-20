@@ -2,6 +2,8 @@
 // Evolução do corpo no Meu dia: medição (digitada ou lida de um exame pela IA, com
 // data), gráfico de cada medida e fotos de evolução para comparar lado a lado.
 // As fotos são privadas e têm compartilhamento próprio ("Fotos de evolução").
+import { useModulos } from '@/hooks/useModulos'
+const useAi = () => useModulos().ai
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { fmtDate } from '@/lib/dates'
 import { BODY_FIELDS, bodySeries, change, photoCompare } from '@/lib/meudia'
@@ -17,6 +19,7 @@ const poseLabel = (p: string) => POSES.find(x => x[0] === p)?.[1] || p
 const fullDate = (d: string) => `${fmtDate(d)}/${d.slice(2, 4)}`
 
 export function Body(p: MeuDiaProps) {
+  const ai = useAi()
   useEffect(() => {
     const w = p.focus?.what
     if (w !== 'peso' && w !== 'foto') return
@@ -58,7 +61,7 @@ export function Body(p: MeuDiaProps) {
         <div className="slbl" id="md-medir">Nova medição</div>
         <div className="md-acts" style={{ marginTop: 0, marginBottom: 10 }}>
           <input ref={fileRef} type="file" accept="application/pdf,image/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={e => readExam(e.target.files?.[0])}/>
-          <button className="btn btn-g" disabled={scan === 'busy'} onClick={() => fileRef.current?.click()}>{scan === 'busy' ? 'Lendo o exame…' : '📄 Ler bioimpedância ou avaliação (PDF ou foto)'}</button>
+          {ai ? <button className="btn btn-g" disabled={scan === 'busy'} onClick={() => fileRef.current?.click()}>{scan === 'busy' ? 'Lendo o exame…' : '📄 Ler bioimpedância ou avaliação (PDF ou foto)'}</button> : <small className="row-s ai-off">✨ Ler por foto usa a IA, que não está ligada nesta casa.</small>}
         </div>
         {scanMsg && <p className={`row-s ${scanMsg.ok ? '' : 'al-warn'}`} role={scanMsg.ok ? 'status' : 'alert'} style={{ marginBottom: 8 }}>{scanMsg.text}</p>}
         <label className="onb-f co-date"><span>Data da medição</span><input className="fi" type="date" value={date} max={p.today} onChange={e => setDate(e.target.value || p.today)}/></label>

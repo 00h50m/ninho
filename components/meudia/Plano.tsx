@@ -2,6 +2,8 @@
 // Plano alimentar no Meu dia: enviar o PDF/foto do plano da nutricionista, conferir
 // o que a IA organizou, e seguir no dia a dia ("Comi"), com dia de treino ou descanso,
 // suplementos, água e lembretes. O arquivo não fica guardado.
+import { useModulos } from '@/hooks/useModulos'
+const useAi = () => useModulos().ai
 import { useEffect, useRef, useState } from 'react'
 import type { Who } from '@/lib/types'
 import { Sheet } from '@/components/ui/Sheet'
@@ -29,6 +31,7 @@ export interface PlanProps {
 }
 
 export function PlanCard(p: PlanProps) {
+  const ai = useAi()
   const row = p.plans.find(x => x.who === p.me)
   const [preview, setPreview] = useState<{ plan: DietPlan, source: string } | null>(null)
   const [busy, setBusy] = useState(false), [err, setErr] = useState<string | null>(null)
@@ -44,7 +47,7 @@ export function PlanCard(p: PlanProps) {
   }
   const picker = <>
     <input ref={fileRef} type="file" accept="application/pdf,image/*" className="sr-only" tabIndex={-1} aria-hidden="true" onChange={e => upload(e.target.files?.[0])}/>
-    <button className="btn btn-s" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? 'Lendo o plano… (até 1 minuto)' : row ? 'Trocar plano' : '📄 Enviar plano (PDF ou foto)'}</button>
+    {ai ? <button className="btn btn-s" disabled={busy} onClick={() => fileRef.current?.click()}>{busy ? 'Lendo o plano… (até 1 minuto)' : row ? 'Trocar plano' : '📄 Enviar plano (PDF ou foto)'}</button> : <small className="row-s ai-off">✨ Ler por foto usa a IA, que não está ligada nesta casa.</small>}
   </>
   if (preview) return <PlanPreview plan={preview.plan} onCancel={() => setPreview(null)} onSave={() => p.onSavePlan(preview.plan, preview.source).then(() => setPreview(null)).catch(() => {})}/>
   if (!row) return (

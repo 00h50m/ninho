@@ -1,6 +1,8 @@
 // Sugestões da IA para a semana (botão na Reunião semanal).
 // Só para quem é da casa: o app manda o token da sessão e o servidor confere
 // que a conta está ligada à casa pedida (household_members).
+import { houseFeatures } from '@/lib/server/member'
+import { OFF_MSG } from '@/lib/modulos'
 import { NextResponse } from 'next/server'
 import { createDb, dbConfigured } from '@/lib/server/push'
 import { weeklyTips } from '@/lib/server/ai'
@@ -25,6 +27,7 @@ export async function POST(req: Request) {
   const legacy = member.data || user.data.user.is_anonymous === false ? null
     : await db.from('profiles').select('id').eq('id', user.data.user.id).eq('household_id', householdId).maybeSingle()
   if (!member.data && !legacy?.data) return NextResponse.json({ error: 'não é desta casa' }, { status: 403 })
+  if (!(await houseFeatures(db, householdId)).ia) return NextResponse.json({ error: OFF_MSG.ia }, { status: 403 })
   try {
     const r = await weeklyTips(db, householdId, { apiKey: process.env.ANTHROPIC_API_KEY, baseURL: process.env.ANTHROPIC_BASE_URL })
     if (r.ok === true) return NextResponse.json({ tips: r.tips })

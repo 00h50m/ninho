@@ -9,13 +9,15 @@ import { LEVELS } from '@/lib/xp'
 import { NotificationsCard } from '@/components/NotificationsCard'
 import { TelegramCard } from '@/components/TelegramCard'
 import { SobrouGuide } from '@/components/SobrouGuide'
+import { ModulosCard } from '@/components/ModulosCard'
+import { toNinhoError } from '@/lib/errors'
 import { firstName, initials } from '@/components/AppModals'
 import { GuideContent } from '@/components/Guia'
 import { SistemaCard } from '@/components/Sistema'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function AjustesScreen({ a }: { a: App }) {
-  const { today, goMd, setNosView, a11y, account, ag, device, dogs, go, householdId, lv, me, names, openModal, pickTheme, setA11y, setOnb, setToast, setup, showCard, showToast, shownTheme, streak, tasks, theme, toastTimer, updateName, xp } = a
+  const { modulos, mods, showError,  today, goMd, setNosView, a11y, account, ag, device, dogs, go, householdId, lv, me, names, openModal, pickTheme, setA11y, setOnb, setToast, setup, showCard, showToast, shownTheme, streak, tasks, theme, toastTimer, updateName, xp } = a
   return (
     <div className="scr narrow">
       <button className="back" onClick={()=>go('inicio')}>← Início</button>
@@ -59,7 +61,7 @@ export function AjustesScreen({ a }: { a: App }) {
       <div className="card aj-sec" id="aj-inicio" style={{marginBottom:14}}>
         <div className="slbl">O que aparece no Início</div>
         <div>
-          <div className="row-s">Desmarque o que não usa. O resto continua nas outras áreas. Vale só para este aparelho.</div>          <div className="a11y-cards">{HOME_CARDS.map(([k,l])=><label key={k}><input type="checkbox" checked={showCard(k)} onChange={e=>setA11y({hidden:e.target.checked?a11y.hidden.filter(x=>x!==k):[...a11y.hidden,k]})}/>{l}</label>)}</div>
+          <div className="row-s">Desmarque o que não usa. O resto continua nas outras áreas. Vale só para este aparelho.</div>          <div className="a11y-cards">{HOME_CARDS.filter(([k])=>(k!=='sobrou'||modulos.sobrou)&&(k!=='caes'||modulos.pets)).map(([k,l])=><label key={k}><input type="checkbox" checked={showCard(k)} onChange={e=>setA11y({hidden:e.target.checked?a11y.hidden.filter(x=>x!==k):[...a11y.hidden,k]})}/>{l}</label>)}</div>
         </div>
       </div>
       {setup?.available&&<div className="card" style={{marginBottom:14}}>
@@ -90,16 +92,17 @@ export function AjustesScreen({ a }: { a: App }) {
       <NotificationsCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
         onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
         onNeedIdentity={()=>openModal('device')}/>
-      <SobrouGuide householdId={householdId} link={ag.sobrouUrl}/>
+      {modulos.sobrou&&<SobrouGuide householdId={householdId} link={ag.sobrouUrl}/>}
       <div id="aj-tg" className="aj-sec"/>
       <TelegramCard householdId={householdId} me={me} names={names} onToast={m=>showToast(m)}
         onError={m=>{setToast({kind:'err',msg:m});clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(null),6000)}}
         onNeedIdentity={()=>openModal('device')}/>
+      <ModulosCard features={modulos.features} pets={modulos.pets} onPets={async on=>{try{await mods.setPets(on);showToast(on?'🐾 Pets ligados: a aba Cães voltou':'Pets desligados: a aba Cães saiu')}catch(e){showError(toNinhoError(e,'mudar os módulos da casa'));throw e}}}/>
       <div className="card aj-sec" id="aj-casa" style={{marginBottom:14}}>
         <div className="slbl">Ajustes da casa</div>
         <div className="aj-links">
           <button className="aj-link" onClick={()=>{go('nos');setNosView('equilibrio')}}><span>⚖️ Divisão da carga</span><small>Divisão inteligente ou rodízio · Nós › Semana › Equilíbrio</small></button>
-          <button className="aj-link" onClick={()=>go('caes')}><span>🐾 Escala dos cães</span><small>Quem cuida em cada período · Cães</small></button>
+          {modulos.pets&&<button className="aj-link" onClick={()=>go('caes')}><span>🐾 Escala dos cães</span><small>Quem cuida em cada período · Cães</small></button>}
           <button className="aj-link" onClick={()=>goMd('ajustes')}><span>🌿 Meu dia: metas e privacidade</span><small>Água, sono, comida e o que a outra vê · Meu dia › Ajustes</small></button>
         </div>
       </div>

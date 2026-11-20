@@ -28,6 +28,8 @@ export interface OnboardingProps {
   theme: ThemeId
   onTheme: (t: ThemeId) => void
   onClose: () => void
+  /** grava a resposta "têm pet?" nos módulos da casa (046) */
+  onPets?: (on: boolean) => Promise<void>
   onDone: (r: FinishResult, goTo: 'rotinas' | 'inicio') => void
 }
 
@@ -95,6 +97,7 @@ export function Onboarding(p: OnboardingProps) {
     setBusy(true); setErr(null)
     try {
       const r = await finishOnboarding(p.householdId, p.me, buildPayload(a, p.tasks, p.existingKeys))
+      if (a.pets !== null && p.onPets) await p.onPets(a.pets).catch(() => {})
       setDone(r)
     } catch (e) { setErr(toNinhoError(e, 'concluir configuração').userMessage) } finally { setBusy(false) }
   }
@@ -168,14 +171,21 @@ export function Onboarding(p: OnboardingProps) {
               ))}
             </div>
             <div className="onb-card">
-              <div className="onb-lbl">Cães</div>
+              <div className="onb-lbl" id="onb-pets">Vocês têm pet?</div>
+              <div className="onb-days wrap" role="radiogroup" aria-labelledby="onb-pets">
+                {([[true, '🐾 Sim'], [false, 'Não']] as Array<[boolean, string]>).map(([v, l]) =>
+                  <button key={String(v)} role="radio" aria-checked={a.pets === v} className={`onb-day wide ${a.pets === v ? 'on' : ''}`} onClick={() => set({ pets: v })}>{l}</button>)}
+              </div>
+              <p className="row-s">{a.pets === false ? 'Sem a aba Cães. Dá para ligar depois em Ajustes › Módulos da casa.' : 'Com pet, aparece a aba Cães: ração, passeio, saúde e quem cuida.'}</p>
+              {a.pets && <>
               {a.dogs.map((d, i) => (
-                <div key={i} className="onb-field"><span className="av av-dog" aria-hidden="true">🐶</span>
-                  <input className="fi" value={d.name} maxLength={40} placeholder="Nome do cão" aria-label={`Nome do cão ${i + 1}`} onChange={e => set({ dogs: a.dogs.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })}/>
-                  {!d.id && a.dogs.length > 1 && <button className="btn btn-g onb-x" aria-label="Remover" onClick={() => set({ dogs: a.dogs.filter((_, j) => j !== i) })}>✕</button>}
-                </div>
-              ))}
-              {a.dogs.length < 6 && <button className="lnk-inline" onClick={() => set({ dogs: [...a.dogs, { id: null, name: '' }] })}>+ Adicionar cão</button>}
+                  <div key={i} className="onb-field"><span className="av av-dog" aria-hidden="true">🐶</span>
+                    <input className="fi" value={d.name} maxLength={40} placeholder="Nome do cão" aria-label={`Nome do cão ${i + 1}`} onChange={e => set({ dogs: a.dogs.map((x, j) => j === i ? { ...x, name: e.target.value } : x) })}/>
+                    {!d.id && a.dogs.length > 1 && <button className="btn btn-g onb-x" aria-label="Remover" onClick={() => set({ dogs: a.dogs.filter((_, j) => j !== i) })}>✕</button>}
+                  </div>
+                ))}
+                {a.dogs.length < 6 && <button className="lnk-inline" onClick={() => set({ dogs: [...a.dogs, { id: null, name: '' }] })}>+ Adicionar cão</button>}
+              </>}
             </div>
           </>}
 

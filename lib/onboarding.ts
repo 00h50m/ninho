@@ -32,6 +32,8 @@ export interface RoutineChoice {
 export interface PersonWeek { heavy: number[], periods: Period[] }
 export interface Answers {
   names: Names
+  /** Têm pet? (null = ainda não respondeu). Sem pet, a aba Cães some (046). */
+  pets: boolean | null
   dogs: Array<{ id: string | null, name: string }>
   pains: string[]
   week: { g: PersonWeek, s: PersonWeek, planningDay: number, energy: Energy }
@@ -147,6 +149,7 @@ export function suggestChallenge(a: Pick<Answers, 'pains' | 'routines'>): { titl
 export function defaultAnswers(names: Names, dogs: Array<{ id: string, name: string }>, theme: ThemeId): Answers {
   return {
     names: { ...names },
+    pets: dogs.length ? true : null,
     dogs: dogs.length ? dogs.map(d => ({ id: d.id, name: d.name })) : [{ id: null, name: '' }],
     pains: [],
     week: { g: { heavy: [], periods: ['noite'] }, s: { heavy: [], periods: ['noite'] }, planningDay: 0, energy: 'medium' },
@@ -186,6 +189,7 @@ export function mergeAnswers(base: Answers, saved: unknown): Answers {
   const w = (v.week || {}) as Partial<Answers['week']>
   return {
     names: { g: v.names?.g?.trim() ? v.names.g : base.names.g, s: v.names?.s?.trim() ? v.names.s : base.names.s },
+    pets: typeof (v as any).pets === 'boolean' ? (v as any).pets : base.pets,
     dogs: arr<{ id: string | null, name: string }>(v.dogs, d => !!d && typeof (d as any).name === 'string') ?? base.dogs,
     pains: (arr<string>(v.pains, p => PAINS.some(x => x.id === p)) ?? base.pains).slice(0, MAX_PAINS),
     week: {
@@ -204,7 +208,8 @@ export function mergeAnswers(base: Answers, saved: unknown): Answers {
 export function stepError(step: number, a: Answers): string | null {
   if (step === 2) {
     if (!a.names.g.trim() || !a.names.s.trim()) return 'Preencha o nome das duas.'
-    if (a.dogs.some(d => d.id && !d.name.trim())) return 'Os cães cadastrados precisam de um nome.'
+    if (a.pets === null) return 'Conte se vocês têm pet (sim ou não).'
+    if (a.pets && a.dogs.some(d => d.id && !d.name.trim())) return 'Os cães cadastrados precisam de um nome.'
   }
   if (step === 4 && a.pains.length > MAX_PAINS) return `Escolha até ${MAX_PAINS}.`
   if (step === 6 && a.essentials.includes('outros') && !a.otherEssential.trim()) return 'Escreva qual é o outro essencial (ou desmarque).'
@@ -234,12 +239,13 @@ export function buildPayload(a: Answers, tasks: Task[], existingKeys: string[]) 
   })
   const answers = {
     pains: a.pains, week: a.week, essentials: a.essentials,
-    otherEssential: a.otherEssential.trim() || null, theme: a.theme,
+    otherEssential: a.otherEssential.trim() || null, theme: a.theme, pets: a.pets,
     routines: routines.map(r => r.key), challenge: suggestChallenge(a),
   }
   return {
     names: { g: a.names.g.trim(), s: a.names.s.trim() },
-    dogs: a.dogs.filter(d => d.name.trim()).map(d => ({ id: d.id, name: d.name.trim() })),
+    // sem pet: nenhum cão novo (os que já existem ficam, só a aba some)
+    dogs: a.pets ? a.dogs.filter(d => d.name.trim()).map(d => ({ id: d.id, name: d.name.trim() })) : [],
     routines, essential_task_ids: essentialTasks.map(t => t.id), answers,
   }
 }

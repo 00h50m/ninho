@@ -15,7 +15,7 @@ export async function POST(req: Request) {
   let body: any = null
   try { body = await req.json() } catch { /* vazio */ }
   const db = createDb()
-  const m = await memberOf(db, req, String(body?.householdId || ''))
+  const m = await memberOf(db, req, String(body?.householdId || ''), 'ia')
   if (m.ok === false) return NextResponse.json({ error: m.error }, { status: m.status })
   if (!m.who) return NextResponse.json({ error: 'Escolha quem é você no app antes.' }, { status: 400 })
   const kcal = Number(body?.kcal), protein = Number(body?.protein), start = String(body?.start || '')

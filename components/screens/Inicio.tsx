@@ -40,7 +40,9 @@ import { Deferred } from '@/components/ui/Deferred'
 import type { App } from '@/components/app/useNinhoApp'
 
 export function InicioScreen({ a }: { a: App }) {
-  const { tasks, approveWeekPlan, ownerOfTask, hItems, ownerOfItem, toggleTask, toggleDogItem, isPending, fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
+  const { modulos, tasks, approveWeekPlan, ownerOfTask, hItems, ownerOfItem, toggleTask, toggleDogItem, isPending, fx, adjustForgot, ajusteNotNow, stuckTasks, a11y, accidents, account, actionBtn, activeCh, ag, allToday, autoDistribute, buyFood, care, casa, challenge, chaos, ci, countFor, cx, dateLabel, dayPct, dogDaily, dogDone, dogName, dogs, doneToday, en, fxLive, game, go, goCasa, goMd, healthSoon, hello, helpReq, hiddenCount, homeView, householdId, itemTitle, lv, maintActions, mascot, md, mdAdd, me, names, newBag, nos, nowHM, nowSum, onb, openModal, person, personCard, pickHomeView, pickPerson, plan, rn, rnRun, saveCheckin, setA11y, setDayOpen, setNosView, setOnb, setShowAllToday, setSprintOpen, setTab, settings, setup, showAllToday, showCard, showError, showToast, sp, streak, today, todayIndex, toggleSurvival, week, weekInfo, weekStart, xp, xpPct } = a
+  // módulos da casa (046): Sobrou só na casa que tem; Cães só com pets
+  const show=(k:string)=>showCard(k)&&(k!=='sobrou'||modulos.sobrou)&&(k!=='caes'||modulos.pets)
   const [focus,setFocus]=useState(false)
   return (
     <div className="scr">
@@ -50,8 +52,8 @@ export function InicioScreen({ a }: { a: App }) {
           <div className="hd-chips">
             {me&&<span className="chip"><span className={`mini av-${me}`} aria-hidden="true">{names[me].slice(0,1).toUpperCase()}</span>{account?'Sua conta':'Este aparelho'}</span>}
             <button className={`chip ${settings.survival?'coral':en.cls}`} onClick={()=>openModal('energy')} aria-label={`A semana: ${en.l}${settings.survival?', modo sobrevivência':''}. Alterar`}>{settings.survival?'🛡 Sobrevivência':`${en.ic} ${en.l}`}</button>
-            {me&&<button className="chip" onClick={()=>setDayOpen(true)}>🗓️ Planejar o dia</button>}
-            {fx.available&&<button className={`chip ${fxLive?'green':''}`} onClick={()=>goCasa('faxinao')}>🧹 {fxLive?'Faxinão em andamento':'Faxinão'}</button>}
+            {me&&modulos.ai&&<button className="chip" onClick={()=>setDayOpen(true)}>🗓️ Planejar o dia</button>}
+            {fx.available&&modulos.ai&&<button className={`chip ${fxLive?'green':''}`} onClick={()=>goCasa('faxinao')}>🧹 {fxLive?'Faxinão em andamento':'Faxinão'}</button>}
           </div>
         </div>
         <div className="sh-a desk-only"><button className="btn btn-p" onClick={()=>openModal('task',null)}>+ Nova tarefa</button></div>
@@ -63,14 +65,14 @@ export function InicioScreen({ a }: { a: App }) {
         <button className="lnk-inline" onClick={()=>{setA11y({setupSnooze:addDays(today,14)});showToast('Ok! O aviso volta em 2 semanas. Dá para configurar a qualquer hora em Ajustes.')}}>Agora não</button>
       </div>}
 
-      {showCard('resumo')&&<div className="qstats" role="group" aria-label="Resumo">
+      {show('resumo')&&<div className="qstats" role="group" aria-label="Resumo">
         <div className="qs"><span className="qs-l">Hoje</span><b>{dayPct}%</b><small>{doneToday}/{allToday.length}</small></div>
         <button className="qs" onClick={()=>setTab('week')}><span className="qs-l">Nível {lv.l}</span><b>{xp}</b><small>/ {lv.max} XP</small></button>
         <div className="qs" title={game.streaks.house_best>0?`Recorde: ${game.streaks.house_best} dias`:undefined}><span className="qs-l">Sequência</span><b>🔥 {streak}</b><small>dia{streak!==1?'s':''}</small></div>
         {activeCh?<button className="qs qs-ch" onClick={()=>{go('nos');setNosView('desafios')}}><span className="qs-l">Desafio · {activeCh.p.hits}/{activeCh.c.goal}{activeCh.p.todayHit?' ✓':''}</span><b className="qs-t">{activeCh.c.title}</b></button>
         :challenge&&nos.available?<button className="qs qs-ch" onClick={()=>{go('nos');setNosView('desafios')}}><span className="qs-l">Desafio sugerido</span><b className="qs-t">{challenge.title}</b></button>:null}
       </div>}
-      {showCard('prioridades')&&(()=>{const pr=weekPriorities(nos.meetings,weekStart);return pr&&<section className="card prio" aria-labelledby="prio-h">
+      {show('prioridades')&&(()=>{const pr=weekPriorities(nos.meetings,weekStart);return pr&&<section className="card prio" aria-labelledby="prio-h">
         <div className="slbl" id="prio-h">🎯 Prioridades da semana<button className="lnk" onClick={()=>{go('nos');setNosView('semana')}}>Reunião →</button></div>
         <ol className="prio-l">{pr.list.map((p,i)=><li key={i}>{p}</li>)}</ol>
         <p className="row-s">Combinadas na reunião de {fmtDate(addDays(pr.from,6))}.</p>
@@ -115,15 +117,15 @@ export function InicioScreen({ a }: { a: App }) {
         {personCard('g')}
         {personCard('s')}
         <aside className="side">
-          {showCard('mascote')&&<MascoteCard say={mascot} today={today}/>}
-          {week.available&&me&&showCard('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
+          {show('mascote')&&<MascoteCard say={mascot} today={today}/>}
+          {week.available&&me&&show('checkin')&&<CheckinCard me={me} names={names} today={week.checkins.filter(c=>c.date===today)} onSave={saveCheckin}/>}
           {fxLive&&<FaxinaoHomeCard f={fxLive} me={me} names={names} onOpen={()=>goCasa('faxinao')}/>}
-          {md.available&&me&&showCard('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} profiles={md.profiles} goals={md.goals}
+          {md.available&&me&&show('meudia')&&<MeuDiaCard me={me} settings={md.settings} logs={md.logs} meds={md.meds} profiles={md.profiles} goals={md.goals}
             onUndo={l=>{md.remove(l).catch(e=>showError(toNinhoError(e,'desfazer')))}} today={today} nowHM={nowHM}
             onAdd={(k,v)=>{mdAdd(me,k,v).then(()=>{if(navigator.onLine!==false)showToast('+1 copo 💧')}).catch(e=>showError(toNinhoError(e,'registrar água')))}} onOpen={()=>goMd('hoje')}/>}
-          {setup?.available&&showCard('rotina')&&rn.today.length>0&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
+          {setup?.available&&show('rotina')&&rn.today.length>0&&<RoutineNowCard now={rn.now} next={rn.next} countToday={rn.today.length} names={names}
             turnOf={r=>turnBy('routine:'+r.id,'daily',today,plan.slots)} progress={r=>rnRun(r as Routine)} onOpen={()=>go('rotinas')} onSetup={()=>setOnb(setup.completed?'redo':'open')}/>}
-          {showCard('caes')&&<div className="card">
+          {show('caes')&&<div className="card">
             <div className="slbl">🐾 Cães hoje {dogDaily.length>0&&<span className="mono" style={{color:'var(--faint)'}}>{dogDone}/{dogDaily.length}</span>}<button className="lnk" onClick={()=>setTab('pets')}>Ver →</button></div>
             {dogs.length===0?(
               <div className="empty" style={{padding:'12px 0'}}>Nenhum pet ainda<div><button className="btn btn-s" onClick={()=>openModal('pet')}>+ Cadastrar pet</button></div></div>
@@ -155,27 +157,27 @@ export function InicioScreen({ a }: { a: App }) {
             </div>}
             {dogs.length>0&&<div style={{fontSize:11.5,color:'var(--sub)',marginTop:8}}>As rotinas aparecem na lista de quem é a vez ↻</div>}
           </div>}
-          {cx.ready&&showCard('jantar')&&(()=>{const din=cx.meals.find(m=>m.date===today&&m.meal==='jantar');const soon=useSoon(cx.pantry,today);return (din||soon.length>0)&&(
+          {cx.ready&&show('jantar')&&(()=>{const din=cx.meals.find(m=>m.date===today&&m.meal==='jantar');const soon=useSoon(cx.pantry,today);return (din||soon.length>0)&&(
             <div className="card jt-home">
               {din&&<div className="jt-home-d"><span>🍲 <b>Jantar de hoje:</b> {din.title}</span><button className="lnk" onClick={()=>goCasa('jantar')}>🍳 {cookLabel(din.cook,names)}</button></div>}
               {soon.length>0&&<div className="jt-home-d"><span>⏰ <b>Usar logo:</b> {soon.slice(0,3).map(i=>`${i.name} (${urgencyLabel(i,today)})`).join(', ')}{soon.length>3?` e mais ${soon.length-3}`:''}</span><button className="lnk" onClick={()=>goCasa('despensa')}>Despensa →</button></div>}
             </div>)})()}
-          <Deferred>{ag.available&&showCard('agenda')&&(()=>{const soon=agendaEntries(ag.events,[],today,1).filter(e=>!e.late);const due=agBills(ag.events,today).pending.filter(b=>b.date<=addDays(today,3));return (soon.length>0||due.length>0)&&(
+          <Deferred>{ag.available&&show('agenda')&&(()=>{const soon=agendaEntries(ag.events,[],today,1).filter(e=>!e.late);const due=agBills(ag.events,today).pending.filter(b=>b.date<=addDays(today,3));return (soon.length>0||due.length>0)&&(
             <div className="card ag-home">
               <div className="slbl">📅 Agenda<button className="lnk" onClick={()=>goCasa('agenda')}>Ver →</button></div>
               {soon.map(e=><div key={e.key} className="ag-home-i"><span>{e.icon} {e.title}</span><span className="mono">{e.date===today?'hoje':'amanhã'}{e.time?` ${e.time}`:''}</span></div>)}
               {due.map(b=><div key={b.id} className={`ag-home-i ${b.date<today?'late':''}`}><span>{kindIcon('vencimento')} {b.title}</span><span className="mono">{b.date<today?'atrasado':b.date===today?'vence hoje':`vence ${fmtDate(b.date)}`}</span></div>)}
             </div>)})()}</Deferred>
-          <Deferred>{showCard('sobrou')&&<SobrouCard householdId={householdId} today={today} link={ag.sobrouUrl} onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('sobrou-guia')?.scrollIntoView({behavior:'smooth',block:'start'}),300)}}/>}</Deferred>
-          <Deferred>{showCard('manutencao')&&<MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>}</Deferred>
-          {showCard('compras')&&(()=>{const sc=shoppingCounts(casa.shop);return casa.shopState==='ready'&&sc.toBuy>0&&(
+          <Deferred>{show('sobrou')&&<SobrouCard householdId={householdId} today={today} link={ag.sobrouUrl} onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('sobrou-guia')?.scrollIntoView({behavior:'smooth',block:'start'}),300)}}/>}</Deferred>
+          <Deferred>{show('manutencao')&&<MaintTodayCard items={casa.maint} today={today} names={names} actions={maintActions} onOpen={()=>goCasa('manutencao')}/>}</Deferred>
+          {show('compras')&&(()=>{const sc=shoppingCounts(casa.shop);return casa.shopState==='ready'&&sc.toBuy>0&&(
             <button className="card dsum shop-sum" onClick={()=>setTab('shop')}>
               <span className="dav" style={{width:36,height:36,fontSize:18}}>🛒</span>
               <span style={{flex:1,minWidth:0,textAlign:'left'}}><b>{sc.toBuy} ite{sc.toBuy===1?'m':'ns'} na lista de compras</b>
                 <span className="dsum-s">{casa.shop.filter(i=>!i.checked_at).slice(0,4).map(i=>i.title).join(', ')}{sc.toBuy>4?'…':''}</span></span>
               <span className="chev">›</span>
             </button>)})()}
-          <Deferred>{showCard('atalhos')&&<div className="card">
+          <Deferred>{show('atalhos')&&<div className="card">
             <div className="slbl">Atalhos</div>
             <div className="fchips qa-chips">
               <button className="fc" onClick={autoDistribute}>✦ Distribuir tarefas</button>
@@ -188,8 +190,8 @@ export function InicioScreen({ a }: { a: App }) {
       </div>
       {showPlanToday(today,tasks.some(t=>(t.plans||[]).some(p=>p.week_start===planWeek(today).start)))&&<WeekPlanCard tasks={tasks} events={ag.events||[]} today={today} names={names} ownerOf={ownerOfTask} onApprove={approveWeekPlan}/>}
       <NewsCard onGuide={()=>{go('ajustes');setTimeout(()=>document.getElementById('aj-ajuda')?.scrollIntoView({behavior:'smooth',block:'start'}),400)}}/>
-      {showCard('ajuste')&&stuckTasks.length>0&&<StuckCard task={stuckTasks[0]} more={stuckTasks.length-1} names={names} onAdjust={adjustForgot} onLater={()=>ajusteNotNow(stuckTasks[0])}/>}
-      {week.available&&showCard('semana')&&<WeekStrip days={weekInfo} names={names}/>}
+      {show('ajuste')&&stuckTasks.length>0&&<StuckCard task={stuckTasks[0]} more={stuckTasks.length-1} names={names} onAdjust={adjustForgot} onLater={()=>ajusteNotNow(stuckTasks[0])}/>}
+      {week.available&&show('semana')&&<WeekStrip days={weekInfo} names={names}/>}
     </div>
   )
 }

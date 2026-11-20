@@ -22,6 +22,7 @@ import { useCaes } from '@/hooks/useCaes'
 import { useMeuDia } from '@/hooks/useMeuDia'
 import { useNos } from '@/hooks/useNos'
 import { useFaxinao } from '@/hooks/useFaxinao'
+import { modulosOf, useModulosLoader } from '@/hooks/useModulos'
 import type { AppBase } from './tipos'
 import type { Avisos } from './useAvisos'
 import type { Preferencias } from './usePreferencias'
@@ -93,7 +94,11 @@ export function useDados(c:AppBase&Avisos&Preferencias&Navegacao){
     return()=>{setErrorSink(null);window.removeEventListener('error',onErr);window.removeEventListener('unhandledrejection',onRej)}
   },[householdId,me])
 
+  // módulos da casa (046): pets, IA e Sobrou
+  const mods=useModulosLoader(householdId)
+  const modulos=modulosOf(mods.features,dogs.length>0)
   return {
+    mods,modulos,
     accidents,ag,casa,cx,cz,data,device,dogs,fx,fxLive,game,historyData,historyError,hour,loadHistory,md,me,names,
     nos,now,nowHM,patchRoutines,patchTask,pickPerson,refreshStats,requireMe,rot,routines,setAccidents,setDogs,
     setHistoryData,setHistoryError,setNames,setSettings,setSetup,setSpBusy,setSprintOpen,setTasks,setXp,settings,

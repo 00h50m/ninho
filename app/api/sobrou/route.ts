@@ -12,7 +12,7 @@ export async function POST(req: Request) {
   if (!dbConfigured()) return NextResponse.json({ error: 'servidor sem SUPABASE_SERVICE_ROLE_KEY' }, { status: 503 })
   let body: any = null
   try { body = await req.json() } catch { /* vazio */ }
-  const m = await memberOf(createDb(), req, String(body?.householdId || ''))
+  const m = await memberOf(createDb(), req, String(body?.householdId || ''), 'sobrou')
   if (m.ok === false) return NextResponse.json({ error: m.error }, { status: m.status })
   // só para quem é da casa: o que falta na Vercel (nomes, nunca valores)
   const missing = sobrouMissing()
